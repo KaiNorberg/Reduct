@@ -357,7 +357,6 @@ For example:
 (* 2 3) // Evaluates to "6"
 (/ 10 3) // Evaluates to "3"
 (/ 10 3.0) // Evaluates to "3.333333"
-(+ "1" 2) // Error
 ```
 
 ### Truthiness
