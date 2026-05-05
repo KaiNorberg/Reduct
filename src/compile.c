@@ -151,7 +151,7 @@ static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_it
     {
         if (!REDUCT_LOCAL_IS_DEFINED(local))
         {
-            REDUCT_ERROR_COMPILE(compiler, atom, "undefined variable '%.*s'", atom->atom.length, atom->atom.string);
+            REDUCT_ERROR_COMPILE(compiler, atom, "undefined local '%.*s'", atom->atom.length, atom->atom.string);
         }
 
         *out = local->expr;
@@ -167,7 +167,7 @@ static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_it
         }
     }
 
-    REDUCT_ERROR_COMPILE(compiler, atom, "undefined variable '%.*s'", atom->atom.length, atom->atom.string);
+    REDUCT_ERROR_COMPILE(compiler, atom, "undefined local '%.*s'", atom->atom.length, atom->atom.string);
 }
 
 static inline reduct_bool_t reduct_compiler_is_data(reduct_compiler_t* compiler, reduct_item_t* item)
@@ -217,23 +217,7 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_it
     reduct_item_t* head = reduct_list_nth_item(compiler->reduct, &list->list, 0);
     if (reduct_compiler_is_data(compiler, head))
     {
-        reduct_reg_t target = reduct_expr_get_reg(compiler, out);
-        reduct_compile_list(compiler, target);
-
-        reduct_handle_t h;
-        REDUCT_LIST_FOR_EACH(&h, &list->list)
-        {
-            reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&h);
-            reduct_expr_t argExpr = REDUCT_EXPR_NONE();
-            reduct_expr_build(compiler, item, &argExpr);
-
-            REDUCT_ASSERT(argExpr.mode != REDUCT_MODE_NONE);
-            reduct_compile_append(compiler, target, &argExpr);
-
-            reduct_expr_done(compiler, &argExpr);
-        }
-
-        *out = REDUCT_EXPR_REG(target);
+        reduct_intrinsic_list_generic(compiler, list, 0, out);
         return;
     }
 
@@ -264,7 +248,7 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_it
     reduct_handle_t argH;
     REDUCT_LIST_FOR_EACH_AT(&argH, &list->list, 1)
     {
-        reduct_reg_t target = (reduct_reg_t)(base + _iter.index - 2);
+        reduct_reg_t target = (reduct_reg_t)(base + _iter.index - 1);
         reduct_expr_t argExpr = REDUCT_EXPR_TARGET(target);
         reduct_expr_build(compiler, REDUCT_HANDLE_TO_ITEM(&argH), &argExpr);
 

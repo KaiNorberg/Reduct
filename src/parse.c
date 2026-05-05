@@ -67,7 +67,17 @@ typedef enum
     REDUCT_PARSE_PRECEDENCE_MAX,
 } reduct_parse_precedence_t;
 
-static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_handle_t handle, reduct_bool_t unary)
+static reduct_bool_t reduct_parse_compare_suffix(reduct_atom_t* atom, const char* suffix)
+{
+    reduct_size_t suffixLen = REDUCT_STRLEN(suffix);
+    if (atom->length < suffixLen)
+    {
+        return REDUCT_FALSE;
+    }
+    return REDUCT_MEMCMP(atom->string + atom->length - suffixLen, suffix, suffixLen) == 0;
+}
+
+static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t* ctx, reduct_handle_t handle, reduct_bool_t unary)
 {
     if (!REDUCT_HANDLE_IS_ITEM(&handle))
     {
@@ -80,47 +90,93 @@ static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_handle_t han
     }
     reduct_atom_t* atom = &item->atom;
 
+    if (atom->length == 0)
+    {
+        return REDUCT_PARSE_PRECEDENCE_NONE;
+    }
+
+    char last = atom->string[atom->length - 1];
+
     if (unary)
     {
-        if (reduct_atom_is_equal(atom, "not", 3) || reduct_atom_is_equal(atom, "-", 1))
+        if ((last == 't' && reduct_parse_compare_suffix(atom, "not")) ||
+            (last == '-' && reduct_parse_compare_suffix(atom, "-")))
         {
             return REDUCT_PARSE_PRECEDENCE_UNARY;
         }
         return REDUCT_PARSE_PRECEDENCE_NONE;
     }
 
-    if (reduct_atom_is_equal(atom, "or", 2))
+    switch (last)
     {
-        return REDUCT_PARSE_PRECEDENCE_LOGICAL_OR;
-    }
-    if (reduct_atom_is_equal(atom, "and", 3))
-    {
-        return REDUCT_PARSE_PRECEDENCE_LOGICAL_AND;
-    }
-    if (reduct_atom_is_equal(atom, "==", 2) || reduct_atom_is_equal(atom, "!=", 2) ||
-        reduct_atom_is_equal(atom, "<", 1) || reduct_atom_is_equal(atom, "<=", 2) ||
-        reduct_atom_is_equal(atom, ">", 1) || reduct_atom_is_equal(atom, ">=", 2))
-    {
-        return REDUCT_PARSE_PRECEDENCE_COMPARISON;
-    }
-    if (reduct_atom_is_equal(atom, "<<", 2) || reduct_atom_is_equal(atom, ">>", 2))
-    {
-        return REDUCT_PARSE_PRECEDENCE_SHIFT;
-    }
-    if (reduct_atom_is_equal(atom, "&", 1) || reduct_atom_is_equal(atom, "|", 1) || reduct_atom_is_equal(atom, "^", 1))
-    {
-        return REDUCT_PARSE_PRECEDENCE_BITWISE;
-    }
-    if (reduct_atom_is_equal(atom, "*", 1) || reduct_atom_is_equal(atom, "/", 1) || reduct_atom_is_equal(atom, "%", 1))
-    {
-        return REDUCT_PARSE_PRECEDENCE_MUL_DIV;
-    }
-    if (reduct_atom_is_equal(atom, "+", 1) || reduct_atom_is_equal(atom, "-", 1))
-    {
-        return REDUCT_PARSE_PRECEDENCE_ADD_SUB;
+    case 'r':
+        if (reduct_parse_compare_suffix(atom, "or"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_LOGICAL_OR;
+        }
+        break;
+    case 'd':
+        if (reduct_parse_compare_suffix(atom, "and"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_LOGICAL_AND;
+        }
+        break;
+    case '<':
+        if (reduct_parse_compare_suffix(atom, "<<"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_SHIFT;
+        }
+        if (reduct_parse_compare_suffix(atom, "<"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_COMPARISON;
+        }
+        break;
+    case '>':
+        if (reduct_parse_compare_suffix(atom, ">>"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_SHIFT;
+        }
+        if (reduct_parse_compare_suffix(atom, ">"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_COMPARISON;
+        }
+        break;
+    case '=':
+        if (reduct_parse_compare_suffix(atom, "==") || reduct_parse_compare_suffix(atom, "!=") ||
+            reduct_parse_compare_suffix(atom, "<=") || reduct_parse_compare_suffix(atom, ">="))
+        {
+            return REDUCT_PARSE_PRECEDENCE_COMPARISON;
+        }
+        break;
+    case '&':
+    case '|':
+    case '^':
+        if (reduct_parse_compare_suffix(atom, "&") || reduct_parse_compare_suffix(atom, "|") ||
+            reduct_parse_compare_suffix(atom, "^"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_BITWISE;
+        }
+        break;
+    case '*':
+    case '/':
+    case '%':
+        if (reduct_parse_compare_suffix(atom, "*") || reduct_parse_compare_suffix(atom, "/") ||
+            reduct_parse_compare_suffix(atom, "%"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_MUL_DIV;
+        }
+        break;
+    case '+':
+    case '-':
+        if (reduct_parse_compare_suffix(atom, "+") || reduct_parse_compare_suffix(atom, "-"))
+        {
+            return REDUCT_PARSE_PRECEDENCE_ADD_SUB;
+        }
+        break;
     }
 
-    return REDUCT_PARSE_PRECEDENCE_NONE;
+    const char* ptr = ctx->input->buffer + REDUCT_CONTAINER_OF(atom, reduct_item_t, atom)->position;
+    REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ptr, "unexpected operator '%.*s'", (int)atom->length, atom->string);
 }
 
 static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t* ctx, reduct_list_t* list, reduct_size_t* pos,
@@ -133,7 +189,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
 
     reduct_handle_t first = reduct_list_nth(ctx->reduct, list, *pos);
     reduct_handle_t left;
-    reduct_parse_precedence_t unaryPrecedence = reduct_parse_get_precedence(first, REDUCT_TRUE);
+    reduct_parse_precedence_t unaryPrecedence = reduct_parse_get_precedence(ctx, first, REDUCT_TRUE);
 
     if (unaryPrecedence > REDUCT_PARSE_PRECEDENCE_NONE)
     {
@@ -153,7 +209,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
     while (*pos < list->length)
     {
         reduct_handle_t op = reduct_list_nth(ctx->reduct, list, *pos);
-        reduct_parse_precedence_t prec = reduct_parse_get_precedence(op, REDUCT_FALSE);
+        reduct_parse_precedence_t prec = reduct_parse_get_precedence(ctx, op, REDUCT_FALSE);
         if (prec == REDUCT_PARSE_PRECEDENCE_NONE || prec < minPrecedence)
         {
             break;
@@ -162,7 +218,10 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
         (*pos)++;
         if (*pos >= list->length)
         {
-            break;
+            reduct_item_t* opItem = REDUCT_HANDLE_TO_ITEM(&op);
+            REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input,
+                ctx->input->buffer + opItem->position,
+                "infix operator '%.*s' missing right operand", (int)opItem->atom.length, opItem->atom.string);
         }
 
         reduct_handle_t right = reduct_parse_infix_transform_recursive(ctx, list, pos, prec + 1);
@@ -276,10 +335,16 @@ static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t*
     wrapperItem->inputId = getInListItem->inputId;
     wrapperItem->position = getInListItem->position;
 
-    reduct_list_push(ctx->reduct, wrapper,
-        REDUCT_HANDLE_FROM_ATOM(reduct_atom_lookup(ctx->reduct, "get-in", 6, REDUCT_ATOM_LOOKUP_NONE)));
+    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_STRING(ctx->reduct, "get-in"));
     reduct_list_push(ctx->reduct, wrapper, *getInTarget);
-    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_FROM_LIST(*getInList));
+    if ((*getInList)->length == 2)
+    {
+        reduct_list_push(ctx->reduct, wrapper, reduct_list_second(ctx->reduct, *getInList));
+    }
+    else
+    {
+        reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_FROM_LIST(*getInList));
+    }
     reduct_list_push(ctx->reduct, list, REDUCT_HANDLE_FROM_LIST(wrapper));
 
     *getInList = REDUCT_NULL;
@@ -441,7 +506,7 @@ REDUCT_API reduct_handle_t reduct_parse_input(reduct_t* reduct, reduct_input_t* 
     ctx.reduct = reduct;
     ctx.input = input;
     ctx.ptr = input->buffer;
-    
+
     if (ctx.ptr + 1 < ctx.input->end && *ctx.ptr == '#' && *(ctx.ptr + 1) == '!')
     {
         while (ctx.ptr < ctx.input->end && *ctx.ptr != '\n')

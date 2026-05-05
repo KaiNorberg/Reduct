@@ -1,0 +1,10 @@
+(do
+    (def abc+ (lambda (a b) (+ a b)))
+    (def abc* (lambda (a b) (* a b)))
+
+    (assert! (== {10 - 2 * 3} 4) "infix notation should respect standard operator precedence")
+    (assert! (== {{10 - 2} * 3 } 24) "infix notation should respect nested infixes")
+    (assert! (== {1 abc+ 2 abc* 3} 7) "infix notation should support custom functions and respect precedence")
+    (assert! (== {10 / 2 + 5} 10) "infix notation should handle division and addition")
+    (assert! {2 + 3 * 4 == 14} "infix notation should handle comparison operators with lower precedence")
+)

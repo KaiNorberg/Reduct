@@ -412,11 +412,12 @@ static inline void reduct_compile_inst(reduct_compiler_t* compiler, reduct_inst_
  *
  * @param compiler The compiler context.
  * @param target The target register.
+ * @param count The number of elements to include in the list.
  */
-static inline void reduct_compile_list(reduct_compiler_t* compiler, reduct_reg_t target)
+static inline void reduct_compile_list(reduct_compiler_t* compiler, reduct_reg_t target, reduct_uint32_t count)
 {
     REDUCT_ASSERT(compiler != REDUCT_NULL);
-    reduct_compile_inst(compiler, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_LIST, target, 0, 0));
+    reduct_compile_inst(compiler, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_LIST, target, count, 0));
 }
 
 /**
@@ -612,22 +613,6 @@ static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_exp
     REDUCT_ASSERT(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_RET | (reduct_opcode_t)expr->mode), 0, 0, expr->value));
-}
-
-/**
- * @brief Emits an `REDUCT_OPCODE_APPEND` instruction.
- *
- * @param compiler The compiler context.
- * @param target The target list register.
- * @param expr The expression to append.
- */
-static inline void reduct_compile_append(reduct_compiler_t* compiler, reduct_reg_t target, reduct_expr_t* expr)
-{
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(expr != REDUCT_NULL);
-    REDUCT_ASSERT(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
-    reduct_compile_inst(compiler,
-        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_APPEND | (reduct_opcode_t)expr->mode), target, 0, expr->value));
 }
 
 /**

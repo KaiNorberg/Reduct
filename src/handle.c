@@ -29,13 +29,6 @@ REDUCT_API void reduct_handle_ensure_item(reduct_t* reduct, reduct_handle_t* han
     *handle = REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
 }
 
-REDUCT_API reduct_item_t* reduct_handle_item(reduct_t* reduct, reduct_handle_t* handle)
-{
-    REDUCT_ASSERT(handle != REDUCT_NULL);
-    reduct_handle_ensure_item(reduct, handle);
-    return REDUCT_HANDLE_TO_ITEM(handle);
-}
-
 REDUCT_API void reduct_handle_promote(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b,
     reduct_promotion_t* out)
 {
@@ -200,6 +193,12 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
     }
 
     out->item = REDUCT_HANDLE_TO_ITEM(handle);
+    if (out->item == REDUCT_NULL)
+    {
+        out->group = 1;
+        return;
+    }
+
     if (out->item->type == REDUCT_ITEM_TYPE_LIST)
     {
         out->group = 2;
@@ -294,12 +293,11 @@ REDUCT_API reduct_int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_
     reduct_size_t lenB = listB ? listB->length : 0;
     reduct_size_t minLen = lenA < lenB ? lenA : lenB;
 
-    reduct_list_iter_t iterA = REDUCT_LIST_ITER(listA);
-    reduct_list_iter_t iterB = REDUCT_LIST_ITER(listB);
-    reduct_handle_t itemA, itemB;
-    while (iterA.index < minLen && reduct_list_iter_next(&iterA, &itemA) && reduct_list_iter_next(&iterB, &itemB))
+    for (reduct_size_t i = 0; i < minLen; i++)
     {
-        reduct_int64_t cmp = reduct_handle_compare(reduct, &itemA, &itemB);
+        reduct_handle_t ha = reduct_list_nth(reduct, listA, i);
+        reduct_handle_t hb = reduct_list_nth(reduct, listB, i);
+        reduct_int64_t cmp = reduct_handle_compare(reduct, &ha, &hb);
         if (cmp != 0)
         {
             return cmp;
@@ -361,7 +359,7 @@ REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t* h
     REDUCT_ASSERT(reduct != REDUCT_NULL);
     REDUCT_ASSERT(handle != REDUCT_NULL);
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     if (REDUCT_UNLIKELY(index >= item->length))
     {
@@ -388,7 +386,7 @@ REDUCT_API reduct_size_t reduct_handle_len(reduct_t* reduct, reduct_handle_t* ha
     REDUCT_ASSERT(reduct != REDUCT_NULL);
     REDUCT_ASSERT(handle != REDUCT_NULL);
 
-    return reduct_handle_item(reduct, handle)->length;
+    return reduct_handle_as_item(reduct, handle)->length;
 }
 
 REDUCT_API reduct_bool_t reduct_handle_is_str(reduct_t* reduct, reduct_handle_t* handle, const char* str)

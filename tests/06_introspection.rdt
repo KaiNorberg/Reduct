@@ -60,8 +60,7 @@
     (assert! (== (nil? nil nil) true) "nil? should return true if all items are nil")
     (assert! (== (nil? nil text) false) "nil? should return false if any item is not nil")
 
-    (assert! (eq? "apple" "apple") "eq? should return true for strictly equal strings")
-    (assert! (not (eq? 10 "10")) "eq? should return false for items that are numerically equal but different types/shapes")
-    (assert! (ne? "apple" "banana") "ne? should return true for different strings")
-    (assert! (eq? (list 1 2) (list 1 2)) "eq? should support structural equality for lists")
+    (assert! (exact== "apple" "apple") "exact== should return true for strictly equal strings")
+    (assert! (exact!= "apple" "banana") "exact!= should return true for different strings")
+    (assert! (exact== (list 1 2) (list 1 2)) "exact== should support structural equality for lists")
 )

@@ -158,6 +158,10 @@ For more examples, see the `bench/` and `tests/` directories.
 
 Reduct aims to provide a series of potential advantages that over existing languages.
 
+### Immutability
+
+Functional languages often emphasize immutability in order to improve debuggability and inspectability. In effect, immutability allows us to know exactly what some code will do, regardless of where it was called or what other parts of the program are doing.
+
 ### Performance
 
 Reduct utilizes a register-based VM and many other techniques to improve performance, allowing it to outperform even Lua (though not the JIT version obviously, maybe one day...), in some benchmarks.
@@ -237,6 +241,105 @@ Included is an example of what that might look like:
 
 Despite that original use case, Reduct can just as easily be utilized for scripting, configuration, or even as a general-purpose embedded language.
 
+## Parsing
+
+The parser can apply several possible transformations before any code or data is evaluated.
+
+### Comments
+
+Comments are ignored by the parser and can be used to document your code.
+
+```lisp
+// This is a line comment.
+
+/*
+    This is a
+    block comment.
+*/
+```
+
+### Association Lists
+
+The parser provides syntax sugar around the `get-in` native such that any atom followed by a `.` and another atom or list (e.g., `a.b`), that does not evaluate to a float-shaped atom, will be expanded into a `get-in` call.
+
+For example:
+
+```lisp
+(def data (("a" 1) ("b" 2) ("c" (("d" 3)))))
+
+data.a // (get-in data "a") -> 1
+data.(nth "ab" 1) // (get-in data (nth "ab" 1)) -> 2
+data.c.d // (get-in data ("c" "d")) -> 3
+```
+
+> This feature primarily exists to make the `import` native easier to use.
+
+### Infix Expressions
+
+Infix expressions provide a more convenient way to write certain expressions, particularly mathematical or logical expressions.
+
+To write an infix expression, use curly braces.
+
+For example:
+
+```lisp
+{1 + 2 * 3} // (1 + (2 * 3))
+{2 * (my-func1 1 2)} // (2 * (my-func 1 2))
+{not (my-func2 data) or {count > 10}} // (or (not (my-func2 data)) (> count 10))
+```
+
+When the parser encounters an infix expression it will expand it into a normal expression, using the following rules:
+
+1. Operators are grouped based on their precedence, which is decided by their suffix. For example, `*` and `/` have higher precedence than `+` and `-`. The same applies to `abc*` and `abc+`.
+2. Operators with the same precedence are evaluated from left to right.
+3. If an expression is wrapped in another infix expression, it is treated as a single unit and its precedence is ignored (e.g., `{{1 + 2} * 3}`).
+4. Lists within an infix expression are treated as usual.
+5. If an infix expression contains only a single item, it is treated as that item (e.g., `{1}` becomes `1`).
+
+The following table lists the supported suffixes:
+
+| Precedence | Suffixes |
+| --- | --- |
+| 7 | `not`, unary `-` |
+| 6 | `*`, `/`, `%` |
+| 5 | `+`, `-` |
+| 4 | `<<`, `>>` |
+| 3 | `&`, `\|`, `^` |
+| 2 | `==`, `!=`, `<`, `<=`, `>`, `>=` |
+| 1 | `and` |
+| 0 | `or` |
+
+Since the precedence is decided based upon a functions suffix, custom functions can easily and predicably be handled by infix expressions.
+
+For example:
+
+```lisp
+(def abc+ (lambda (a b) (+ a b)))
+(def abc* (lambda (a b) (* a b)))
+
+{1 abc+ 2 abc* 3} // (abc+ 1 (abc* 2 3)) -> 7
+```
+
+This system can also be used to implement more complex logic, such as emulating operator overloading:
+
+```lisp
+(def vec2 (lambda (x y)    
+    (list
+        ("x" x)
+        ("y" y)
+    )
+))
+
+(def vec2+ (lambda (a b)
+    (vec2 {a.x + b.x} {a.y + b.y})
+))
+
+(def v1 (vec2 1 2))
+(def v2 (vec2 3 4))
+
+{v1 vec2+ v2} // (vec2+ v1 v2) -> (("x" 4) ("y" 6))
+```
+
 ## Additional Concepts
 
 ### Type Coercion
@@ -310,72 +413,6 @@ As an example, locals can be used to create a more traditional "function definit
 
 (add 1 2) // Evaluates to "3"
 ```
-
-## Parser Evaluation
-
-The parser can apply several possible transformations before any code or data is evaluated.
-
-### Comments
-
-Comments are ignored by the parser and can be used to document your code.
-
-```lisp
-// This is a line comment.
-
-/*
-    This is a
-    block comment.
-*/
-```
-
-### Association Lists
-
-The parser provides syntax sugar around the `get-in` native such that any atom followed by a `.` and another atom or list (e.g., `a.b`), that does not evaluate to a float-shaped atom, will be expanded into a `get-in` call.
-
-For example:
-
-```lisp
-(def data (("a" 1) ("b" 2) ("c" (("d" 3)))))
-
-data.a // (get-in data "a") -> 1
-data.(nth "ab" 1) // (get-in data (nth "ab" 1)) -> 2
-data.c.d // (get-in data ("c" "d")) -> 3
-```
-
-> This feature primarily exists to make the `import` native easier to use.
-
-### Infix Expressions
-
-Infix expressions provide a more convenient way to write certain expressions, particularly mathematical or logical expressions.
-
-To write an infix expression, use curly braces:
-
-```lisp
-{1 + 2 * 3} // (1 + (2 * 3))
-{2 * (my-func1 1 2)} // (2 * (my-func 1 2))
-{not (my-func2 data) or {count > 10}} // (or (not (my-func2 data)) (> count 10))
-```
-
-When the parser encounters an infix expression it will expand it into a normal expression, using the following rules:
-
-1. Operators are grouped based on their precedence. For example, `*` and `/` have higher precedence than `+` and `-`.
-2. Operators with the same precedence are evaluated from left to right.
-3. If an expression is wrapped in another infix expression, it is treated as a single unit and its precedence is ignored (e.g., `{{1 + 2} * 3}`).
-4. Lists within an infix expression are treated as usual.
-5. If an infix expression contains only a single item, it is treated as that item (e.g., `{1}` becomes `1`).
-
-The following table lists the supported operators:
-
-| Precedence | Operators |
-| --- | --- |
-| 7 | `not`, unary `-` |
-| 6 | `*`, `/`, `%` |
-| 5 | `+`, `-` |
-| 4 | `<<`, `>>` |
-| 3 | `&`, `\|`, `^` |
-| 2 | `==`, `!=`, `<`, `<=`, `>`, `>=` |
-| 1 | `and` |
-| 0 | `or` |
 
 ## Style Guide
 
@@ -806,7 +843,7 @@ For example:
 
 (let ((x 10) (y 20))
     (+ x y)
-) // Evaluates to "30"
+) // Would evaluate to "30"
 ```
 
 ---
@@ -913,13 +950,13 @@ Returns `true` if any arguments are not equal, otherwise `false`.
 
 Will stop evaluating arguments as soon as one is equal.
 
-**`(eq? <item> <item> {item}) -> <true|false>`**
+**`(exact== <item> <item> {item}) -> <true|false>`**
 
 Returns `true` if all arguments are exactly equal using string comparison, otherwise `false`.
 
 Will stop evaluating arguments as soon as one is not equal.
 
-**`(ne? <item> <item> {item}) -> <true|false>`**
+**`(exact!= <item> <item> {item}) -> <true|false>`**
 
 Returns `true` if any arguments are not exactly equal using string comparison, otherwise `false`.
 

@@ -41,6 +41,35 @@ REDUCT_API reduct_list_t* reduct_list_new(reduct_t* reduct)
     return list;
 }
 
+REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, reduct_size_t count, reduct_handle_t* handles)
+{
+    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    REDUCT_ASSERT(handles != REDUCT_NULL || count == 0);
+
+    if (REDUCT_LIKELY(count <= REDUCT_LIST_WIDTH))
+    {
+        reduct_item_t* item = reduct_item_new(reduct);
+        item->type = REDUCT_ITEM_TYPE_LIST;
+        reduct_list_t* list = &item->list;
+        list->length = count;
+        list->shift  = 0;
+        list->root   = REDUCT_NULL;
+        for (reduct_uint32_t i = 0; i < count; i++)
+        {
+            list->tail.handles[i] = handles[i];
+        }
+        return list;
+    }
+
+    reduct_list_t* list = reduct_list_new(reduct);
+    for (reduct_uint32_t i = 0; i < count; i++)
+    {
+        reduct_list_push(reduct, list, handles[i]);
+    }
+
+    return list;
+}
+
 REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, reduct_size_t count, ...)
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
@@ -64,7 +93,7 @@ REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, reduct_si
     return list;
 }
 
-static reduct_list_node_t* reduct_list_find_leaf(reduct_list_t* list, reduct_size_t index, reduct_size_t tailOffset)
+REDUCT_API reduct_list_node_t* reduct_list_find_leaf(reduct_list_t* list, reduct_size_t index, reduct_size_t tailOffset)
 {
     if (index >= tailOffset || list->root == REDUCT_NULL)
     {
@@ -79,7 +108,7 @@ static reduct_list_node_t* reduct_list_find_leaf(reduct_list_t* list, reduct_siz
     return node;
 }
 
-static reduct_list_node_t* reduct_list_assoc_internal(reduct_t* reduct, reduct_uint32_t shift, reduct_list_node_t* node,
+static inline reduct_list_node_t* reduct_list_assoc_internal(reduct_t* reduct, reduct_uint32_t shift, reduct_list_node_t* node,
     reduct_size_t index, reduct_handle_t val)
 {
     reduct_list_node_t* newNode = reduct_list_node_copy(reduct, node);
@@ -144,7 +173,7 @@ REDUCT_API reduct_list_t* reduct_list_dissoc(struct reduct* reduct, reduct_list_
     reduct_handle_t val;
     REDUCT_LIST_FOR_EACH(&val, list)
     {
-        if (_iter.index - 1 != index)
+        if (_iter.index != index)
         {
             reduct_list_push(reduct, newList, val);
         }
@@ -165,15 +194,15 @@ REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t
     }
 
     reduct_list_t* newList = reduct_list_new(reduct);
-    reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(list, start);
 
     reduct_handle_t val;
-    while (iter.index < end)
+    REDUCT_LIST_FOR_EACH_AT(&val, list, start)
     {
-        if (REDUCT_LIKELY(reduct_list_iter_next(&iter, &val)))
+        if (_iter.index >= end)
         {
-            reduct_list_push(reduct, newList, val);
+            break;
         }
+        reduct_list_push(reduct, newList, val);
     }
 
     return newList;
@@ -210,6 +239,11 @@ REDUCT_API reduct_handle_t reduct_list_nth(struct reduct* reduct, reduct_list_t*
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
     REDUCT_ASSERT(list != REDUCT_NULL);
+
+    if (list->length <= REDUCT_LIST_WIDTH)
+    {
+        return list->tail.handles[index];
+    }
 
     if (REDUCT_UNLIKELY(index >= list->length))
     {
@@ -255,41 +289,38 @@ REDUCT_API void reduct_list_push(reduct_t* reduct, reduct_list_t* list, reduct_h
 {
     REDUCT_ASSERT(list != REDUCT_NULL);
 
-    if (list->length > 0 && (list->length & REDUCT_LIST_MASK) == 0)
+    if (list->length < REDUCT_LIST_WIDTH || (list->length & REDUCT_LIST_MASK) != 0)
     {
-        reduct_list_node_t* fullTailNode = reduct_list_node_new(reduct);
-        REDUCT_MEMCPY(fullTailNode, &list->tail, sizeof(reduct_list_node_t));
-
-        reduct_list_node_init(&list->tail);
-        list->tail.handles[0] = val;
-
-        if (list->root == REDUCT_NULL)
-        {
-            list->root = fullTailNode;
-            list->shift = 0;
-        }
-        else
-        {
-            if ((list->length - 1) >> (list->shift + REDUCT_LIST_BITS) > 0)
-            {
-                reduct_list_node_t* newRoot = reduct_list_node_new(reduct);
-                reduct_list_node_init(newRoot);
-                newRoot->children[0] = list->root;
-                newRoot->children[1] = reduct_push_tail(reduct, list->shift, list->length - 1, REDUCT_NULL, fullTailNode);
-                list->root = newRoot;
-                list->shift += REDUCT_LIST_BITS;
-            }
-            else
-            {
-                list->root = reduct_push_tail(reduct, list->shift, list->length - 1, list->root, fullTailNode);
-            }
-        }
+        list->tail.handles[list->length & REDUCT_LIST_MASK] = val; 
+        list->length++;
+        return; 
     }
-    else
+    
+    reduct_list_node_t* fullTailNode = reduct_list_node_copy(reduct, &list->tail);
+    reduct_list_node_init(&list->tail);
+    list->tail.handles[0] = val;
+
+    if (list->root == REDUCT_NULL)
     {
-        list->tail.handles[list->length & REDUCT_LIST_MASK] = val;
+        list->root = fullTailNode;
+        list->shift = 0;
+        list->length++;
+        return;
     }
 
+    if ((list->length - 1) >> (list->shift + REDUCT_LIST_BITS) > 0)
+    {
+        reduct_list_node_t* newRoot = reduct_list_node_new(reduct);
+        reduct_list_node_init(newRoot);
+        newRoot->children[0] = list->root;
+        newRoot->children[1] = reduct_push_tail(reduct, list->shift, list->length - 1, REDUCT_NULL, fullTailNode);
+        list->root = newRoot;
+        list->shift += REDUCT_LIST_BITS;
+        list->length++;
+        return;
+    }
+
+    list->root = reduct_push_tail(reduct, list->shift, list->length - 1, list->root, fullTailNode);
     list->length++;
 }
 
@@ -321,21 +352,72 @@ REDUCT_API reduct_list_t* reduct_list_new_from_handles(reduct_t* reduct, reduct_
 
 REDUCT_API reduct_bool_t reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out)
 {
+    if (iter->leaf != REDUCT_NULL)
+    {
+        iter->index++;
+    }
+
     if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
     {
         return REDUCT_FALSE;
     }
 
-    if (iter->leaf == REDUCT_NULL || (iter->index & REDUCT_LIST_MASK) == 0)
+    if ((iter->index & REDUCT_LIST_MASK) == 0 || iter->leaf == REDUCT_NULL)
     {
         iter->leaf = reduct_list_find_leaf(iter->list, iter->index, iter->tailOffset);
     }
 
-    if (out != REDUCT_NULL)
+    *out = iter->leaf->handles[iter->index & REDUCT_LIST_MASK];
+
+    return REDUCT_TRUE;
+}
+
+REDUCT_API reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_item_t* listItem, reduct_handle_t* key)
+{
+    reduct_handle_t entryH;
+    REDUCT_LIST_FOR_EACH(&entryH, &listItem->list)
     {
-        *out = iter->leaf->handles[iter->index & REDUCT_LIST_MASK];
+        if (!REDUCT_HANDLE_IS_LIST(&entryH))
+        {
+            continue;
+        }
+
+        reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
+        if (entry->length < 1)
+        {
+            continue;
+        }
+
+        reduct_handle_t entryKey = reduct_list_first(reduct, &entry->list);
+        if (reduct_handle_compare_likely_atom(reduct, &entryKey, key))
+        {
+            return entryH;
+        }
+    }
+    return REDUCT_HANDLE_NONE;
+}
+
+REDUCT_API reduct_bool_t reduct_list_get_entry(reduct_t* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,
+    reduct_handle_t* outVal)
+{
+    if (!REDUCT_HANDLE_IS_LIST(entryH))
+    {
+        return REDUCT_FALSE;
+    }
+    reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(entryH);
+    if (entry->length < 1)
+    {
+        return REDUCT_FALSE;
     }
 
-    iter->index++;
+    if (outKey != REDUCT_NULL)
+    {
+        *outKey = reduct_list_first(reduct, &entry->list);
+    }
+
+    if (outVal != REDUCT_NULL)
+    {
+        *outVal = (entry->length >= 2) ? reduct_list_second(reduct, &entry->list) : reduct_handle_nil(reduct);
+    }
     return REDUCT_TRUE;
 }

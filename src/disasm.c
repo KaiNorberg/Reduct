@@ -50,9 +50,6 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
         case REDUCT_OPCODE_RET:
             opName = "RET";
             break;
-        case REDUCT_OPCODE_APPEND:
-            opName = "APPEND";
-            break;
         case REDUCT_OPCODE_MOV:
             opName = "MOV";
             break;
@@ -131,7 +128,7 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
         switch (REDUCT_INST_GET_OP_BASE(inst))
         {
         case REDUCT_OPCODE_LIST:
-            REDUCT_FPRINTF(out, "R%-5u %-6s %-6s", a, "", "");
+            REDUCT_FPRINTF(out, "R%-5u %-6u", a, b);
             break;
         case REDUCT_OPCODE_JMP:
             REDUCT_FPRINTF(out, "%-6d %-6s %-6s", sbx, "", "");
@@ -148,7 +145,6 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
         case REDUCT_OPCODE_RET:
             REDUCT_FPRINTF(out, "%c%-5u %-6s %-6s", isConst ? 'K' : 'R', c, "", "");
             break;
-        case REDUCT_OPCODE_APPEND:
         case REDUCT_OPCODE_MOV:
         case REDUCT_OPCODE_BNOT:
             REDUCT_FPRINTF(out, "R%-5u %-6s %c%-5u", a, "", isConst ? 'K' : 'R', c);

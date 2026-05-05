@@ -37,7 +37,17 @@ REDUCT_API void reduct_intrinsic_register_all(struct reduct* reduct);
  * @param startIdx The index to start compiling from.
  * @param out The output expression.
  */
-void reduct_intrinsic_block_generic(struct reduct_compiler* compiler, struct reduct_item* list,
+REDUCT_API void reduct_intrinsic_block_generic(struct reduct_compiler* compiler, struct reduct_item* list,
     reduct_uint32_t startIdx, struct reduct_expr* out);
+
+/**
+ * @brief Compiles a list of expressions into a list.
+ *
+ * @param compiler The compiler context.
+ * @param list The list containing the expressions to be evaluated and added to the new list.
+ * @param startIdx The index to start compiling from.
+ * @param out The output expression.
+ */
+REDUCT_API void reduct_intrinsic_list_generic(struct reduct_compiler* compiler, struct reduct_item* list, reduct_uint32_t startIdx, struct reduct_expr* out);
 
 #endif

@@ -2,6 +2,7 @@
 #include "reduct/intrinsic.h"
 #include "reduct/item.h"
 #include "reduct/standard.h"
+#include <reduct/defs.h>
 
 static inline void reduct_intrinsic_check_arity(reduct_compiler_t* compiler, reduct_item_t* list,
     reduct_size_t expected, const char* name)
@@ -45,25 +46,7 @@ void reduct_intrinsic_quote(reduct_compiler_t* compiler, reduct_item_t* list, re
 
 void reduct_intrinsic_list(reduct_compiler_t* compiler, reduct_item_t* list, reduct_expr_t* out)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(list != REDUCT_NULL);
-    REDUCT_ASSERT(out != REDUCT_NULL);
-
-    reduct_reg_t target = reduct_expr_get_reg(compiler, out);
-    reduct_compile_list(compiler, target);
-
-    reduct_handle_t h;
-    REDUCT_LIST_FOR_EACH_AT(&h, &list->list, 1)
-    {
-        reduct_expr_t argExpr = REDUCT_EXPR_NONE();
-        reduct_expr_build(compiler, REDUCT_HANDLE_TO_ITEM(&h), &argExpr);
-
-        reduct_compile_append(compiler, target, &argExpr);
-
-        reduct_expr_done(compiler, &argExpr);
-    }
-
-    *out = REDUCT_EXPR_REG(target);
+    return reduct_intrinsic_list_generic(compiler, list, 1, out);
 }
 
 static inline void reduct_compile_build_into_target(reduct_compiler_t* compiler, reduct_item_t* item,
@@ -81,50 +64,6 @@ static inline void reduct_compile_build_into_target(reduct_compiler_t* compiler,
         reduct_compile_move(compiler, target, &expr);
         reduct_expr_done(compiler, &expr);
     }
-}
-
-void reduct_intrinsic_block_generic(reduct_compiler_t* compiler, reduct_item_t* list, reduct_uint32_t startIdx,
-    reduct_expr_t* out)
-{
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(list != REDUCT_NULL);
-    REDUCT_ASSERT(out != REDUCT_NULL);
-
-    if (startIdx >= list->length)
-    {
-        *out = REDUCT_EXPR_NONE();
-        return;
-    }
-
-    reduct_uint16_t savedLocalCount = compiler->localCount;
-
-    reduct_reg_t targetHint = REDUCT_EXPR_GET_TARGET(out);
-    reduct_handle_t h;
-    REDUCT_LIST_FOR_EACH_AT(&h, &list->list, startIdx)
-    {
-        reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&h);
-
-        if (_iter.index == list->length)
-        {
-            if (targetHint != REDUCT_REG_INVALID)
-            {
-                reduct_compile_build_into_target(compiler, item, targetHint);
-                *out = REDUCT_EXPR_REG(targetHint);
-            }
-            else
-            {
-                reduct_expr_build(compiler, item, out);
-            }
-        }
-        else
-        {
-            reduct_expr_t expr = REDUCT_EXPR_NONE();
-            reduct_expr_build(compiler, item, &expr);
-            reduct_expr_done(compiler, &expr);
-        }
-    }
-
-    reduct_local_pop(compiler, savedLocalCount, out);
 }
 
 void reduct_intrinsic_do(reduct_compiler_t* compiler, reduct_item_t* list, reduct_expr_t* out)
@@ -197,7 +136,7 @@ void reduct_intrinsic_lambda(reduct_compiler_t* compiler, reduct_item_t* list, r
         if (captured == REDUCT_NULL)
         {
             REDUCT_ERROR_COMPILE(compiler, REDUCT_CONTAINER_OF(captureName, reduct_item_t, atom),
-                "undefined variable '%.*s'", captureName->length, captureName->string);
+                "undefined local '%.*s'", captureName->length, captureName->string);
         }
 
         if (!REDUCT_LOCAL_IS_DEFINED(captured))
@@ -256,7 +195,7 @@ void reduct_intrinsic_thread(reduct_compiler_t* compiler, reduct_item_t* list, r
             reduct_handle_t argH;
             REDUCT_LIST_FOR_EACH_AT(&argH, &step->list, 1)
             {
-                reduct_reg_t argReg = (reduct_reg_t)(base + _iter.index - 1);
+                reduct_reg_t argReg = (reduct_reg_t)(base + _iter.index);
                 reduct_expr_t argExpr = REDUCT_EXPR_TARGET(argReg);
                 reduct_expr_build(compiler, REDUCT_HANDLE_TO_ITEM(&argH), &argExpr);
 
@@ -566,9 +505,13 @@ void reduct_intrinsic_match(reduct_compiler_t* compiler, reduct_item_t* list, re
     reduct_size_t jumpCount = 0;
 
     reduct_handle_t h;
-    reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(&list->list, 2);
-    while (iter.index < list->length - 1 && reduct_list_iter_next(&iter, &h))
+    REDUCT_LIST_FOR_EACH_AT(&h, &list->list, 2)
     {
+        if (_iter.index >= list->length - 1)
+        {
+            break;
+        }
+
         reduct_item_t* pair = reduct_intrinsic_get_pair(compiler, &h, "match");
         reduct_expr_t valExpr = REDUCT_EXPR_NONE();
         reduct_expr_build(compiler, reduct_list_nth_item(compiler->reduct, &pair->list, 0), &valExpr);
@@ -657,7 +600,7 @@ static void reduct_intrinsic_and_or(reduct_compiler_t* compiler, reduct_item_t* 
         {
             reduct_bool_t shortCircuits = (jumpOp == REDUCT_OPCODE_JMPT) ? isTruthy : !isTruthy;
 
-            if (shortCircuits || _iter.index == list->length)
+            if (shortCircuits || _iter.index + 1 >= list->length)
             {
                 if (target == REDUCT_REG_INVALID)
                 {
@@ -685,7 +628,7 @@ static void reduct_intrinsic_and_or(reduct_compiler_t* compiler, reduct_item_t* 
             reduct_expr_done(compiler, &argExpr);
         }
 
-        if (_iter.index != list->length)
+        if (_iter.index + 1 != list->length)
         {
             if (REDUCT_UNLIKELY(jumpCount >= REDUCT_REGISTER_MAX))
             {
@@ -1129,7 +1072,7 @@ static void reduct_intrinsic_comparison_generic(reduct_compiler_t* compiler, red
 
         reduct_compile_binary(compiler, opBase, target, leftExpr.reg, &rightExpr);
 
-        if (_iter.index != list->length)
+        if (_iter.index + 1 != list->length)
         {
             if (jumpCount >= REDUCT_REGISTER_MAX)
             {
@@ -1170,7 +1113,7 @@ void reduct_intrinsic_equal(reduct_compiler_t* compiler, reduct_item_t* list, re
     reduct_intrinsic_comparison_generic(compiler, list, out, REDUCT_OPCODE_EQ);
 }
 
-void reduct_intrinsic_strict_equal(reduct_compiler_t* compiler, reduct_item_t* list, reduct_expr_t* out)
+void reduct_intrinsic_exact_equal(reduct_compiler_t* compiler, reduct_item_t* list, reduct_expr_t* out)
 {
     reduct_intrinsic_comparison_generic(compiler, list, out, REDUCT_OPCODE_SEQ);
 }
@@ -1180,7 +1123,7 @@ void reduct_intrinsic_not_equal(reduct_compiler_t* compiler, reduct_item_t* list
     reduct_intrinsic_comparison_generic(compiler, list, out, REDUCT_OPCODE_NEQ);
 }
 
-void reduct_intrinsic_strict_not_equal(reduct_compiler_t* compiler, reduct_item_t* list, reduct_expr_t* out)
+void reduct_intrinsic_exact_not_equal(reduct_compiler_t* compiler, reduct_item_t* list, reduct_expr_t* out)
 {
     reduct_intrinsic_comparison_generic(compiler, list, out, REDUCT_OPCODE_SNEQ);
 }
@@ -1439,8 +1382,8 @@ static reduct_native_t reductIntrinsics[] = {
     {">>", reduct_intrinsic_native_shr, reduct_intrinsic_bit_shr},
     {"==", reduct_intrinsic_native_eq, reduct_intrinsic_equal},
     {"!=", reduct_intrinsic_native_neq, reduct_intrinsic_not_equal},
-    {"eq?", reduct_intrinsic_native_seq, reduct_intrinsic_strict_equal},
-    {"ne?", reduct_intrinsic_native_sneq, reduct_intrinsic_strict_not_equal},
+    {"exact==", reduct_intrinsic_native_seq, reduct_intrinsic_exact_equal},
+    {"exact!=", reduct_intrinsic_native_sneq, reduct_intrinsic_exact_not_equal},
     {"<", reduct_intrinsic_native_lt, reduct_intrinsic_less},
     {"<=", reduct_intrinsic_native_le, reduct_intrinsic_less_equal},
     {">", reduct_intrinsic_native_gt, reduct_intrinsic_greater},
@@ -1452,4 +1395,83 @@ REDUCT_API void reduct_intrinsic_register_all(reduct_t* reduct)
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
     reduct_native_register(reduct, reductIntrinsics, sizeof(reductIntrinsics) / sizeof(reductIntrinsics[0]));
+}
+
+REDUCT_API void reduct_intrinsic_block_generic(reduct_compiler_t* compiler, reduct_item_t* list, reduct_uint32_t startIdx,
+    reduct_expr_t* out)
+{
+    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    REDUCT_ASSERT(list != REDUCT_NULL);
+    REDUCT_ASSERT(out != REDUCT_NULL);
+
+    if (startIdx >= list->length)
+    {
+        *out = REDUCT_EXPR_NONE();
+        return;
+    }
+
+    reduct_uint16_t savedLocalCount = compiler->localCount;
+
+    reduct_reg_t targetHint = REDUCT_EXPR_GET_TARGET(out);
+    reduct_handle_t h;
+    REDUCT_LIST_FOR_EACH_AT(&h, &list->list, startIdx)
+    {
+        reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&h);
+
+        if (_iter.index + 1 == list->length)
+        {
+            if (targetHint != REDUCT_REG_INVALID)
+            {
+                reduct_compile_build_into_target(compiler, item, targetHint);
+                *out = REDUCT_EXPR_REG(targetHint);
+            }
+            else
+            {
+                reduct_expr_build(compiler, item, out);
+            }
+        }
+        else
+        {
+            reduct_expr_t expr = REDUCT_EXPR_NONE();
+            reduct_expr_build(compiler, item, &expr);
+            reduct_expr_done(compiler, &expr);
+        }
+    }
+
+    reduct_local_pop(compiler, savedLocalCount, out);
+}
+
+
+REDUCT_API void reduct_intrinsic_list_generic(reduct_compiler_t* compiler, reduct_item_t* list, reduct_uint32_t startIdx, reduct_expr_t* out)
+{
+    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    REDUCT_ASSERT(list != REDUCT_NULL);
+    REDUCT_ASSERT(out != REDUCT_NULL);
+
+    reduct_uint32_t count = list->length - startIdx;
+    if (count == 0)
+    {
+        *out = REDUCT_EXPR_NIL(compiler);
+        return;
+    }
+
+    reduct_reg_t base = reduct_reg_alloc_range(compiler, count);
+
+    reduct_handle_t h;
+    REDUCT_LIST_FOR_EACH_AT(&h, &list->list, startIdx)
+    {
+        reduct_size_t index = _iter.index - startIdx;        
+        reduct_expr_t elemExpr = REDUCT_EXPR_TARGET(base + index);
+        reduct_expr_build(compiler, REDUCT_HANDLE_TO_ITEM(&h), &elemExpr);
+        if (elemExpr.mode != REDUCT_MODE_REG || elemExpr.reg != base + index)
+        {
+            reduct_compile_move(compiler, base + index, &elemExpr);
+            reduct_expr_done(compiler, &elemExpr);
+        }
+    }
+
+    reduct_compile_list(compiler, base, count);
+    reduct_reg_free_range(compiler, base + 1, count - 1);
+
+    *out = REDUCT_EXPR_REG(base);
 }

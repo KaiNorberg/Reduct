@@ -150,6 +150,7 @@ LABEL_C_OP(_label, { \
 
 #define DECODE_A() reduct_uint32_t a = REDUCT_INST_GET_A(inst)
 #define DECODE_B() reduct_uint32_t b = REDUCT_INST_GET_B(inst)
+#define DECODE_C() reduct_uint32_t c = REDUCT_INST_GET_C(inst)
 #define DECODE_C_REG() \
     reduct_uint32_t c = REDUCT_INST_GET_C(inst); \
     reduct_handle_t valC = base[c]
@@ -187,7 +188,6 @@ LABEL_C_OP(_label, { \
         OP_ENTRY_C(REDUCT_OPCODE_CALL, label_call),
         OP_ENTRY_C(REDUCT_OPCODE_MOV, label_mov),
         OP_ENTRY_C(REDUCT_OPCODE_RET, label_ret),
-        OP_ENTRY_C(REDUCT_OPCODE_APPEND, label_append),
         OP_ENTRY_C(REDUCT_OPCODE_EQ, label_eq),
         OP_ENTRY_C(REDUCT_OPCODE_NEQ, label_neq),
         OP_ENTRY_C(REDUCT_OPCODE_SEQ, label_seq),
@@ -213,11 +213,11 @@ LABEL_C_OP(_label, { \
     };
 
 #define LABEL_C_OP(_label, ...) \
-_label: \
-{ \
-    DECODE_C_REG(); \
-    __VA_ARGS__ \
-} \
+    _label: \
+    { \
+        DECODE_C_REG(); \
+        __VA_ARGS__ \
+    } \
     _label##_k: \
     { \
         DECODE_C_CONST(); \
@@ -230,7 +230,8 @@ label_none:
 label_list:
 {
     DECODE_A();
-    base[a] = REDUCT_HANDLE_FROM_LIST(reduct_list_new(reduct));
+    DECODE_B();
+    base[a] = REDUCT_HANDLE_HANDLES(reduct, b, &base[a]);
     DISPATCH();
 }
 label_jmp:
@@ -373,14 +374,6 @@ LABEL_C_OP(label_ret, {
     constants = frame->closure->constants;
     DISPATCH();
 })
-LABEL_C_OP(label_append, {
-    DECODE_A();
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_LIST(&base[a]), REDUCT_NULL, "APPEND: target must be a list");
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&base[a]);
-    reduct_list_t* listPtr = &item->list;
-    reduct_list_push(reduct, listPtr, valC);
-    DISPATCH();
-})
 OP_COMPARE(label_eq, ==)
 OP_COMPARE(label_neq, !=)
 OP_EQUALITY(label_seq, reduct_handle_is_equal, REDUCT_TRUE)
@@ -465,7 +458,7 @@ LABEL_C_OP(label_shr, {
 label_closure:
 {
     DECODE_A();
-    reduct_uint32_t c = REDUCT_INST_GET_C(inst);
+    DECODE_C();
     reduct_handle_t protoHandle = frame->closure->constants[c];
     REDUCT_ASSERT(REDUCT_HANDLE_IS_ITEM(&protoHandle));
 

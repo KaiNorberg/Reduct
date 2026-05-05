@@ -126,6 +126,26 @@ REDUCT_API reduct_bool_t reduct_atom_is_equal(reduct_atom_t* atom, const char* s
     reduct_size_t len);
 
 /**
+ * @brief Check if two atoms are equal.
+ *
+ * @param a Pointer to the first atom.
+ * @param b Pointer to the second atom.
+ * @return `REDUCT_TRUE` if the atoms are equal, `REDUCT_FALSE` otherwise.
+ */
+static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_atom_is_equal_atom(reduct_atom_t* a, reduct_atom_t* b)
+{
+    if (a == b)
+    {
+        return REDUCT_TRUE;
+    }
+    if (a->length != b->length)
+    {
+        return REDUCT_FALSE;
+    }
+    return REDUCT_MEMCMP(a->string, b->string, a->length) == 0;
+}
+
+/**
  * @brief Create an atom with a reserved size.
  *
  * @param reduct Pointer to the Reduct structure.

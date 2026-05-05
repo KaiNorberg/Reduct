@@ -61,6 +61,16 @@ typedef struct reduct_list
 REDUCT_API reduct_list_t* reduct_list_new(struct reduct* reduct);
 
 /**
+ * @brief Create a new list from an array of handles.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param count The number of handles.
+ * @param handles The array of handles.
+ * @return A pointer to the newly created list.
+ */
+REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, reduct_size_t count, reduct_handle_t* handles);
+
+/**
  * @brief Create a new list of pairs (key-value) from a variable number of pairs.
  *
  * @param reduct Pointer to the Reduct structure.
@@ -233,5 +243,59 @@ REDUCT_API reduct_bool_t reduct_list_iter_next(reduct_list_iter_t* iter, reduct_
  */
 #define REDUCT_LIST_FOR_EACH_AT(_handle, _list, _start) \
     for (reduct_list_iter_t _iter = REDUCT_LIST_ITER_AT(_list, _start); reduct_list_iter_next(&_iter, (_handle));)
+
+/**
+ * @brief Get the first element of the list.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param list Pointer to the list.
+ * @return The handle of the first element.
+ */
+static inline REDUCT_ALWAYS_INLINE reduct_handle_t reduct_list_first(struct reduct* reduct, reduct_list_t* list)
+{
+    if (REDUCT_LIKELY(list->length <= REDUCT_LIST_WIDTH))
+    {
+        return list->tail.handles[0];
+    }
+    return reduct_list_nth(reduct, list, 0);
+}
+
+/**
+ * @brief Get the second element of the list
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param list Pointer to the list.
+ * @return The handle of the second element.
+ */
+static inline REDUCT_ALWAYS_INLINE reduct_handle_t reduct_list_second(struct reduct* reduct, reduct_list_t* list)
+{
+    if (REDUCT_LIKELY(list->length <= REDUCT_LIST_WIDTH))
+    {
+        return list->tail.handles[1];
+    }
+    return reduct_list_nth(reduct, list, 1);
+}
+
+/**
+ * @brief Find an entry in a association list by its key.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param listItem Pointer to the list item.
+ * @param key Pointer to the key handle.
+ * @return The handle of the entry list, or `REDUCT_HANDLE_NONE` if not found.
+ */
+REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, struct reduct_item* listItem, reduct_handle_t* key);
+
+/**
+ * @brief Get the key and value from an entry in a association list.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param entryH Pointer to the entry handle, must be a list.
+ * @param outKey Pointer to store the key handle, can be `REDUCT_NULL`.
+ * @param outVal Pointer to store the value handle, can be `REDUCT_NULL`.
+ * @return `REDUCT_TRUE` if the entry is valid and handles were retrieved, `REDUCT_FALSE` otherwise.
+ */
+REDUCT_API reduct_bool_t reduct_list_get_entry(struct reduct* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,
+    reduct_handle_t* outVal);
 
 #endif

@@ -48,7 +48,7 @@ typedef enum
 typedef enum
 {
     REDUCT_OPCODE_NONE,
-    REDUCT_OPCODE_LIST,     ///< (A) Create a new list and store it in R(A).
+    REDUCT_OPCODE_LIST,     ///< (A, B) R(A) = (R(A) R(A + 1) ... R(A + B - 1))
     REDUCT_OPCODE_JMP,      ///< (sBx) Unconditional jump by relative offset sBx.
     REDUCT_OPCODE_JMPF,     ///< (A, sBx) Jump by sBx if R(A) is falsy.
     REDUCT_OPCODE_JMPT,     ///< (A, sBx) Jump by sBx if R(A) is truthy.
@@ -56,7 +56,6 @@ typedef enum
     REDUCT_OPCODE_CALL,     ///< (A, B, C) Call callable in R/K(C) with B args starting from R(A). Result in R(A).
     REDUCT_OPCODE_MOV,      ///< (A, C) Move value in R/K(C) to R(A).
     REDUCT_OPCODE_RET,      ///< (C) Return value in R/K(C).
-    REDUCT_OPCODE_APPEND,   ///< (A, C) Append value in R/K(C) to the back of the list in R(A).
     REDUCT_OPCODE_EQ,       ///< (A, B, C) If R(B) == R/K(C) store true in R(A), else false.
     REDUCT_OPCODE_NEQ,      ///< (A, B, C) If R(B) != R/K(C) store true in R(A), else false.
     REDUCT_OPCODE_SEQ,      ///< (A, B, C) If R(B) === R/K(C) store true in R(A), else false.

@@ -159,7 +159,7 @@ REDUCT_API reduct_handle_t reduct_apply(reduct_t* reduct, reduct_handle_t* list,
     reduct_handle_t entry;
     REDUCT_LIST_FOR_EACH(&entry, &listItem->list)
     {
-        argv[_iter.index - 1] = entry;
+        argv[_iter.index] = entry;
     }
 
     reduct_handle_t result = reduct_eval_call(reduct, *callable, len, argv);
@@ -288,7 +288,7 @@ REDUCT_API reduct_handle_t reduct_sort(reduct_t* reduct, reduct_handle_t* listHa
     reduct_handle_t entry;
     REDUCT_LIST_FOR_EACH(&entry, &list->list)
     {
-        a[_iter.index - 1] = entry;
+        a[_iter.index] = entry;
     }
 
     reduct_handle_t* src = a;
@@ -354,52 +354,6 @@ static inline void reduct_sequence_normalize_range(reduct_t* reduct, reduct_hand
     *outEnd = (reduct_size_t)end;
 }
 
-static inline reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_item_t* listItem, reduct_handle_t* key)
-{
-    reduct_handle_t entryH;
-    REDUCT_LIST_FOR_EACH(&entryH, &listItem->list)
-    {
-        if (REDUCT_HANDLE_IS_LIST(&entryH))
-        {
-            reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
-            if (entry->length >= 1)
-            {
-                reduct_handle_t entryKey = reduct_list_nth(reduct, &entry->list, 0);
-                if (REDUCT_HANDLE_COMPARE_FAST(reduct, &entryKey, key, ==))
-                {
-                    return entryH;
-                }
-            }
-        }
-    }
-    return REDUCT_HANDLE_NONE;
-}
-
-static inline reduct_bool_t reduct_list_get_entry(reduct_t* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,
-    reduct_handle_t* outVal)
-{
-    if (!REDUCT_HANDLE_IS_LIST(entryH))
-    {
-        return REDUCT_FALSE;
-    }
-    reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(entryH);
-    if (entry->length < 1)
-    {
-        return REDUCT_FALSE;
-    }
-
-    if (outKey != REDUCT_NULL)
-    {
-        *outKey = reduct_list_nth(reduct, &entry->list, 0);
-    }
-
-    if (outVal != REDUCT_NULL)
-    {
-        *outVal = (entry->length >= 2) ? reduct_list_nth(reduct, &entry->list, 1) : reduct_handle_nil(reduct);
-    }
-    return REDUCT_TRUE;
-}
-
 REDUCT_API reduct_handle_t reduct_len(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
@@ -408,7 +362,7 @@ REDUCT_API reduct_handle_t reduct_len(reduct_t* reduct, reduct_size_t argc, redu
     reduct_size_t total = 0;
     for (reduct_size_t i = 0; i < argc; i++)
     {
-        total += reduct_handle_item(reduct, &argv[i])->length;
+        total += reduct_handle_as_item(reduct, &argv[i])->length;
     }
     return REDUCT_HANDLE_FROM_INT(total);
 }
@@ -495,7 +449,7 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, reduct_size_t argc, r
     reduct_size_t totalLen = 0;
     for (reduct_size_t i = 0; i < argc; i++)
     {
-        totalLen += reduct_handle_item(reduct, &argv[i])->atom.length;
+        totalLen += reduct_handle_as_item(reduct, &argv[i])->atom.length;
     }
 
     if (totalLen == 0)
@@ -503,12 +457,12 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, reduct_size_t argc, r
         return REDUCT_HANDLE_FROM_ATOM(reduct_atom_new(reduct, 0));
     }
 
-    reduct_atom_t* first = &reduct_handle_item(reduct, &argv[0])->atom;
+    reduct_atom_t* first = &reduct_handle_as_item(reduct, &argv[0])->atom;
     reduct_atom_t* result = reduct_atom_superstr(reduct, first, totalLen);
     char* dst = result->string + first->length;
     for (reduct_size_t i = 1; i < argc; i++)
     {
-        reduct_atom_t* src = &reduct_handle_item(reduct, &argv[i])->atom;
+        reduct_atom_t* src = &reduct_handle_as_item(reduct, &argv[i])->atom;
         REDUCT_MEMCPY(dst, src->string, src->length);
         dst += src->length;
     }
@@ -527,7 +481,7 @@ REDUCT_API reduct_handle_t reduct_append(reduct_t* reduct, reduct_size_t argc, r
     {
         return argv[0];
     }
-    reduct_list_t* list = &reduct_handle_item(reduct, &argv[0])->list;
+    reduct_list_t* list = &reduct_handle_as_item(reduct, &argv[0])->list;
 
     reduct_list_t* newList = reduct_list_append(reduct, list, argv[1]);
     reduct_handle_t newHandle = REDUCT_HANDLE_FROM_LIST(newList);
@@ -552,7 +506,7 @@ REDUCT_API reduct_handle_t reduct_prepend(reduct_t* reduct, reduct_size_t argc, 
         return argv[0];
     }
 
-    reduct_list_t* list = &reduct_handle_item(reduct, &argv[0])->list;
+    reduct_list_t* list = &reduct_handle_as_item(reduct, &argv[0])->list;
     reduct_list_t* newList = reduct_list_prepend(reduct, list, argv[1]);
     reduct_handle_t newHandle = REDUCT_HANDLE_FROM_LIST(newList);
 
@@ -566,7 +520,7 @@ REDUCT_API reduct_handle_t reduct_prepend(reduct_t* reduct, reduct_size_t argc, 
 
 static inline reduct_handle_t reduct_sequence_edge(reduct_t* reduct, reduct_handle_t* handle, reduct_bool_t first)
 {
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     if (item->length == 0)
     {
@@ -601,7 +555,7 @@ REDUCT_API reduct_handle_t reduct_last(reduct_t* reduct, reduct_handle_t* handle
 
 static inline reduct_handle_t reduct_sequence_trim(reduct_t* reduct, reduct_handle_t* handle, reduct_bool_t rest)
 {
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     if (item->length <= 1)
     {
@@ -646,7 +600,7 @@ REDUCT_API reduct_handle_t reduct_nth(reduct_t* reduct, reduct_handle_t* handle,
     REDUCT_ASSERT(reduct != REDUCT_NULL);
     REDUCT_ERROR_CHECK_SEQUENCE(reduct, handle, "nth");
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     reduct_int64_t n = reduct_handle_normalize_index(reduct, index, item->length);
 
@@ -672,7 +626,7 @@ REDUCT_API reduct_handle_t reduct_assoc(reduct_t* reduct, reduct_handle_t* handl
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     reduct_int64_t n = reduct_handle_normalize_index(reduct, index, item->length);
     if (n < 0)
@@ -708,9 +662,9 @@ REDUCT_API reduct_handle_t reduct_assoc(reduct_t* reduct, reduct_handle_t* handl
     {
         reduct_atom_t* src = &item->atom;
         reduct_atom_t* fill = (targetIndex > item->length && fillVal != REDUCT_NULL)
-            ? &reduct_handle_item(reduct, fillVal)->atom
+            ? &reduct_handle_as_item(reduct, fillVal)->atom
             : REDUCT_NULL;
-        reduct_atom_t* val = &reduct_handle_item(reduct, value)->atom;
+        reduct_atom_t* val = &reduct_handle_as_item(reduct, value)->atom;
 
         reduct_size_t prefixLen = REDUCT_MIN(item->length, targetIndex);
         reduct_size_t fillCount = (targetIndex > item->length) ? targetIndex - item->length : 0;
@@ -757,7 +711,7 @@ REDUCT_API reduct_handle_t reduct_dissoc(struct reduct* reduct, reduct_handle_t*
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     reduct_int64_t n = reduct_handle_normalize_index(reduct, index, item->length);
 
@@ -809,7 +763,7 @@ REDUCT_API reduct_handle_t reduct_update(reduct_t* reduct, reduct_handle_t* hand
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     reduct_int64_t targetIndex = reduct_handle_normalize_index(reduct, index, item->length);
     if (targetIndex < 0)
@@ -829,7 +783,7 @@ REDUCT_API reduct_handle_t reduct_index_of(reduct_t* reduct, reduct_handle_t* ha
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     switch (item->type)
     {
@@ -840,7 +794,7 @@ REDUCT_API reduct_handle_t reduct_index_of(reduct_t* reduct, reduct_handle_t* ha
         {
             if (reduct_handle_compare(reduct, &current, target) == 0)
             {
-                return REDUCT_HANDLE_FROM_INT(_iter.index - 1);
+                return REDUCT_HANDLE_FROM_INT(_iter.index);
             }
         }
     }
@@ -880,7 +834,7 @@ REDUCT_API reduct_handle_t reduct_reverse(reduct_t* reduct, reduct_handle_t* han
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     if (item->length <= 1)
     {
@@ -927,7 +881,7 @@ REDUCT_API reduct_handle_t reduct_slice(reduct_t* reduct, reduct_handle_t* handl
     REDUCT_ASSERT(handle != REDUCT_NULL);
     REDUCT_ASSERT(startH != REDUCT_NULL);
 
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
     reduct_size_t start, end;
     reduct_sequence_normalize_range(reduct, startH, endH, item->length, &start, &end);
 
@@ -1013,7 +967,7 @@ REDUCT_API reduct_handle_t reduct_replace(struct reduct* reduct, reduct_handle_t
     reduct_handle_t* newVal)
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
     switch (item->type)
     {
@@ -1054,7 +1008,6 @@ REDUCT_API reduct_handle_t reduct_replace(struct reduct* reduct, reduct_handle_t
 
         const char* str = item->atom.string;
 
-        // First pass: count matches to compute result length
         reduct_size_t matchCount = 0;
         for (reduct_size_t i = 0; i <= item->length - oldLen; )
         {
@@ -1073,7 +1026,6 @@ REDUCT_API reduct_handle_t reduct_replace(struct reduct* reduct, reduct_handle_t
         reduct_atom_t* result = reduct_atom_new(reduct, resultLen);
         char* dst = result->string;
 
-        // Second pass: copy with replacements
         reduct_size_t lastPos = 0;
         for (reduct_size_t i = 0; i <= item->length - oldLen; )
         {
@@ -1200,22 +1152,29 @@ REDUCT_API reduct_handle_t reduct_get_in(reduct_t* reduct, reduct_handle_t* list
     reduct_handle_t current = *list;
     reduct_handle_t pathH = *path;
 
-    if (!REDUCT_HANDLE_IS_LIST(&pathH))
+    if (REDUCT_LIKELY(!REDUCT_HANDLE_IS_LIST(&pathH)))
     {
-        reduct_item_t* item = reduct_handle_item(reduct, &current);
-        if (item->type != REDUCT_ITEM_TYPE_LIST)
+        reduct_item_t* item = reduct_handle_as_item(reduct, &current);
+        if (REDUCT_UNLIKELY(item->type != REDUCT_ITEM_TYPE_LIST))
         {
             return (defaultVal != REDUCT_NULL) ? *defaultVal : reduct_handle_nil(reduct);
         }
 
         reduct_handle_t entryH = reduct_list_find_entry(reduct, item, &pathH);
-        if (entryH != REDUCT_HANDLE_NONE)
+        if (REDUCT_UNLIKELY(entryH == REDUCT_HANDLE_NONE))
         {
-            reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
-            return (entry->length >= 2) ? reduct_list_nth(reduct, &entry->list, 1) : reduct_handle_nil(reduct);
+            return (defaultVal != REDUCT_NULL) ? *defaultVal : reduct_handle_nil(reduct);
         }
-        return (defaultVal != REDUCT_NULL) ? *defaultVal : reduct_handle_nil(reduct);
+
+        reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
+        if (REDUCT_UNLIKELY(entry->length < 2))
+        {
+            return (defaultVal != REDUCT_NULL) ? *defaultVal : reduct_handle_nil(reduct);
+        }
+
+        return reduct_list_second(reduct, &entry->list);
     }
+
     reduct_item_t* pathItem = REDUCT_HANDLE_TO_ITEM(&pathH);
     reduct_handle_t key;
     REDUCT_LIST_FOR_EACH(&key, &pathItem->list)
@@ -1230,6 +1189,68 @@ REDUCT_API reduct_handle_t reduct_get_in(reduct_t* reduct, reduct_handle_t* list
     return current;
 }
 
+static reduct_handle_t reduct_assoc_key(reduct_t* reduct, reduct_handle_t* handle, reduct_handle_t* key,
+    reduct_handle_t* val)
+{
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_LIST, "assoc: expected list, got %s",
+        reduct_item_type_str(item));
+
+    reduct_list_t* newList = reduct_list_new(reduct);
+    reduct_handle_t targetEntry = reduct_list_find_entry(reduct, item, key);
+    reduct_bool_t found = REDUCT_FALSE;
+
+    reduct_handle_t entry;
+    REDUCT_LIST_FOR_EACH(&entry, &item->list)
+    {
+        if (entry == targetEntry)
+        {
+            reduct_list_t* newEntry = reduct_list_new(reduct);
+            reduct_list_push(reduct, newEntry, *key);
+            reduct_list_push(reduct, newEntry, *val);
+            reduct_list_push(reduct, newList, REDUCT_HANDLE_FROM_LIST(newEntry));
+            found = REDUCT_TRUE;
+        }
+        else
+        {
+            reduct_list_push(reduct, newList, entry);
+        }
+    }
+
+    if (!found)
+    {
+        reduct_list_t* newEntry = reduct_list_new(reduct);
+        reduct_list_push(reduct, newEntry, *key);
+        reduct_list_push(reduct, newEntry, *val);
+        reduct_list_push(reduct, newList, REDUCT_HANDLE_FROM_LIST(newEntry));
+    }
+
+    return REDUCT_HANDLE_FROM_LIST(newList);
+}
+
+static reduct_handle_t reduct_dissoc_key(reduct_t* reduct, reduct_handle_t* handle, reduct_handle_t* key)
+{
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
+    if (item->type != REDUCT_ITEM_TYPE_LIST)
+    {
+        return *handle;
+    }
+
+    reduct_list_t* newList = reduct_list_new(reduct);
+    reduct_handle_t targetEntry = reduct_list_find_entry(reduct, item, key);
+
+    reduct_handle_t entry;
+    REDUCT_LIST_FOR_EACH(&entry, &item->list)
+    {
+        if (entry != targetEntry)
+        {
+            reduct_list_push(reduct, newList, entry);
+        }
+    }
+
+    return REDUCT_HANDLE_FROM_LIST(newList);
+}
+
 REDUCT_API reduct_handle_t reduct_assoc_in(reduct_t* reduct, reduct_handle_t* list, reduct_handle_t* path,
     reduct_handle_t* val)
 {
@@ -1237,33 +1258,7 @@ REDUCT_API reduct_handle_t reduct_assoc_in(reduct_t* reduct, reduct_handle_t* li
 
     if (!REDUCT_HANDLE_IS_LIST(path))
     {
-        reduct_item_t* listItem = reduct_handle_item(reduct, list);
-        reduct_list_t* newList = reduct_list_new(reduct);
-        reduct_handle_t targetEntry = reduct_list_find_entry(reduct, listItem, path);
-
-        reduct_handle_t entryH;
-        REDUCT_LIST_FOR_EACH(&entryH, &listItem->list)
-        {
-            if (entryH == targetEntry)
-            {
-                reduct_list_t* newEntry = reduct_list_new(reduct);
-                reduct_list_push(reduct, newEntry, *path);
-                reduct_list_push(reduct, newEntry, *val);
-                reduct_list_push(reduct, newList, REDUCT_HANDLE_FROM_LIST(newEntry));
-                continue;
-            }
-            reduct_list_push(reduct, newList, entryH);
-        }
-
-        if (targetEntry == REDUCT_HANDLE_NONE)
-        {
-            reduct_list_t* newEntry = reduct_list_new(reduct);
-            reduct_list_push(reduct, newEntry, *path);
-            reduct_list_push(reduct, newEntry, *val);
-            reduct_list_push(reduct, newList, REDUCT_HANDLE_FROM_LIST(newEntry));
-        }
-
-        return REDUCT_HANDLE_FROM_LIST(newList);
+        return reduct_assoc_key(reduct, list, path, val);
     }
 
     reduct_item_t* pathItem = REDUCT_HANDLE_TO_ITEM(path);
@@ -1272,29 +1267,22 @@ REDUCT_API reduct_handle_t reduct_assoc_in(reduct_t* reduct, reduct_handle_t* li
         return *val;
     }
 
-    reduct_handle_t firstKey = reduct_list_nth(reduct, &pathItem->list, 0);
-    reduct_handle_t restPath;
-
+    reduct_handle_t first = reduct_list_first(reduct, &pathItem->list);
     if (pathItem->length == 1)
     {
-        restPath = firstKey;
-        return reduct_assoc_in(reduct, list, &restPath, val);
+        return reduct_assoc_key(reduct, list, &first, val);
     }
-    else
+
+    reduct_handle_t subItem = reduct_get_in(reduct, list, &first, REDUCT_NULL);
+    if (subItem == reduct_handle_nil(reduct))
     {
-        restPath = REDUCT_HANDLE_FROM_LIST(reduct_list_slice(reduct, &pathItem->list, 1, pathItem->length));
-
-        reduct_handle_t subList = reduct_get_in(reduct, list, &firstKey, REDUCT_NULL);
-        if (!REDUCT_HANDLE_IS_LIST(&subList))
-        {
-            subList = REDUCT_HANDLE_FROM_LIST(reduct_list_new(reduct));
-        }
-
-        reduct_handle_t updatedSubList = reduct_assoc_in(reduct, &subList, &restPath, val);
-        reduct_handle_t result = reduct_assoc_in(reduct, list, &firstKey, &updatedSubList);
-
-        return result;
+        subItem = REDUCT_HANDLE_FROM_LIST(reduct_list_new(reduct));
     }
+
+    reduct_handle_t restPath = REDUCT_HANDLE_FROM_LIST(reduct_list_slice(reduct, &pathItem->list, 1, pathItem->length));
+    reduct_handle_t updated = reduct_assoc_in(reduct, &subItem, &restPath, val);
+
+    return reduct_assoc_key(reduct, list, &first, &updated);
 }
 
 REDUCT_API reduct_handle_t reduct_dissoc_in(reduct_t* reduct, reduct_handle_t* list, reduct_handle_t* path)
@@ -1303,48 +1291,31 @@ REDUCT_API reduct_handle_t reduct_dissoc_in(reduct_t* reduct, reduct_handle_t* l
 
     if (!REDUCT_HANDLE_IS_LIST(path))
     {
-        reduct_item_t* listItem = reduct_handle_item(reduct, list);
-        reduct_list_t* newList = reduct_list_new(reduct);
-        reduct_handle_t targetEntry = reduct_list_find_entry(reduct, listItem, path);
-
-        reduct_handle_t entryH;
-        REDUCT_LIST_FOR_EACH(&entryH, &listItem->list)
-        {
-            if (entryH == targetEntry)
-            {
-                continue;
-            }
-            reduct_list_push(reduct, newList, entryH);
-        }
-
-        return REDUCT_HANDLE_FROM_LIST(newList);
+        return reduct_dissoc_key(reduct, list, path);
     }
+
     reduct_item_t* pathItem = REDUCT_HANDLE_TO_ITEM(path);
     if (pathItem->length == 0)
     {
         return *list;
     }
 
-    reduct_handle_t firstKey = reduct_list_nth(reduct, &pathItem->list, 0);
+    reduct_handle_t first = reduct_list_first(reduct, &pathItem->list);
     if (pathItem->length == 1)
     {
-        return reduct_dissoc_in(reduct, list, &firstKey);
+        return reduct_dissoc_key(reduct, list, &first);
     }
-    else
+
+    reduct_handle_t subItem = reduct_get_in(reduct, list, &first, REDUCT_NULL);
+    if (subItem == reduct_handle_nil(reduct))
     {
-        reduct_handle_t restPath =
-            REDUCT_HANDLE_FROM_LIST(reduct_list_slice(reduct, &pathItem->list, 1, pathItem->length));
-
-        reduct_handle_t subList = reduct_get_in(reduct, list, &firstKey, REDUCT_NULL);
-        if (REDUCT_HANDLE_IS_LIST(&subList))
-        {
-            reduct_handle_t updatedSubList = reduct_dissoc_in(reduct, &subList, &restPath);
-            reduct_handle_t result = reduct_assoc_in(reduct, list, &firstKey, &updatedSubList);
-            return result;
-        }
-
         return *list;
     }
+
+    reduct_handle_t restPath = REDUCT_HANDLE_FROM_LIST(reduct_list_slice(reduct, &pathItem->list, 1, pathItem->length));
+    reduct_handle_t updated = reduct_dissoc_in(reduct, &subItem, &restPath);
+
+    return reduct_assoc_key(reduct, list, &first, &updated);
 }
 
 REDUCT_API reduct_handle_t reduct_update_in(reduct_t* reduct, reduct_handle_t* list, reduct_handle_t* path,
@@ -1561,15 +1532,14 @@ REDUCT_API reduct_handle_t reduct_join(reduct_t* reduct, reduct_handle_t* listHa
         return REDUCT_HANDLE_FROM_ATOM(reduct_atom_new(reduct, 0));
     }
 
-    reduct_atom_t* sepAtom = &reduct_handle_item(reduct, sepHandle)->atom;
+    reduct_atom_t* sepAtom = &reduct_handle_as_item(reduct, sepHandle)->atom;
 
-    // Compute total length
     reduct_size_t totalLen = 0;
     reduct_handle_t entry;
     REDUCT_LIST_FOR_EACH(&entry, &list->list)
     {
-        totalLen += reduct_handle_item(reduct, &entry)->atom.length;
-        if (_iter.index < list->length)
+        totalLen += reduct_handle_as_item(reduct, &entry)->atom.length;
+        if (_iter.index + 1 < list->length)
         {
             totalLen += sepAtom->length;
         }
@@ -1580,10 +1550,10 @@ REDUCT_API reduct_handle_t reduct_join(reduct_t* reduct, reduct_handle_t* listHa
 
     REDUCT_LIST_FOR_EACH(&entry, &list->list)
     {
-        reduct_atom_t* src = &reduct_handle_item(reduct, &entry)->atom;
+        reduct_atom_t* src = &reduct_handle_as_item(reduct, &entry)->atom;
         REDUCT_MEMCPY(dst, src->string, src->length);
         dst += src->length;
-        if (_iter.index < list->length)
+        if (_iter.index + 1 < list->length)
         {
             REDUCT_MEMCPY(dst, sepAtom->string, sepAtom->length);
             dst += sepAtom->length;
@@ -1610,7 +1580,7 @@ REDUCT_API reduct_handle_t reduct_split(reduct_t* reduct, reduct_handle_t* srcHa
     {
         for (reduct_size_t i = 0; i < srcLen; i++)
         {
-            reduct_list_push(reduct, resultList, REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, &REDUCT_HANDLE_TO_ITEM(srcHandle)->atom, i, 1)));
+            reduct_list_push(reduct, resultList, REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, REDUCT_HANDLE_TO_ATOM(srcHandle), i, 1)));
         }
     }
     else
@@ -1620,13 +1590,13 @@ REDUCT_API reduct_handle_t reduct_split(reduct_t* reduct, reduct_handle_t* srcHa
         {
             if (REDUCT_MEMCMP(srcStr + i, sepStr, sepLen) == 0)
             {
-                reduct_list_push(reduct, resultList, REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, &REDUCT_HANDLE_TO_ITEM(srcHandle)->atom, lastPos, i - lastPos)));
+                reduct_list_push(reduct, resultList, REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, REDUCT_HANDLE_TO_ATOM(srcHandle), lastPos, i - lastPos)));
                 i += sepLen - 1;
                 lastPos = i + 1;
             }
         }
 
-        reduct_list_push(reduct, resultList, REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, &REDUCT_HANDLE_TO_ITEM(srcHandle)->atom, lastPos, srcLen - lastPos)));
+        reduct_list_push(reduct, resultList, REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, REDUCT_HANDLE_TO_ATOM(srcHandle), lastPos, srcLen - lastPos)));
     }
 
     return resultHandle;
@@ -1695,7 +1665,7 @@ REDUCT_API reduct_handle_t reduct_trim(reduct_t* reduct, reduct_handle_t* srcHan
         end--;
     }
 
-    return REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, &REDUCT_HANDLE_TO_ITEM(srcHandle)->atom, start, end - start + 1));
+    return REDUCT_HANDLE_FROM_ATOM(reduct_atom_substr(reduct, REDUCT_HANDLE_TO_ATOM(srcHandle), start, end - start + 1));
 }
 
 #define REDUCT_INTROSPECTION_LOOP(_predicate) \
@@ -1740,7 +1710,7 @@ REDUCT_API reduct_handle_t reduct_is_callable(reduct_t* reduct, reduct_size_t ar
 #define REDUCT_PREDICATE_IS_STRING(_h) (REDUCT_HANDLE_IS_ATOM(_h) && !REDUCT_HANDLE_IS_NUMBER_SHAPED(_h))
 REDUCT_INTROSPECTION_IMPL(reduct_is_string, REDUCT_PREDICATE_IS_STRING)
 
-#define REDUCT_PREDICATE_IS_EMPTY(_h) (reduct_handle_item(reduct, _h)->length == 0)
+#define REDUCT_PREDICATE_IS_EMPTY(_h) (reduct_handle_as_item(reduct, _h)->length == 0)
 REDUCT_INTROSPECTION_IMPL(reduct_is_empty, REDUCT_PREDICATE_IS_EMPTY)
 
 #define REDUCT_PREDICATE_IS_NIL(_h) (*(_h) == reduct_handle_nil(reduct))
@@ -1757,7 +1727,7 @@ REDUCT_API reduct_handle_t reduct_get_int(reduct_t* reduct, reduct_handle_t* han
     {
         return REDUCT_HANDLE_FROM_INT((reduct_int64_t)REDUCT_HANDLE_TO_FLOAT(handle));
     }
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
     REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_number(&item->atom), "expected integer, got %s", reduct_item_type_str(item));
     return REDUCT_HANDLE_FROM_INT(reduct_atom_get_int(&item->atom));
 }
@@ -1773,7 +1743,7 @@ REDUCT_API reduct_handle_t reduct_get_float(reduct_t* reduct, reduct_handle_t* h
     {
         return REDUCT_HANDLE_FROM_FLOAT((reduct_float_t)REDUCT_HANDLE_TO_INT(handle));
     }
-    reduct_item_t* item = reduct_handle_item(reduct, handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
     REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_number(&item->atom), "expected floating point, got %s", reduct_item_type_str(item));
     return REDUCT_HANDLE_FROM_FLOAT(reduct_atom_get_float(&item->atom));
 }
@@ -2113,6 +2083,7 @@ REDUCT_API reduct_handle_t reduct_print(reduct_t* reduct, reduct_size_t argc, re
             reduct_handle_atom_string(reduct, &argv[i], &str, &len);
             REDUCT_FWRITE(str, 1, len, REDUCT_STDOUT);
         }
+
         if (i < argc - 1)
         {
             REDUCT_FWRITE(" ", 1, 1, REDUCT_STDOUT);

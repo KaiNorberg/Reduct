@@ -66,7 +66,7 @@ static inline reduct_size_t reduct_stringify_internal(reduct_t* reduct, reduct_h
                 size > written ? size - written : 0);
             written += res;
 
-            if (_iter.index < item->length)
+            if (_iter.index + 1 < item->length)
             {
                 res = REDUCT_SNPRINTF(size > written ? buffer + written : REDUCT_NULL,
                     size > written ? size - written : 0, " ");

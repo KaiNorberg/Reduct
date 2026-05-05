@@ -134,8 +134,7 @@ struct reduct;
 #define REDUCT_HANDLE_IS_INT_SHAPED(_handle) \
     (REDUCT_HANDLE_IS_INT(_handle) || \
      (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_IS_ATOM(_handle) && \
-      !(REDUCT_HANDLE_TO_ITEM(_handle)->flags & REDUCT_ITEM_FLAG_QUOTED) && \
-      reduct_atom_is_int(&REDUCT_HANDLE_TO_ITEM(_handle)->atom)))
+      reduct_atom_is_int(REDUCT_HANDLE_TO_ATOM(_handle))))
 
 /**
  * @brief Check if a handle is a float or references a float shaped item.
@@ -146,8 +145,7 @@ struct reduct;
 #define REDUCT_HANDLE_IS_FLOAT_SHAPED(_handle) \
     (REDUCT_HANDLE_IS_FLOAT(_handle) || \
      (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_IS_ATOM(_handle) && \
-      !(REDUCT_HANDLE_TO_ITEM(_handle)->flags & REDUCT_ITEM_FLAG_QUOTED) && \
-      reduct_atom_is_float(&REDUCT_HANDLE_TO_ITEM(_handle)->atom)))
+      reduct_atom_is_float(REDUCT_HANDLE_TO_ATOM(_handle))))
 
 /**
  * @brief Check if a handle is a number or references a number shaped item.
@@ -230,7 +228,7 @@ struct reduct;
  * @return Non-zero if the handle is a native function, zero otherwise.
  */
 #define REDUCT_HANDLE_IS_NATIVE(_reduct, _handle) \
-    (REDUCT_HANDLE_IS_ATOM(_handle) && reduct_atom_is_native(_reduct, &REDUCT_HANDLE_TO_ITEM(_handle)->atom))
+    (REDUCT_HANDLE_IS_ATOM(_handle) && reduct_atom_is_native(_reduct, REDUCT_HANDLE_TO_ATOM(_handle)))
 
 /**
  * @brief Check if a handle is callable.
@@ -270,11 +268,52 @@ struct reduct;
 #define REDUCT_HANDLE_TO_ITEM(_handle) ((reduct_item_t*)(void*)((*(_handle)) & REDUCT_HANDLE_MASK_PTR))
 
 /**
+ * @brief Get the atom pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The atom pointer.
+ */
+#define REDUCT_HANDLE_TO_ATOM(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->atom)
+
+/**
+ * @brief Get the list pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The list pointer.
+ */
+#define REDUCT_HANDLE_TO_LIST(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->list)
+
+/**
+ * @brief Get the function pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The function pointer.
+ */
+#define REDUCT_HANDLE_TO_FUNCTION(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->function)
+
+/**
+ * @brief Get the closure pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The closure pointer.
+ */
+#define REDUCT_HANDLE_TO_CLOSURE(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->closure)
+
+/**
  * @brief Create a list handle.
  *
  * @param _reduct Pointer to the Reduct structure.
  */
 #define REDUCT_HANDLE_LIST(_reduct) REDUCT_HANDLE_FROM_LIST(reduct_list_new(_reduct))
+
+/**
+ * @brief Create a list handle from an array of handles.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _count The number of handles.
+ * @param _handles The array of handles.
+ */
+#define REDUCT_HANDLE_HANDLES(_reduct, _count, _handles) REDUCT_HANDLE_FROM_LIST(reduct_list_new_handles(_reduct, _count, _handles))
 
 /**
  * @brief Create a list handle of pairs (key-value) from a variable number of pairs.
@@ -299,7 +338,7 @@ struct reduct;
  * @param _reduct Pointer to the Reduct structure.
  * @param _str The null-terminated string.
  */
-#define REDUCT_HANDLE_STR(_reduct, _str) REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_string(_reduct, _str))
+#define REDUCT_HANDLE_STRING(_reduct, _str) REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_string(_reduct, _str))
 
 /**
  * @brief Create an interned atom handle from a string.
@@ -511,7 +550,14 @@ REDUCT_API void reduct_handle_ensure_item(struct reduct* reduct, reduct_handle_t
  * @param handle The handle.
  * @return The item pointer.
  */
-REDUCT_API struct reduct_item* reduct_handle_item(struct reduct* reduct, reduct_handle_t* handle);
+static inline REDUCT_ALWAYS_INLINE struct reduct_item* reduct_handle_as_item(struct reduct* reduct, reduct_handle_t* handle)
+{
+    if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ITEM(handle)))
+    {
+        reduct_handle_ensure_item(reduct, handle);
+    }
+    return REDUCT_HANDLE_TO_ITEM(handle);
+}
 
 /**
  * @brief Promotion types for numeric operations.
@@ -576,6 +622,34 @@ REDUCT_API reduct_bool_t reduct_handle_is_equal(struct reduct* reduct, reduct_ha
  * @return A negative value if a < b, zero if a == b, and a positive value if a > b.
  */
 REDUCT_API reduct_int64_t reduct_handle_compare(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b);
+
+/**
+ * @brief Compare two handles that are most likely atoms.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param a The first handle.
+ * @param b The second handle.
+ * @return `REDUCT_TRUE` if the handles are equal, `REDUCT_FALSE` otherwise.
+ */
+static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_handle_compare_likely_atom(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b)
+{
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_ATOM(a) && REDUCT_HANDLE_IS_ATOM(b)))
+    {
+        if (reduct_atom_is_equal_atom(REDUCT_HANDLE_TO_ATOM(a), REDUCT_HANDLE_TO_ATOM(b)))
+        {
+            return REDUCT_TRUE;
+        }
+    } 
+    else 
+    {
+        if (reduct_handle_compare(reduct, a, b) == 0)
+        {
+            return REDUCT_TRUE;
+        }
+    }
+
+    return REDUCT_FALSE;
+}
 
 /**
  * @brief Get the constant nil handle.
