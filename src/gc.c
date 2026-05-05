@@ -66,7 +66,7 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
-    if (item == REDUCT_NULL || (item->flags & REDUCT_ITEM_FLAG_GC_MARK))
+    if (REDUCT_UNLIKELY(item == REDUCT_NULL || (item->flags & REDUCT_ITEM_FLAG_GC_MARK)))
     {
         return;
     }

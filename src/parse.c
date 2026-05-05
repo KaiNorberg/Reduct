@@ -329,9 +329,17 @@ static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t*
         return;
     }
 
+    reduct_item_t* getInListItem = REDUCT_CONTAINER_OF(*getInList, reduct_item_t, list);
+
+    if (*getInTarget == REDUCT_HANDLE_NONE)
+    {
+        REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input,
+            ctx->input->buffer + getInListItem->position,
+            "get-in: missing target");
+    }
+
     reduct_list_t* wrapper = reduct_list_new(ctx->reduct);
     reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
-    reduct_item_t* getInListItem = REDUCT_CONTAINER_OF(*getInList, reduct_item_t, list);
     wrapperItem->inputId = getInListItem->inputId;
     wrapperItem->position = getInListItem->position;
 

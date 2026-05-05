@@ -21,6 +21,11 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct
     {
         reduct->regCapacity *= REDUCT_EVAL_REGS_GROWTH_FACTOR;
     }
+    if (REDUCT_UNLIKELY(reduct->regCapacity > REDUCT_EVAL_REGS_MAX))
+    {
+        REDUCT_ERROR_INTERNAL(reduct, "too many registers");
+    }
+
     reduct_handle_t* newRegs = (reduct_handle_t*)REDUCT_REALLOC(reduct->regs, sizeof(reduct_handle_t) * reduct->regCapacity);
     if (newRegs == REDUCT_NULL)
     {
@@ -38,14 +43,18 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct,
 
     if (REDUCT_UNLIKELY(reduct->frameCount >= reduct->frameCapacity))
     {
+        if (REDUCT_UNLIKELY(reduct->frameCapacity * REDUCT_EVAL_FRAMES_GROWTH_FACTOR >= REDUCT_EVAL_FRAMES_MAX))
+        {
+            REDUCT_ERROR_INTERNAL(reduct, "stack overflow");
+        }
+
         reduct->frameCapacity *= REDUCT_EVAL_FRAMES_GROWTH_FACTOR;
-        reduct_eval_frame_t* newFrames = (reduct_eval_frame_t*)REDUCT_REALLOC(reduct->frames,
-                sizeof(reduct_eval_frame_t) * reduct->frameCapacity);
-        if (newFrames == REDUCT_NULL)
+        reduct->frames = (reduct_eval_frame_t*)REDUCT_REALLOC(reduct->frames,
+            sizeof(reduct_eval_frame_t) * reduct->frameCapacity);
+        if (reduct->frames == REDUCT_NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
-        reduct->frames = newFrames;
     }
 
     reduct_uint32_t neededRegs = target + closure->function->registerCount;
@@ -385,11 +394,16 @@ OP_COMPARE(label_ge, >=)
 OP_ARITH(label_add, +)
 OP_ARITH(label_sub, -)
 OP_ARITH(label_mul, *)
-OP_ARITH(label_div, /)
+LABEL_C_OP(label_div, {
+    DECODE_A();
+    DECODE_B();
+    REDUCT_HANDLE_MOD_DIV_FAST(reduct, &base[a], &base[b], &valC, /);
+    DISPATCH();
+})
 LABEL_C_OP(label_mod, {
     DECODE_A();
     DECODE_B();
-    REDUCT_HANDLE_MOD_FAST(reduct, &base[a], &base[b], &valC);
+    REDUCT_HANDLE_MOD_DIV_FAST(reduct, &base[a], &base[b], &valC, %);
     DISPATCH();
 })
 OP_BITWISE(label_band, &)
@@ -421,7 +435,7 @@ LABEL_C_OP(label_shl, {
     {
         left = reduct_get_int(reduct, &valC);
     }
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, left >= 0 && left < 64, "left shift amount must be 0-63, got %ld", left);
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, left >= 0 && left < REDUCT_HANDLE_INT_WIDTH - 1, "left shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, left);
     if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&base[b])))
     {
         base[a] = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&base[b]) << left);
@@ -444,7 +458,7 @@ LABEL_C_OP(label_shr, {
     {
         right = reduct_get_int(reduct, &valC);
     }
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, right >= 0 && right < 64, "right shift amount must be 0-63, got %ld", right);
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, right >= 0 && right < REDUCT_HANDLE_INT_WIDTH - 1, "right shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, right);
     if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&base[b])))
     {
         base[a] = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&base[b]) >> right);

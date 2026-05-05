@@ -136,7 +136,7 @@ void reduct_intrinsic_lambda(reduct_compiler_t* compiler, reduct_item_t* list, r
         if (captured == REDUCT_NULL)
         {
             REDUCT_ERROR_COMPILE(compiler, REDUCT_CONTAINER_OF(captureName, reduct_item_t, atom),
-                "undefined local '%.*s'", captureName->length, captureName->string);
+                "undefined local '%.*s'%s", captureName->length, captureName->string, captureName->flags & REDUCT_ATOM_FLAG_OVERFLOW ? " (integer overflow)" : "");
         }
 
         if (!REDUCT_LOCAL_IS_DEFINED(captured))
@@ -733,9 +733,9 @@ static inline reduct_atom_t* reduct_fold_binary_calc(reduct_compiler_t* compiler
         case REDUCT_OPCODE_BXOR:
             return reduct_atom_new_int(compiler->reduct, li ^ ri);
         case REDUCT_OPCODE_SHL:
-            return (ri < 0 || ri >= 64) ? REDUCT_NULL : reduct_atom_new_int(compiler->reduct, li << ri);
+            return (ri < 0 || ri >= REDUCT_HANDLE_INT_WIDTH) ? REDUCT_NULL : reduct_atom_new_int(compiler->reduct, li << ri);
         case REDUCT_OPCODE_SHR:
-            return (ri < 0 || ri >= 64) ? REDUCT_NULL : reduct_atom_new_int(compiler->reduct, li >> ri);
+            return (ri < 0 || ri >= REDUCT_HANDLE_INT_WIDTH) ? REDUCT_NULL : reduct_atom_new_int(compiler->reduct, li >> ri);
         default:
             return REDUCT_NULL;
         }
@@ -1244,7 +1244,6 @@ void reduct_intrinsic_greater_equal(reduct_compiler_t* compiler, reduct_item_t* 
 REDUCT_INTRINSIC_NATIVE_ARITH(add, +, 0)
 REDUCT_INTRINSIC_NATIVE_ARITH(mul, *, 1)
 REDUCT_INTRINSIC_NATIVE_ARITH(sub, -, 0)
-REDUCT_INTRINSIC_NATIVE_ARITH(div, /, 1)
 
 REDUCT_INTRINSIC_NATIVE_BITWISE(band, &)
 REDUCT_INTRINSIC_NATIVE_BITWISE(bor, |)
@@ -1273,22 +1272,30 @@ static reduct_handle_t reduct_intrinsic_native_list(reduct_t* reduct, reduct_siz
     return REDUCT_HANDLE_FROM_LIST(list);
 }
 
+static reduct_handle_t reduct_intrinsic_native_div(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
+{
+    reduct_error_check_min_arity(reduct, argc, 1, "/");
+    if (argc == 1)
+    {
+        reduct_handle_t res;
+        reduct_handle_t one = REDUCT_HANDLE_FROM_INT(1);
+        REDUCT_HANDLE_MOD_DIV_FAST(reduct, &res, &one, &argv[0], /);
+        return res;
+    }
+    reduct_handle_t res = argv[0];
+    for (reduct_size_t i = 1; i < argc; i++)
+    {
+        REDUCT_HANDLE_MOD_DIV_FAST(reduct, &res, &res, &argv[i], /);
+    }
+    return res;
+}
+
 static reduct_handle_t reduct_intrinsic_native_mod(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
 {
     reduct_error_check_arity(reduct, argc, 2, "%");
-    reduct_promotion_t prom;
-    reduct_handle_promote(reduct, &argv[0], &argv[1], &prom);
-    if (prom.type != REDUCT_PROMOTION_TYPE_INT)
-    {
-        REDUCT_ERROR_RUNTIME(reduct, "%%: expected integer operands, got %s and %s",
-            REDUCT_HANDLE_GET_TYPE_STR(&argv[0]),
-            REDUCT_HANDLE_GET_TYPE_STR(&argv[1]));
-    }
-    if (prom.b.intVal == 0)
-    {
-        REDUCT_ERROR_RUNTIME(reduct, "modulo by zero");
-    }
-    return REDUCT_HANDLE_FROM_INT(prom.a.intVal % prom.b.intVal);
+    reduct_handle_t result;
+    REDUCT_HANDLE_MOD_DIV_FAST(reduct, &result, &argv[0], &argv[1], %);
+    return result;
 }
 
 static reduct_handle_t reduct_intrinsic_native_inc(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
@@ -1320,9 +1327,9 @@ static reduct_handle_t reduct_intrinsic_native_shl(reduct_t* reduct, reduct_size
     reduct_error_check_arity(reduct, argc, 2, "<<");
     reduct_int64_t left = reduct_get_int(reduct, &argv[0]);
     reduct_int64_t right = reduct_get_int(reduct, &argv[1]);
-    if (right < 0 || right >= 64)
+    if (right < 0 || right >= REDUCT_HANDLE_INT_WIDTH)
     {
-        REDUCT_ERROR_RUNTIME(reduct, "<<: shift amount must be 0-63, got %ld", right);
+        REDUCT_ERROR_RUNTIME(reduct, "<<: shift amount must be 0-%lu, got %ld", REDUCT_HANDLE_INT_WIDTH, right);
     }
     return REDUCT_HANDLE_FROM_INT(left << right);
 }
@@ -1332,9 +1339,9 @@ static reduct_handle_t reduct_intrinsic_native_shr(reduct_t* reduct, reduct_size
     reduct_error_check_arity(reduct, argc, 2, ">>");
     reduct_int64_t left = reduct_get_int(reduct, &argv[0]);
     reduct_int64_t right = reduct_get_int(reduct, &argv[1]);
-    if (right < 0 || right >= 64)
+    if (right < 0 || right >= REDUCT_HANDLE_INT_WIDTH)
     {
-        REDUCT_ERROR_RUNTIME(reduct, ">>: shift amount must be 0-63, got %ld", right);
+        REDUCT_ERROR_RUNTIME(reduct, ">>: shift amount must be 0-%lu, got %ld", REDUCT_HANDLE_INT_WIDTH -1, right);
     }
     return REDUCT_HANDLE_FROM_INT(left >> right);
 }

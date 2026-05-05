@@ -1727,9 +1727,24 @@ REDUCT_API reduct_handle_t reduct_get_int(reduct_t* reduct, reduct_handle_t* han
     {
         return REDUCT_HANDLE_FROM_INT((reduct_int64_t)REDUCT_HANDLE_TO_FLOAT(handle));
     }
+
     reduct_item_t* item = reduct_handle_as_item(reduct, handle);
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_number(&item->atom), "expected integer, got %s", reduct_item_type_str(item));
-    return REDUCT_HANDLE_FROM_INT(reduct_atom_get_int(&item->atom));
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM, "expected atom, got %s", reduct_item_type_str(item));
+
+    if (reduct_atom_is_number(&item->atom))
+    {
+        return REDUCT_HANDLE_FROM_INT(reduct_atom_get_int(&item->atom));
+    }
+
+    const char* str = item->atom.string;
+    reduct_size_t len = item->atom.length;
+    reduct_atom_t* atom = reduct_atom_lookup(reduct, str, len, REDUCT_ATOM_LOOKUP_NONE);
+    if (reduct_atom_is_number(atom))
+    {
+        return REDUCT_HANDLE_FROM_INT(reduct_atom_get_int(atom));
+    }
+
+    return REDUCT_HANDLE_FROM_INT(0);
 }
 
 REDUCT_API reduct_handle_t reduct_get_float(reduct_t* reduct, reduct_handle_t* handle)
@@ -1743,9 +1758,24 @@ REDUCT_API reduct_handle_t reduct_get_float(reduct_t* reduct, reduct_handle_t* h
     {
         return REDUCT_HANDLE_FROM_FLOAT((reduct_float_t)REDUCT_HANDLE_TO_INT(handle));
     }
+
     reduct_item_t* item = reduct_handle_as_item(reduct, handle);
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_number(&item->atom), "expected floating point, got %s", reduct_item_type_str(item));
-    return REDUCT_HANDLE_FROM_FLOAT(reduct_atom_get_float(&item->atom));
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM, "expected atom, got %s", reduct_item_type_str(item));
+
+    if (reduct_atom_is_number(&item->atom))
+    {
+        return REDUCT_HANDLE_FROM_FLOAT(reduct_atom_get_float(&item->atom));
+    }
+
+    const char* str = item->atom.string;
+    reduct_size_t len = item->atom.length;
+    reduct_atom_t* atom = reduct_atom_lookup(reduct, str, len, REDUCT_ATOM_LOOKUP_NONE);
+    if (reduct_atom_is_number(atom))
+    {
+        return REDUCT_HANDLE_FROM_FLOAT(reduct_atom_get_float(atom));
+    }
+
+    return REDUCT_HANDLE_FROM_FLOAT(0.0);
 }
 
 static void reduct_path_copy(reduct_t* reduct, char* dest, const char* src, reduct_size_t len, reduct_size_t max)

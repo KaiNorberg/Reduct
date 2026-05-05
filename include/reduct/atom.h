@@ -64,6 +64,7 @@ typedef reduct_uint8_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NUMBER_CHECKED (1 << 4) ///< Atom has been checked for integer/float shaping.
 #define REDUCT_ATOM_FLAG_NATIVE_CHECKED (1 << 5) ///< Atom has been checked for a native function.
 #define REDUCT_ATOM_FLAG_LARGE (1 << 6) ///< Atom has an allocated buffer within a stack.
+#define REDUCT_ATOM_FLAG_OVERFLOW (1 << 7) ///< Atom has been parsed into an integer that is to large to fit into a `reduct_handle_t`.
 
 #define REDUCT_ATOM_STACK_MIN 1024 ///< The minimum size of an atom stack.
 #define REDUCT_ATOM_STACK_GROWTH 2 ///< The factor by which we increase the minimum size until the needed capacity is reached.

@@ -118,6 +118,19 @@ typedef size_t reduct_size_t;
 typedef int reduct_int_t;
 typedef double reduct_float_t;
 
+#define REDUCT_INT64_MAX INT64_MAX
+#define REDUCT_INT64_MIN INT64_MIN
+#define REDUCT_UINT64_MAX UINT64_MAX
+#define REDUCT_INT32_MAX INT32_MAX
+#define REDUCT_INT32_MIN INT32_MIN
+#define REDUCT_UINT32_MAX UINT32_MAX
+#define REDUCT_INT16_MAX INT16_MAX
+#define REDUCT_INT16_MIN INT16_MIN
+#define REDUCT_UINT16_MAX UINT16_MAX
+#define REDUCT_INT8_MAX INT8_MAX
+#define REDUCT_INT8_MIN INT8_MIN
+#define REDUCT_UINT8_MAX UINT8_MAX
+
 #ifdef _WIN32
 #include <windows.h>
 typedef HMODULE reduct_lib_t;

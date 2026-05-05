@@ -377,13 +377,13 @@ REDUCT_API reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_item_
     reduct_handle_t entryH;
     REDUCT_LIST_FOR_EACH(&entryH, &listItem->list)
     {
-        if (!REDUCT_HANDLE_IS_LIST(&entryH))
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(&entryH)))
         {
             continue;
         }
 
         reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
-        if (entry->length < 1)
+        if (REDUCT_UNLIKELY(entry->length < 1))
         {
             continue;
         }

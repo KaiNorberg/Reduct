@@ -151,7 +151,7 @@ static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_it
     {
         if (!REDUCT_LOCAL_IS_DEFINED(local))
         {
-            REDUCT_ERROR_COMPILE(compiler, atom, "undefined local '%.*s'", atom->atom.length, atom->atom.string);
+            REDUCT_ERROR_COMPILE(compiler, atom, "undefined local '%.*s'%s", atom->atom.length, atom->atom.string, atom->atom.flags & REDUCT_ATOM_FLAG_OVERFLOW ? " (integer overflow)" : "");
         }
 
         *out = local->expr;
@@ -167,7 +167,7 @@ static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_it
         }
     }
 
-    REDUCT_ERROR_COMPILE(compiler, atom, "undefined local '%.*s'", atom->atom.length, atom->atom.string);
+    REDUCT_ERROR_COMPILE(compiler, atom, "undefined local '%.*s'%s", atom->atom.length, atom->atom.string, atom->atom.flags & REDUCT_ATOM_FLAG_OVERFLOW ? " (integer overflow)" : "");
 }
 
 static inline reduct_bool_t reduct_compiler_is_data(reduct_compiler_t* compiler, reduct_item_t* item)

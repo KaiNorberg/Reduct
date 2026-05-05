@@ -515,6 +515,11 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
     }
 
     reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
+    if (item->flags & REDUCT_ITEM_FLAG_QUOTED)
+    {
+        return;
+    }
+
     const char* p = atom->string;
     const char* end = p + atom->length;
     const char* start = p;
@@ -612,8 +617,14 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
             }
             p++;
         }
+
         if (valid && hasDigits && p == end && *(end - 1) != '_')
         {
+            if (intValue > REDUCT_HANDLE_INT_MAX)
+            {
+                atom->flags |= REDUCT_ATOM_FLAG_OVERFLOW;
+                return;
+            }
             atom->flags |= REDUCT_ATOM_FLAG_INTEGER;
             atom->integerValue = sign * (reduct_int64_t)intValue;
             if (atom->integerValue == 0)
@@ -621,6 +632,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
                 item->flags |= REDUCT_ITEM_FLAG_FALSY;
             }
         }
+
         return;
     }
 
@@ -754,15 +766,20 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
             {
                 item->flags |= REDUCT_ITEM_FLAG_FALSY;
             }
+
+            return;
         }
-        else
+
+        if (intValue > REDUCT_HANDLE_INT_MAX)
         {
-            atom->flags |= REDUCT_ATOM_FLAG_INTEGER;
-            atom->integerValue = sign * (reduct_int64_t)intValue;
-            if (atom->integerValue == 0)
-            {
-                item->flags |= REDUCT_ITEM_FLAG_FALSY;
-            }
+            atom->flags |= REDUCT_ATOM_FLAG_OVERFLOW;
+            return;
+        }
+        atom->flags |= REDUCT_ATOM_FLAG_INTEGER;
+        atom->integerValue = sign * (reduct_int64_t)intValue;
+        if (atom->integerValue == 0)
+        {
+            item->flags |= REDUCT_ITEM_FLAG_FALSY;
         }
     }
 }

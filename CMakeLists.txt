@@ -92,6 +92,14 @@ if(REDUCT_USE_SANITIZERS AND NOT WIN32)
     target_link_options(reduct_static PRIVATE -fsanitize=address,undefined)
 endif()
 
+option(REDUCT_USE_FUZZER "Enable libFuzzer instrumentation" OFF)
+if(REDUCT_USE_FUZZER AND NOT (WIN32 OR APPLE))
+    target_compile_options(reduct_static PRIVATE
+        -fsanitize=fuzzer-no-link,address,undefined
+        -fno-omit-frame-pointer
+        -g)
+endif()
+
 if(NOT WIN32)
     target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized)
     target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized)

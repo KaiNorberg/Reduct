@@ -45,6 +45,9 @@ struct reduct;
 #define REDUCT_HANDLE_MASK_PTR REDUCT_HANDLE_MASK_VAL  ///< Mask for item pointer bits.
 #define REDUCT_HANDLE_MASK_FLAGS 0x00000000000000FFULL ///< Mask for flags (not stored in handle anymore).
 
+#define REDUCT_HANDLE_INT_MAX 0x00007FFFFFFFFFFFULL ///< Maximum value for a 48-bit signed integer in a handle.
+#define REDUCT_HANDLE_INT_WIDTH 48 ///< The bit width of the integer payload in a handle.
+
 /**
  * @brief Create a handle from an integer.
  *
@@ -421,7 +424,7 @@ struct reduct;
  * @param _reduct Pointer to the Reduct structure.
  * @param _a The target handle.
  * @param _b The first handle.
- * @param _c The second handle
+ * @param _c The second handle.
  * @param _op The arithmetic operator, (e.g., +, -, *, etc.)
  */
 #define REDUCT_HANDLE_ARITHMETIC_FAST(_reduct, _a, _b, _c, _op) \
@@ -454,6 +457,46 @@ struct reduct;
     } while (0)
 
 /**
+ * @brief Perform a modulo or division operation on two handles with a fast path for integers.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _a The target handle.
+ * @param _b The first handle.
+ * @param _c The second handle.
+ * @param _op The arithmetic operator, (e.g., /, %)
+ */
+#define REDUCT_HANDLE_MOD_DIV_FAST(_reduct, _a, _b, _c, _op) \
+    do \
+    { \
+        reduct_handle_t _bVal = *(_b); \
+        reduct_handle_t _cVal = *(_c); \
+        if (REDUCT_LIKELY( \
+                (((_bVal ^ REDUCT_HANDLE_TAG_INT) | (_cVal ^ REDUCT_HANDLE_TAG_INT)) & REDUCT_HANDLE_MASK_TAG) == 0)) \
+        { \
+            reduct_int64_t _cv = REDUCT_HANDLE_TO_INT(&_cVal); \
+            if (REDUCT_UNLIKELY(_cv == 0)) \
+            { \
+                REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+            } \
+            *(_a) = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&_bVal) _op _cv); \
+        } \
+        else \
+        { \
+            reduct_promotion_t prom; \
+            reduct_handle_promote(_reduct, _b, _c, &prom); \
+            if (REDUCT_UNLIKELY(prom.type != REDUCT_PROMOTION_TYPE_INT)) \
+            { \
+                REDUCT_ERROR_RUNTIME(_reduct, "division: incompatible operand types"); \
+            } \
+            if (REDUCT_UNLIKELY(prom.b.intVal == 0)) \
+            { \
+                REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+            } \
+            *(_a) = REDUCT_HANDLE_FROM_INT(prom.a.intVal _op prom.b.intVal); \
+        } \
+    } while (0)
+
+/**
  * @brief Perform a bitwise operation on two handles with a fast path for integers.
  *
  * @param _reduct Pointer to the Reduct structure.
@@ -475,45 +518,6 @@ struct reduct;
         else \
         { \
             *(_a) = REDUCT_HANDLE_FROM_INT(reduct_get_int(_reduct, &_bVal) _op reduct_get_int(_reduct, &_cVal)); \
-        } \
-    } while (0)
-
-/**
- * @brief Perform a modulo operation on two handles with a fast path for integers.
- *
- * @param _reduct Pointer to the Reduct structure.
- * @param _a The target handle.
- * @param _b The first handle.
- * @param _c The second handle
- */
-#define REDUCT_HANDLE_MOD_FAST(_reduct, _a, _b, _c) \
-    do \
-    { \
-        reduct_handle_t _bVal = *(_b); \
-        reduct_handle_t _cVal = *(_c); \
-        if (REDUCT_LIKELY( \
-                (((_bVal ^ REDUCT_HANDLE_TAG_INT) | (_cVal ^ REDUCT_HANDLE_TAG_INT)) & REDUCT_HANDLE_MASK_TAG) == 0)) \
-        { \
-            reduct_int64_t _cv = REDUCT_HANDLE_TO_INT(&_cVal); \
-            if (REDUCT_UNLIKELY(_cv == 0)) \
-            { \
-                REDUCT_ERROR_RUNTIME(_reduct, "modulo by zero"); \
-            } \
-            *(_a) = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&_bVal) % _cv); \
-        } \
-        else \
-        { \
-            reduct_promotion_t prom; \
-            reduct_handle_promote(_reduct, _b, _c, &prom); \
-            if (REDUCT_UNLIKELY(prom.type != REDUCT_PROMOTION_TYPE_INT)) \
-            { \
-                REDUCT_ERROR_RUNTIME(_reduct, "modulo: incompatible operand types"); \
-            } \
-            if (REDUCT_UNLIKELY(prom.b.intVal == 0)) \
-            { \
-                REDUCT_ERROR_RUNTIME(_reduct, "modulo by zero"); \
-            } \
-            *(_a) = REDUCT_HANDLE_FROM_INT(prom.a.intVal % prom.b.intVal); \
         } \
     } while (0)
 
