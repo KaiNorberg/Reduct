@@ -417,31 +417,3 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
 
     REDUCT_LONGJMP(reduct->error->jmp, REDUCT_TRUE);
 }
-
-REDUCT_API void reduct_error_check_arity(reduct_t* reduct, reduct_size_t argc, reduct_size_t expected, const char* name)
-{
-    if (REDUCT_UNLIKELY(argc != expected))
-    {
-        REDUCT_ERROR_RUNTIME(reduct, "%s: expected %zu argument(s), got %zu", name, expected,
-            (reduct_size_t)argc);
-    }
-}
-
-REDUCT_API void reduct_error_check_min_arity(reduct_t* reduct, reduct_size_t argc, reduct_size_t min, const char* name)
-{
-    if (REDUCT_UNLIKELY(argc < min))
-    {
-        REDUCT_ERROR_RUNTIME(reduct, "%s: expected at least %zu argument(s), got %zu", name, (reduct_size_t)min,
-            (reduct_size_t)argc);
-    }
-}
-
-REDUCT_API void reduct_error_check_arity_range(reduct_t* reduct, reduct_size_t argc, reduct_size_t min,
-    reduct_size_t max, const char* name)
-{
-    if (REDUCT_UNLIKELY(argc < min || argc > max))
-    {
-        REDUCT_ERROR_RUNTIME(reduct, "%s: expected %zu to %zu argument(s), got %zu", name, (reduct_size_t)min,
-            (reduct_size_t)max, (reduct_size_t)argc);
-    }
-}

@@ -118,6 +118,23 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_ready(reduct_t* reduc
     }
 }
 
+static inline REDUCT_ALWAYS_INLINE reduct_uint32_t reduct_eval_bundle_args(reduct_t* reduct, reduct_function_t* func,
+    reduct_uint32_t argc, reduct_handle_t* argv)
+{
+    reduct_uint32_t arity = func->arity;
+    if (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC)
+    {
+        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= (reduct_uint32_t)arity - 1, REDUCT_NULL,
+            "expected at least %u arguments, got %u", arity - 1, argc);
+
+        reduct_uint32_t fixed = arity - 1;
+        argv[fixed] = REDUCT_HANDLE_HANDLES(reduct, argc - fixed, &argv[fixed]);
+        return arity;
+    }
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == arity, REDUCT_NULL, "expected %u arguments, got %u", arity, argc);
+    return argc;
+}
+
 static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, reduct_uint32_t initialFrameCount)
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
@@ -141,21 +158,18 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, reduct_uint32_t 
         goto* dispatchTable[op]; \
     } while (0)
 
-#define OP_COMPARE(_label, _op) \
-LABEL_C_OP(_label, { \
-    DECODE_A(); \
-    DECODE_B(); \
-    base[a] = REDUCT_HANDLE_FROM_BOOL(REDUCT_HANDLE_COMPARE_FAST(reduct, &base[b], &valC, _op)); \
-    DISPATCH(); \
-})
+#define UPDATE_STATE() \
+    do { \
+        frame = &reduct->frames[reduct->frameCount - 1]; \
+        ip = frame->ip; \
+        base = reduct->regs + frame->base; \
+        constants = frame->closure->constants; \
+    } while (0)
 
-#define OP_ARITH(_label, _op) \
-LABEL_C_OP(_label, { \
-    DECODE_A(); \
-    DECODE_B(); \
-    REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &base[a], &base[b], &valC, _op); \
-    DISPATCH(); \
-})
+#define PREPARE_CALLABLE() \
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&valC), REDUCT_NULL, "cannot call value of type %s", \
+        REDUCT_HANDLE_GET_TYPE_STR(&valC)); \
+    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&valC)
 
 #define DECODE_A() reduct_uint32_t a = REDUCT_INST_GET_A(inst)
 #define DECODE_B() reduct_uint32_t b = REDUCT_INST_GET_B(inst)
@@ -185,6 +199,47 @@ LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
     base[a] = REDUCT_HANDLE_FROM_BOOL(_func(reduct, &base[b], &valC) == _truth); \
+    DISPATCH(); \
+})
+
+#define OP_COMPARE(_label, _op) \
+LABEL_C_OP(_label, { \
+    DECODE_A(); \
+    DECODE_B(); \
+    base[a] = REDUCT_HANDLE_FROM_BOOL(REDUCT_HANDLE_COMPARE_FAST(reduct, &base[b], &valC, _op)); \
+    DISPATCH(); \
+})
+
+#define OP_ARITH(_label, _op) \
+LABEL_C_OP(_label, { \
+    DECODE_A(); \
+    DECODE_B(); \
+    REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &base[a], &base[b], &valC, _op); \
+    DISPATCH(); \
+})
+
+#define OP_SHIFT(_label, _op, _name) \
+LABEL_C_OP(_label, { \
+    DECODE_A(); \
+    DECODE_B(); \
+    reduct_int64_t amount; \
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&valC))) \
+    { \
+        amount = REDUCT_HANDLE_TO_INT(&valC); \
+    } \
+    else \
+    { \
+        amount = reduct_get_int(reduct, &valC); \
+    } \
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_INT_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, amount); \
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&base[b]))) \
+    { \
+        base[a] = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&base[b]) _op amount); \
+    } \
+    else \
+    { \
+        base[a] = REDUCT_HANDLE_FROM_INT(reduct_get_int(reduct, &base[b]) _op amount); \
+    } \
     DISPATCH(); \
 })
 
@@ -276,21 +331,15 @@ label_jmpt:
 LABEL_C_OP(label_call, {
     DECODE_A();
     DECODE_B();
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&valC), REDUCT_NULL, "cannot call value of type %s",
-        REDUCT_HANDLE_GET_TYPE_STR(&valC));
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&valC);
+    PREPARE_CALLABLE();
     if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_CLOSURE))
     {
         reduct_closure_t* closure = &item->closure;
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, b == closure->function->arity, REDUCT_NULL, "expected %d arguments, got %d",
-            closure->function->arity, b);
+        b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
 
         reduct_eval_push_frame(reduct, closure, frame->base + a);
 
-        frame = &reduct->frames[reduct->frameCount - 1];
-        ip = frame->ip;
-        base = reduct->regs + frame->base;
-        constants = frame->closure->constants;
+        UPDATE_STATE();
 
         DISPATCH();
     }
@@ -298,11 +347,8 @@ LABEL_C_OP(label_call, {
     {
         reduct_handle_t* args = &base[a];
         reduct_handle_t result = item->atom.native(reduct, b, args);
-
-        frame = &reduct->frames[reduct->frameCount - 1];
-        base = reduct->regs + frame->base;
+        UPDATE_STATE();
         base[a] = result;
-        constants = frame->closure->constants;
 
         reduct_gc_if_needed(reduct);
 
@@ -314,14 +360,11 @@ LABEL_C_OP(label_call, {
 LABEL_C_OP(label_tailcall, {
     DECODE_A();
     DECODE_B();
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&valC), REDUCT_NULL, "cannot call value of type %s",
-        REDUCT_HANDLE_GET_TYPE_STR(&valC));
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&valC);
+    PREPARE_CALLABLE();
     if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_CLOSURE))
     {
         reduct_closure_t* closure = &item->closure;
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, b == closure->function->arity, REDUCT_NULL, "expected %d arguments, got %d",
-            closure->function->arity, b);
+        b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
 
         if (a != 0)
         {
@@ -330,10 +373,7 @@ LABEL_C_OP(label_tailcall, {
 
         reduct_eval_tail_frame(reduct, closure);
 
-        frame = &reduct->frames[reduct->frameCount - 1];
-        ip = frame->ip;
-        base = reduct->regs + frame->base;
-        constants = frame->closure->constants;
+        UPDATE_STATE();
 
         DISPATCH();
     }
@@ -352,10 +392,7 @@ LABEL_C_OP(label_tailcall, {
             goto eval_end;
         }
 
-        frame = &reduct->frames[reduct->frameCount - 1];
-        ip = frame->ip;
-        base = reduct->regs + frame->base;
-        constants = frame->closure->constants;
+        UPDATE_STATE();
 
         reduct_gc_if_needed(reduct);
 
@@ -377,10 +414,7 @@ LABEL_C_OP(label_ret, {
         result = valC;
         goto eval_end;
     }
-    frame = &reduct->frames[reduct->frameCount - 1];
-    ip = frame->ip;
-    base = reduct->regs + frame->base;
-    constants = frame->closure->constants;
+    UPDATE_STATE();
     DISPATCH();
 })
 OP_COMPARE(label_eq, ==)
@@ -423,52 +457,8 @@ LABEL_C_OP(label_bnot, {
     base[a] = REDUCT_HANDLE_FROM_INT(~val);
     DISPATCH();
 })
-LABEL_C_OP(label_shl, {
-    DECODE_A();
-    DECODE_B();
-    reduct_int64_t left;
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&valC)))
-    {
-        left = REDUCT_HANDLE_TO_INT(&valC);
-    }
-    else
-    {
-        left = reduct_get_int(reduct, &valC);
-    }
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, left >= 0 && left < REDUCT_HANDLE_INT_WIDTH - 1, "left shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, left);
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&base[b])))
-    {
-        base[a] = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&base[b]) << left);
-    }
-    else
-    {
-        base[a] = REDUCT_HANDLE_FROM_INT(reduct_get_int(reduct, &base[b]) << left);
-    }
-    DISPATCH();
-})
-LABEL_C_OP(label_shr, {
-    DECODE_A();
-    DECODE_B();
-    reduct_int64_t right;
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&valC)))
-    {
-        right = REDUCT_HANDLE_TO_INT(&valC);
-    }
-    else
-    {
-        right = reduct_get_int(reduct, &valC);
-    }
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, right >= 0 && right < REDUCT_HANDLE_INT_WIDTH - 1, "right shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, right);
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&base[b])))
-    {
-        base[a] = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&base[b]) >> right);
-    }
-    else
-    {
-        base[a] = REDUCT_HANDLE_FROM_INT(reduct_get_int(reduct, &base[b]) >> right);
-    }
-    DISPATCH();
-})
+OP_SHIFT(label_shl, <<, "left")
+OP_SHIFT(label_shr, >>, "right")
 label_closure:
 {
     DECODE_A();
@@ -550,16 +540,17 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     if (item->type == REDUCT_ITEM_TYPE_CLOSURE)
     {
         reduct_closure_t* closure = &item->closure;
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == closure->function->arity, REDUCT_NULL, "expected %ld arguments, got %ld", closure->function->arity, argc);
-
+        reduct_function_t* func = closure->function;
+        reduct_uint32_t arity = (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC) ? func->arity : (reduct_uint32_t)argc;
         reduct_uint32_t target = reduct->regCount;
+        reduct_uint32_t needed = REDUCT_MAX(arity, (reduct_uint32_t)argc);
+        needed = REDUCT_MAX(needed, (reduct_uint32_t)func->registerCount);
 
-        if (REDUCT_UNLIKELY(target + argc > reduct->regCapacity))
+        if (REDUCT_UNLIKELY(target + needed > reduct->regCapacity))
         {
             reduct_bool_t argvInRegs = (argv >= reduct->regs && argv < reduct->regs + reduct->regCapacity);
             reduct_uint32_t argvOffset = argvInRegs ? (reduct_uint32_t)(argv - reduct->regs) : 0;
-
-            reduct_eval_ensure_regs(reduct, target + argc);
+            reduct_eval_ensure_regs(reduct, target + needed);
 
             if (argvInRegs)
             {
@@ -568,6 +559,7 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
         }
 
         REDUCT_MEMCPY(reduct->regs + target, argv, argc * sizeof(reduct_handle_t));
+        reduct_eval_bundle_args(reduct, func, (reduct_uint32_t)argc, &reduct->regs[target]);
 
         reduct_uint32_t initialFrameCount = reduct->frameCount;
         reduct_eval_push_frame(reduct, closure, target);

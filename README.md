@@ -114,13 +114,13 @@ An atom can be either string-shaped, integer-shaped or float-shaped, for conveni
 There are three callable types: intrinsics, natives, and lambdas. Lambdas are defined in Reduct, natives are defined in C, and intrinsics are handled by the bytecode compiler.
 
 ```lisp
-(lambda (n) (* n n)) // A lambda that squares its argument.
+(lambda (n) {n * n}) // A lambda that squares its argument.
 ```
 
 To call a callable, use it as the first item in a list:
 
 ```lisp
-((lambda (n) (* n n)) 5) // Evaluates to "25"
+((lambda (n) {n * n}) 5) // Evaluates to "25"
 ```
 
 Note that a list will be considered to be a function call if the first element is a callable, this rule applies recursively.
@@ -357,6 +357,7 @@ For example:
 (* 2 3) // Evaluates to "6"
 (/ 10 3) // Evaluates to "3"
 (/ 10 3.0) // Evaluates to "3.333333"
+(+ "1" 2) // Error
 ```
 
 ### Truthiness
@@ -817,7 +818,21 @@ Returns a new list containing the results of evaluating each expression.
 
 Evaluates each expression in sequence and returns the result of the last one.
 
-**`(lambda ( {arg: atom} ) <expression> {expression} ) -> <lambda>`**
+**`(lambda ( {arg: symbol} [*rest: symbol] ) <expression> {expression} ) -> <lambda>`**
+
+Returns a user-defined anonymous function. When called, the body expressions are evaluated in sequence, and the result of the last expression is returned.
+
+If a rest parameter (prefixed with `*`) is provided, all remaining arguments are bundled into a list with the specified name.
+
+For example:
+
+```lisp
+(def sum (lambda (*numbers)
+    (reduce numbers 0 +)
+))
+
+(sum 1 2 3) // Evaluates to "6"
+```
 
 Returns a user-defined anonymous function. When called, the body expressions are evaluated in sequence, and the result of the last expression is returned.
 

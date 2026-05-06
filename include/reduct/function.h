@@ -72,6 +72,16 @@ typedef struct reduct_const_slot
 typedef reduct_uint16_t reduct_const_t;
 
 /**
+ * @brief Function flags.
+ * @typedef reduct_function_flags_t
+ */
+typedef enum reduct_function_flags 
+{
+    REDUCT_FUNCTION_FLAG_NONE = 0,
+    REDUCT_FUNCTION_FLAG_VARIADIC = 1 << 0, ///< Function accepts variadic arguments.
+} reduct_function_flags_t;
+
+/**
  * @brief Compiled function structure.
  * @struct reduct_function_t
  */
@@ -86,6 +96,7 @@ typedef struct reduct_function
     reduct_uint16_t constantCapacity; ///< Capacity of the constant array.
     reduct_uint16_t registerCount;    ///< The number of registers the function uses.
     reduct_uint8_t arity;             ///< The number of arguments the function expects.
+    reduct_function_flags_t flags;    ///< The function flags.
 } reduct_function_t;
 
 /**

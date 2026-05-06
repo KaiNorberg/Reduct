@@ -216,59 +216,6 @@ REDUCT_API REDUCT_NORETURN void reduct_error_throw_runtime(struct reduct* reduct
  */
 #define REDUCT_ERROR_INTERNAL(_reduct, ...) REDUCT_ERROR_THROW(reduct, (_reduct)->error, REDUCT_NULL, INTERNAL, __VA_ARGS__)
 
-/**
- * @brief Report a type error for a handle.
- */
-#define REDUCT_ERROR_TYPE(_reduct, _name, _handle, _expected) \
-    do \
-    { \
-        REDUCT_ERROR_RUNTIME(_reduct, "%s expects %s, got %s", _name, _expected, \
-            REDUCT_HANDLE_GET_TYPE_STR(_handle)); \
-    } while (0)
-
-/**
- * @brief Assert that a handle is a list.
- */
-#define REDUCT_ERROR_CHECK_LIST(_reduct, _handle, _name) \
-    do \
-    { \
-        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(_handle))) \
-        { \
-            REDUCT_ERROR_TYPE(_reduct, _name, _handle, "a list"); \
-        } \
-    } while (0)
-
-/**
- * @brief Assert that a handle is a callable.
- */
-#define REDUCT_ERROR_CHECK_CALLABLE(_reduct, _handle, _name) \
-    do \
-    { \
-        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_CALLABLE(_reduct, _handle))) \
-        { \
-            REDUCT_ERROR_TYPE(_reduct, _name, _handle, "a callable"); \
-        } \
-    } while (0)
-
-/**
- * @brief Assert that a handle is a sequence (list or atom).
- */
-#define REDUCT_ERROR_CHECK_SEQUENCE(_reduct, _handle, _name) \
-    do \
-    { \
-        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(_handle) && !REDUCT_HANDLE_IS_ATOM(_handle))) \
-        { \
-            REDUCT_ERROR_TYPE(_reduct, _name, _handle, "a list or atom"); \
-        } \
-    } while (0)
-
-REDUCT_API void reduct_error_check_arity(struct reduct* reduct, reduct_size_t argc, reduct_size_t expected,
-    const char* name);
-REDUCT_API void reduct_error_check_min_arity(struct reduct* reduct, reduct_size_t argc, reduct_size_t min,
-    const char* name);
-REDUCT_API void reduct_error_check_arity_range(struct reduct* reduct, reduct_size_t argc, reduct_size_t min,
-    reduct_size_t max, const char* name);
-
 /** @} */
 
 #endif
