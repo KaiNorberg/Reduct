@@ -1,4 +1,19 @@
 (do
+    (assert! (== (+ 1 2) 3) "addition should work")
+    (assert! (== (- 10 4) 6) "subtraction should work")
+    (assert! (== (* 3 4) 12) "multiplication should work")
+    (assert! (== (/ 10 2) 5) "division should work")
+    (assert! (== (% 10 3) 1) "modulo should work")
+
+    (assert! (== (+ 1.0 2.0) 3.0) "floating addition should work")
+    (assert! (== (- 5.5 2.5) 3.0) "floating subtraction should work")
+    (assert! (== (* 2.5 4.0) 10.0) "floating multiplication should work")
+    (assert! (== (/ 7.5 2.5) 3.0) "floating division should work")
+
+    (assert! (== (+ 1 2.5) 3.5) "integer and float addition should promote to float")
+    (assert! (== (* 2 1.5) 3.0) "integer and float multiplication should promote to float")
+    (assert! (== (/ 10 2.5) 4.0) "integer and float division should promote to float")
+
     (assert! (== (min 5 3 9) 3) "min should return the smallest argument")
     (assert! (== (max 5 3 9) 9) "max should return the largest argument")
     (assert! (== (min 5 3.0 9) 3.0) "min should support mixed types with promotion")

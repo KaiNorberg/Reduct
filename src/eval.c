@@ -431,13 +431,13 @@ OP_ARITH(label_mul, *)
 LABEL_C_OP(label_div, {
     DECODE_A();
     DECODE_B();
-    REDUCT_HANDLE_MOD_DIV_FAST(reduct, &base[a], &base[b], &valC, /);
+    REDUCT_HANDLE_DIV_FAST(reduct, &base[a], &base[b], &valC);
     DISPATCH();
 })
 LABEL_C_OP(label_mod, {
     DECODE_A();
     DECODE_B();
-    REDUCT_HANDLE_MOD_DIV_FAST(reduct, &base[a], &base[b], &valC, %);
+    REDUCT_HANDLE_MOD_FAST(reduct, &base[a], &base[b], &valC);
     DISPATCH();
 })
 OP_BITWISE(label_band, &)

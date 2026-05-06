@@ -1297,13 +1297,13 @@ static reduct_handle_t reduct_intrinsic_native_div(reduct_t* reduct, reduct_size
     {
         reduct_handle_t res;
         reduct_handle_t one = REDUCT_HANDLE_FROM_INT(1);
-        REDUCT_HANDLE_MOD_DIV_FAST(reduct, &res, &one, &argv[0], /);
+        REDUCT_HANDLE_DIV_FAST(reduct, &res, &one, &argv[0]);
         return res;
     }
     reduct_handle_t res = argv[0];
     for (reduct_size_t i = 1; i < argc; i++)
     {
-        REDUCT_HANDLE_MOD_DIV_FAST(reduct, &res, &res, &argv[i], /);
+        REDUCT_HANDLE_DIV_FAST(reduct, &res, &res, &argv[i]);
     }
     return res;
 }
@@ -1312,7 +1312,7 @@ static reduct_handle_t reduct_intrinsic_native_mod(reduct_t* reduct, reduct_size
 {
     REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 2, "%%: expected 2 argument(s), got %zu", (reduct_size_t)argc);
     reduct_handle_t result;
-    REDUCT_HANDLE_MOD_DIV_FAST(reduct, &result, &argv[0], &argv[1], %);
+    REDUCT_HANDLE_MOD_FAST(reduct, &result, &argv[0], &argv[1]);
     return result;
 }
 
