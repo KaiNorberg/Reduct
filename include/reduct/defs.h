@@ -153,21 +153,12 @@ typedef void* reduct_lib_t;
 #define REDUCT_RENAME(_old, _new) rename(_old, _new)
 #define REDUCT_MKDIR(_path) mkdir(_path)
 
-#ifdef _WIN32
-#include <sys/stat.h>
-typedef struct _stat reduct_stat_t;
-#define REDUCT_STAT(_path, _buf) _stat(_path, _buf)
-#define REDUCT_STAT_MTIME(_buf) ((_buf)->st_mtime)
-#define REDUCT_S_ISDIR(_mode) (((_mode) & _S_IFMT) == _S_IFDIR)
-#define REDUCT_S_ISREG(_mode) (((_mode) & _S_IFMT) == _S_IFREG)
-#else
 #include <sys/stat.h>
 typedef struct stat reduct_stat_t;
 #define REDUCT_STAT(_path, _buf) stat(_path, _buf)
 #define REDUCT_STAT_MTIME(_buf) ((_buf)->st_mtime)
 #define REDUCT_S_ISDIR(_mode) S_ISDIR(_mode)
 #define REDUCT_S_ISREG(_mode) S_ISREG(_mode)
-#endif
 
 #endif
 
@@ -239,7 +230,7 @@ typedef enum
 /**
  * @brief Maximum path length for Reduct.
  */
-#define REDUCT_PATH_MAX 512
+#define REDUCT_PATH_MAX 1024
 
 /**
  * @brief Container of macro.

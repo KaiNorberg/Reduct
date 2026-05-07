@@ -1785,23 +1785,127 @@ static void reduct_path_copy(reduct_t* reduct, char* dest, const char* src, redu
     dest[len] = '\0';
 }
 
-static void reduct_resolve_path(reduct_t* reduct, const char* path, reduct_size_t pathLen, char* outPath,
-    reduct_size_t maxLen)
+static void reduct_path_normalize(char* path, reduct_size_t* outLen)
 {
+    reduct_size_t len = *outLen;
+    reduct_size_t w = 0;
     reduct_bool_t isAbsolute = REDUCT_FALSE;
-    if (pathLen > 0 && (path[0] == '/' || path[0] == '\\'))
+
+    if (len > 0 && (path[0] == '/' || path[0] == '\\'))
     {
         isAbsolute = REDUCT_TRUE;
-    }
-    if (pathLen > 1 && ((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z')) && path[1] == ':')
-    {
-        isAbsolute = REDUCT_TRUE;
+        w = 1;
     }
 
-    if (isAbsolute || reduct == REDUCT_NULL || reduct->frameCount == 0)
+    for (reduct_size_t r = (isAbsolute ? 1 : 0); r < len; )
     {
-        reduct_path_copy(reduct, outPath, path, pathLen, maxLen);
+        while (r < len && (path[r] == '/' || path[r] == '\\'))
+        {
+            r++;
+        }
+        if (r >= len) break;
+
+        reduct_size_t compStart = r;
+        while (r < len && path[r] != '/' && path[r] != '\\')
+        {
+            r++;
+        }
+        reduct_size_t compLen = r - compStart;
+
+        if (compLen == 1 && path[compStart] == '.')
+        {
+            continue;
+        }
+
+        if (compLen == 2 && path[compStart] == '.' && path[compStart + 1] == '.')
+        {
+            if (w > (isAbsolute ? 1 : 0))
+            {
+                reduct_size_t lastCompStart = w;
+                while (lastCompStart > 0 && path[lastCompStart - 1] != '/')
+                {
+                    lastCompStart--;
+                }
+                if (isAbsolute && lastCompStart == 0)
+                {
+                    lastCompStart = 1;
+                }
+
+                reduct_size_t lastLen = w - lastCompStart;
+                if (lastLen == 2 && path[lastCompStart] == '.' && path[lastCompStart + 1] == '.')
+                {
+                    path[w++] = '/';
+                    path[w++] = '.';
+                    path[w++] = '.';
+                }
+                else
+                {
+                    w = lastCompStart;
+                    if (w > 0 && path[w - 1] == '/')
+                    {
+                        w--;
+                    }
+                    if (w == 0 && isAbsolute)
+                    {
+                        w = 1;
+                    }
+                }
+            }
+            else if (!isAbsolute)
+            {
+                if (w > 0)
+                {
+                    path[w++] = '/';
+                }
+                path[w++] = '.';
+                path[w++] = '.';
+            }
+            continue;
+        }
+
+        if (w > 0 && path[w - 1] != '/')
+        {
+            path[w++] = '/';
+        }
+        for (reduct_size_t i = 0; i < compLen; i++)
+        {
+            char c = path[compStart + i];
+            path[w++] = (c == '\\') ? '/' : c;
+        }
+    }
+
+    if (w == 0)
+    {
+        path[w++] = '.';
+    }
+
+    path[w] = '\0';
+    *outLen = w;
+}
+
+static void reduct_resolve_path(reduct_t* reduct, const char* path, reduct_size_t pathLen, char* outPath,
+    reduct_size_t maxLen, reduct_bool_t checkExistence)
+{
+    char normalized[REDUCT_PATH_MAX];
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, pathLen < REDUCT_PATH_MAX, "path exceeds maximum length");
+    REDUCT_MEMCPY(normalized, path, pathLen);
+    normalized[pathLen] = '\0';
+    reduct_path_normalize(normalized, &pathLen);
+
+    if (pathLen > 0 && (normalized[0] == '/'))
+    {
+        reduct_path_copy(reduct, outPath, normalized, pathLen, maxLen);
         return;
+    }
+    if (pathLen > 2 && ((normalized[0] >= 'a' && normalized[0] <= 'z') || (normalized[0] >= 'A' && normalized[0] <= 'Z')) && normalized[1] == ':')
+    {
+        reduct_path_copy(reduct, outPath, normalized, pathLen, maxLen);
+        return;
+    }
+
+    if (reduct == REDUCT_NULL || reduct->frameCount == 0)
+    {
+        goto fallback;
     }
 
     reduct_input_t* input = REDUCT_NULL;
@@ -1817,35 +1921,76 @@ static void reduct_resolve_path(reduct_t* reduct, const char* path, reduct_size_
         }
     }
 
-    if (input == REDUCT_NULL)
+    if (input != REDUCT_NULL)
     {
-        reduct_path_copy(reduct, outPath, path, pathLen, maxLen);
-        return;
-    }
-
-    const char* lastSlash = NULL;
-    const char* p = input->path;
-    while (*p != '\0')
-    {
-        if (*p == '/' || *p == '\\')
+        const char* lastSlash = NULL;
+        const char* p = input->path;
+        while (*p != '\0')
         {
-            lastSlash = p;
+            if (*p == '/' || *p == '\\')
+            {
+                lastSlash = p;
+            }
+            p++;
         }
-        p++;
+
+        if (lastSlash != REDUCT_NULL)
+        {
+            reduct_size_t dirLen = (reduct_size_t)(lastSlash - input->path) + 1;
+            if (dirLen + pathLen < maxLen)
+            {
+                REDUCT_MEMCPY(outPath, input->path, dirLen);
+                REDUCT_MEMCPY(outPath + dirLen, normalized, pathLen);
+                outPath[dirLen + pathLen] = '\0';
+
+                if (!checkExistence)
+                {
+                    return;
+                }
+
+                reduct_stat_t st;
+                if (REDUCT_STAT(outPath, &st) == 0)
+                {
+                    return;
+                }
+            }
+        }
     }
 
-    if (lastSlash == REDUCT_NULL)
+    if (reduct != REDUCT_NULL && reduct->importPaths != REDUCT_NULL)
     {
-        reduct_path_copy(reduct, outPath, path, pathLen, maxLen);
-        return;
+        for (reduct_size_t i = 0; i < reduct->importPathCount; i++)
+        {
+            const char* includeDir = reduct->importPaths[i];
+            reduct_size_t dirLen = REDUCT_STRLEN(includeDir);
+            reduct_size_t needSep = (dirLen > 0 && includeDir[dirLen - 1] != '/') ? 1 : 0;
+            reduct_size_t totalLen = dirLen + needSep + pathLen;
+            if (totalLen + 1 < maxLen)
+            {
+                REDUCT_MEMCPY(outPath, includeDir, dirLen);
+                if (needSep)
+                {
+                    outPath[dirLen] = '/';
+                }
+                REDUCT_MEMCPY(outPath + dirLen + needSep, normalized, pathLen);
+                outPath[totalLen] = '\0';
+
+                if (!checkExistence)
+                {
+                    return;
+                }
+
+                reduct_stat_t st;
+                if (REDUCT_STAT(outPath, &st) == 0)
+                {
+                    return;
+                }
+            }
+        }
     }
 
-    reduct_size_t dirLen = (reduct_size_t)(lastSlash - input->path) + 1;
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, dirLen + pathLen < maxLen, "path exceeds maximum length");
-
-    REDUCT_MEMCPY(outPath, input->path, dirLen);
-    REDUCT_MEMCPY(outPath + dirLen, path, pathLen);
-    outPath[dirLen + pathLen] = '\0';
+fallback:
+    reduct_path_copy(reduct, outPath, normalized, pathLen, maxLen);
 }
 
 REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t* handle)
@@ -1866,7 +2011,7 @@ static void reduct_get_resolved_path(reduct_t* reduct, reduct_handle_t* pathHand
     const char* pathStr;
     reduct_size_t pathLen;
     reduct_handle_atom_string(reduct, pathHandle, &pathStr, &pathLen);
-    reduct_resolve_path(reduct, pathStr, pathLen, outBuf, REDUCT_PATH_MAX);
+    reduct_resolve_path(reduct, pathStr, pathLen, outBuf, REDUCT_PATH_MAX, REDUCT_TRUE);
 }
 
 REDUCT_API reduct_handle_t reduct_import(struct reduct* reduct, reduct_handle_t* path, reduct_handle_t* compiler, reduct_handle_t* compilerArgs)
@@ -2025,7 +2170,10 @@ REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handl
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
     char pathBuf[REDUCT_PATH_MAX];
-    reduct_get_resolved_path(reduct, path, pathBuf);
+    const char* pathStr;
+    reduct_size_t pathLen;
+    reduct_handle_atom_string(reduct, path, &pathStr, &pathLen);
+    reduct_resolve_path(reduct, pathStr, pathLen, pathBuf, REDUCT_PATH_MAX, REDUCT_FALSE);
 
     const char* contentStr;
     reduct_size_t contentLen;

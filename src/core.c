@@ -35,6 +35,42 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
     reduct->argc = 0;
     reduct->argv = REDUCT_NULL;
 
+    reduct->importPaths = REDUCT_NULL;
+    reduct->importPathCount = 0;
+    reduct->importPathCapacity = 0;
+
+    char* env = REDUCT_GETENV("REDUCT_PATH");
+    if (env != REDUCT_NULL)
+    {
+        reduct_size_t envLen = REDUCT_STRLEN(env);
+        reduct_size_t start = 0;
+        for (reduct_size_t pos = 0; pos <= envLen; pos++)
+        {
+            if (env[pos] == ':' || env[pos] == ';' || env[pos] == '\0')
+            {
+                if (pos > start)
+                {
+                    reduct_size_t tokLen = pos - start;
+                    char* token = (char*)REDUCT_MALLOC(tokLen + 1);
+                    if (token != REDUCT_NULL)
+                    {
+                        REDUCT_MEMCPY(token, env + start, tokLen);
+                        token[tokLen] = '\0';
+                        reduct_add_import_path(reduct, token);
+                        REDUCT_FREE(token);
+                    }
+                }
+                start = pos + 1;
+            }
+        }
+    }
+
+#if defined(__linux__) || defined(__APPLE__)
+    reduct_add_import_path(reduct, "/usr/local/lib/reduct");
+    reduct_add_import_path(reduct, "/usr/lib/reduct");
+    reduct_add_import_path(reduct, "/lib/reduct");
+#endif
+
     return reduct;
 }
 
@@ -137,6 +173,18 @@ REDUCT_API void reduct_free(reduct_t* reduct)
         reduct->libCapacity = 0;
     }
 
+    if (reduct->importPaths != REDUCT_NULL)
+    {
+        for (reduct_size_t i = 0; i < reduct->importPathCount; i++)
+        {
+            REDUCT_FREE(reduct->importPaths[i]);
+        }
+        REDUCT_FREE(reduct->importPaths);
+        reduct->importPaths = REDUCT_NULL;
+        reduct->importPathCount = 0;
+        reduct->importPathCapacity = 0;
+    }
+
     if (reduct->retained != REDUCT_NULL)
     {
         REDUCT_FREE(reduct->retained);
@@ -219,4 +267,41 @@ REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id
     }
 
     return REDUCT_NULL;
+}
+
+REDUCT_API void reduct_add_import_path(reduct_t* reduct, const char* path)
+{
+    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    REDUCT_ASSERT(path != REDUCT_NULL);
+
+    if (reduct->importPaths == REDUCT_NULL)
+    {
+        reduct->importPathCapacity = REDUCT_IMPORT_PATHS_INITIAL;
+        reduct->importPaths = (char**)REDUCT_MALLOC(reduct->importPathCapacity * sizeof(char*));
+        if (reduct->importPaths == REDUCT_NULL)
+        {
+            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+        }
+    }
+    else if (reduct->importPathCount >= reduct->importPathCapacity)
+    {
+        reduct->importPathCapacity *= REDUCT_IMPORT_PATHS_GROWTH;
+        char** newPaths = (char**)REDUCT_REALLOC(reduct->importPaths, reduct->importPathCapacity * sizeof(char*));
+        if (newPaths == REDUCT_NULL)
+        {
+            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+        }
+        reduct->importPaths = newPaths;
+    }
+
+    reduct_size_t len = REDUCT_STRLEN(path);
+    char* pathCopy = (char*)REDUCT_MALLOC(len + 1);
+    if (pathCopy == REDUCT_NULL)
+    {
+        REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+    }
+    REDUCT_MEMCPY(pathCopy, path, len);
+    pathCopy[len] = '\0';
+
+    reduct->importPaths[reduct->importPathCount++] = pathCopy;
 }

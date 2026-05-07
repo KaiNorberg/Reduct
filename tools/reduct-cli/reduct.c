@@ -44,6 +44,18 @@ int main(int argc, char **argv)
                 return 1;
             }
         }
+        else if (strcmp(argv[i], "-I") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                i++;
+            }
+            else
+            {
+                fprintf(stderr, "error: -I requires a path argument\n");
+                return 1;
+            }
+        }
         else if (strcmp(argv[i], "-d") == 0)
         {
             shouldDump = 1;
@@ -75,12 +87,23 @@ int main(int argc, char **argv)
         fprintf(stderr, "Options:\n");
         fprintf(stderr, "  -e <expr>      Evaluate the given expression\n");
         fprintf(stderr, "  -s, --silent   Do not print the evaluation result\n");
+        fprintf(stderr, "  -I <path>      Add a directory to the import search path\n");
         fprintf(stderr, "  -d             Output the compiled bytecode (disassemble)\n");
-        fprintf(stderr, "  -v, --version  Output version information\n");
+        fprintf(stderr, "  -v, --version  Output version information\n");        
+        fprintf(stderr, "Environment Variables:\n");
+        fprintf(stderr, "  REDUCT_PATH    Colon-separated or semi-colon-separated list of directories for imports\n");
         return 1;
     }
 
     reduct = reduct_new(&error);
+
+    for (int i = 1; i < argc; ++i)
+    {
+        if (strcmp(argv[i], "-I") == 0 && i + 1 < argc)
+        {
+            reduct_add_import_path(reduct, argv[++i]);
+        }
+    }
 
     reduct_args_set(reduct, argc, argv);
 

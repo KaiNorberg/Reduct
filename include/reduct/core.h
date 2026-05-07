@@ -20,6 +20,9 @@ struct reduct_item;
  * @{
  */
 
+#define REDUCT_IMPORT_PATHS_INITIAL 4 ///< Initial size of the import path array.
+#define REDUCT_IMPORT_PATHS_GROWTH 2 ///< Growth factor of the import path array.
+
 #define REDUCT_CONSTANTS_MAX 8 ///< Maximum amount of predefined constants.
 
 /**
@@ -120,6 +123,9 @@ typedef struct reduct
     reduct_lib_t* libs;
     reduct_size_t libCount;
     reduct_size_t libCapacity;
+    char** importPaths;
+    reduct_size_t importPathCount;
+    reduct_size_t importPathCapacity;
     int argc;
     char** argv;  
 } reduct_t;
@@ -149,6 +155,14 @@ REDUCT_API void reduct_free(reduct_t* reduct);
  * @param argv The argument strings.
  */
 REDUCT_API void reduct_args_set(reduct_t* reduct, int argc, char** argv);
+
+/**
+ * @brief Add a path to search when importing modules.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param path The directory path, will be copied.
+ */
+REDUCT_API void reduct_add_import_path(reduct_t* reduct, const char* path);
 
 /**
  * @brief Register a constant in a Reduct structure.
