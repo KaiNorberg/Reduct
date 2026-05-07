@@ -174,7 +174,7 @@ Lisps, which Reduct takes heavy inspiration from, are generally agreed to be a v
 
 The most often blamed source of this poor readability is the sheer volume of parentheses.
 
-Reduct makes the argument that most of these complaints are due to nesting, not parentheses; that it can be solved via infix notation, banning `let` and a more modern style guide.
+Reduct makes the argument that most of these complaints are due to nesting, not parentheses; that it can be solved via infix notation, banning `let` style functions and a more modern style guide.
 
 Included are three examples of a basic program written in common Lisp, C and Reduct.
 
@@ -182,7 +182,7 @@ Included are three examples of a basic program written in common Lisp, C and Red
 
 ```lisp
 (let* ((x 10)
-         (y 20))
+         (y 20)
          (z (+ x y)))
   (* z 2))
 ```
@@ -209,6 +209,10 @@ int main()
     {z * 2}
 )
 ```
+
+Note how Reduct avoids spreading out the context required to understand a line. For example, the `(z (+ x y)))` Lisp line could be confused for a function call.
+
+Additionally, the infix notation provides familiarity that, while not making a great difference in a trivial example, could improve the readability and most importantly editability of a non-trival example (`{i >= max-iter or zr * zr + zi * zi > 4.0}`).
 
 ### Flexibility
 
