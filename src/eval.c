@@ -7,16 +7,16 @@
 #include "reduct/compile.h"
 
 static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct,
-    reduct_uint32_t neededRegs)
+    uint32_t neededRegs)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     if (REDUCT_LIKELY(neededRegs <= reduct->regCapacity))
     {
         return;
     }
 
-    reduct_uint32_t oldCapacity = reduct->regCapacity;
+    uint32_t oldCapacity = reduct->regCapacity;
     while (neededRegs > reduct->regCapacity)
     {
         reduct->regCapacity *= REDUCT_EVAL_REGS_GROWTH_FACTOR;
@@ -26,20 +26,20 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct
         REDUCT_ERROR_INTERNAL(reduct, "too many registers");
     }
 
-    reduct_handle_t* newRegs = (reduct_handle_t*)REDUCT_REALLOC(reduct->regs, sizeof(reduct_handle_t) * reduct->regCapacity);
-    if (newRegs == REDUCT_NULL)
+    reduct_handle_t* newRegs = (reduct_handle_t*)realloc(reduct->regs, sizeof(reduct_handle_t) * reduct->regCapacity);
+    if (newRegs == NULL)
     {
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
-    REDUCT_MEMSET(newRegs + oldCapacity, 0, (reduct->regCapacity - oldCapacity) * sizeof(reduct_handle_t));
+    memset(newRegs + oldCapacity, 0, (reduct->regCapacity - oldCapacity) * sizeof(reduct_handle_t));
     reduct->regs = newRegs;
 }
 
 static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct,
-    reduct_closure_t* closure, reduct_uint32_t target)
+    reduct_closure_t* closure, uint32_t target)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(closure != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(closure != NULL);
 
     if (REDUCT_UNLIKELY(reduct->frameCount >= reduct->frameCapacity))
     {
@@ -49,15 +49,15 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct,
         }
 
         reduct->frameCapacity *= REDUCT_EVAL_FRAMES_GROWTH_FACTOR;
-        reduct->frames = (reduct_eval_frame_t*)REDUCT_REALLOC(reduct->frames,
+        reduct->frames = (reduct_eval_frame_t*)realloc(reduct->frames,
             sizeof(reduct_eval_frame_t) * reduct->frameCapacity);
-        if (reduct->frames == REDUCT_NULL)
+        if (reduct->frames == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
     }
 
-    reduct_uint32_t neededRegs = target + closure->function->registerCount;
+    uint32_t neededRegs = target + closure->function->registerCount;
     reduct_eval_ensure_regs(reduct, neededRegs);
 
     reduct_eval_frame_t* frame = &reduct->frames[reduct->frameCount++];
@@ -71,7 +71,7 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct,
 
 static inline REDUCT_ALWAYS_INLINE void reduct_eval_pop_frame(reduct_t* reduct)
 {
-    REDUCT_ASSERT(reduct->frameCount > 0);
+    assert(reduct->frameCount > 0);
 
     reduct_eval_frame_t* frame = &reduct->frames[--reduct->frameCount];
 
@@ -81,13 +81,13 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_pop_frame(reduct_t* reduct)
 static inline REDUCT_ALWAYS_INLINE void reduct_eval_tail_frame(reduct_t* reduct,
     reduct_closure_t* closure)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(reduct->frameCount > 0);
-    REDUCT_ASSERT(closure != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(reduct->frameCount > 0);
+    assert(closure != NULL);
 
     reduct_eval_frame_t* frame = &reduct->frames[reduct->frameCount - 1];
 
-    reduct_uint32_t neededRegs = frame->base + closure->function->registerCount;
+    uint32_t neededRegs = frame->base + closure->function->registerCount;
     reduct_eval_ensure_regs(reduct, neededRegs);
     reduct->regCount = neededRegs;
 
@@ -100,8 +100,8 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_ready(reduct_t* reduc
     if (REDUCT_UNLIKELY(reduct->frameCapacity == 0))
     {
         reduct->frameCapacity = REDUCT_EVAL_FRAMES_INITIAL;
-        reduct->frames = (reduct_eval_frame_t*)REDUCT_CALLOC(1, sizeof(reduct_eval_frame_t) * reduct->frameCapacity);
-        if (reduct->frames == REDUCT_NULL)
+        reduct->frames = (reduct_eval_frame_t*)calloc(1, sizeof(reduct_eval_frame_t) * reduct->frameCapacity);
+        if (reduct->frames == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
@@ -110,34 +110,34 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_ready(reduct_t* reduc
     if (REDUCT_UNLIKELY(reduct->regCapacity == 0))
     {
         reduct->regCapacity = REDUCT_EVAL_REGS_INITIAL;
-        reduct->regs = (reduct_handle_t*)REDUCT_CALLOC(1, sizeof(reduct_handle_t) * reduct->regCapacity);
-        if (reduct->regs == REDUCT_NULL)
+        reduct->regs = (reduct_handle_t*)calloc(1, sizeof(reduct_handle_t) * reduct->regCapacity);
+        if (reduct->regs == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
     }
 }
 
-static inline REDUCT_ALWAYS_INLINE reduct_uint32_t reduct_eval_bundle_args(reduct_t* reduct, reduct_function_t* func,
-    reduct_uint32_t argc, reduct_handle_t* argv)
+static inline REDUCT_ALWAYS_INLINE uint32_t reduct_eval_bundle_args(reduct_t* reduct, reduct_function_t* func,
+    uint32_t argc, reduct_handle_t* argv)
 {
-    reduct_uint32_t arity = func->arity;
+    uint32_t arity = func->arity;
     if (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC)
     {
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= (reduct_uint32_t)arity - 1, REDUCT_NULL,
+        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= (uint32_t)arity - 1, NULL,
             "expected at least %u arguments, got %u", arity - 1, argc);
 
-        reduct_uint32_t fixed = arity - 1;
+        uint32_t fixed = arity - 1;
         argv[fixed] = REDUCT_HANDLE_HANDLES(reduct, argc - fixed, &argv[fixed]);
         return arity;
     }
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == arity, REDUCT_NULL, "expected %u arguments, got %u", arity, argc);
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == arity, NULL, "expected %u arguments, got %u", arity, argc);
     return argc;
 }
 
-static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, reduct_uint32_t initialFrameCount)
+static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCount)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     reduct_eval_frame_t* frame = &reduct->frames[reduct->frameCount - 1];
     reduct_inst_t* ip = frame->ip;
@@ -167,20 +167,20 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, reduct_uint32_t 
     } while (0)
 
 #define PREPARE_CALLABLE() \
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&valC), REDUCT_NULL, "cannot call value of type %s", \
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&valC), NULL, "cannot call value of type %s", \
         REDUCT_HANDLE_GET_TYPE_STR(&valC)); \
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&valC)
 
-#define DECODE_A() reduct_uint32_t a = REDUCT_INST_GET_A(inst)
-#define DECODE_B() reduct_uint32_t b = REDUCT_INST_GET_B(inst)
-#define DECODE_C() reduct_uint32_t c = REDUCT_INST_GET_C(inst)
+#define DECODE_A() uint32_t a = REDUCT_INST_GET_A(inst)
+#define DECODE_B() uint32_t b = REDUCT_INST_GET_B(inst)
+#define DECODE_C() uint32_t c = REDUCT_INST_GET_C(inst)
 #define DECODE_C_REG() \
-    reduct_uint32_t c = REDUCT_INST_GET_C(inst); \
+    uint32_t c = REDUCT_INST_GET_C(inst); \
     reduct_handle_t valC = base[c]
 #define DECODE_C_CONST() \
-    reduct_uint32_t c = REDUCT_INST_GET_C(inst); \
+    uint32_t c = REDUCT_INST_GET_C(inst); \
     reduct_handle_t valC = constants[c]
-#define DECODE_SBX() reduct_int32_t sbx = REDUCT_INST_GET_SBX(inst)
+#define DECODE_SBX() int32_t sbx = REDUCT_INST_GET_SBX(inst)
 
 #define OP_ENTRY(_op, _label) [_op] = &&_label, [_op | REDUCT_MODE_CONST] = &&_label
 
@@ -222,7 +222,7 @@ LABEL_C_OP(_label, { \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    reduct_int64_t amount; \
+    int64_t amount; \
     if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&valC))) \
     { \
         amount = REDUCT_HANDLE_TO_INT(&valC); \
@@ -290,7 +290,7 @@ LABEL_C_OP(_label, { \
 
     DISPATCH();
 label_none:
-    REDUCT_ERROR_RUNTIME(reduct, "invalid opcode %u at instruction %zu", inst, (reduct_size_t)(ip - frame->closure->function->insts - 1));
+    REDUCT_ERROR_RUNTIME(reduct, "invalid opcode %u at instruction %zu", inst, (size_t)(ip - frame->closure->function->insts - 1));
 label_list:
 {
     DECODE_A();
@@ -368,7 +368,7 @@ LABEL_C_OP(label_tailcall, {
 
         if (a != 0)
         {
-            REDUCT_MEMMOVE(base, base + a, b * sizeof(reduct_handle_t));
+            memmove(base, base + a, b * sizeof(reduct_handle_t));
         }
 
         reduct_eval_tail_frame(reduct, closure);
@@ -445,7 +445,7 @@ OP_BITWISE(label_bor, |)
 OP_BITWISE(label_bxor, ^)
 LABEL_C_OP(label_bnot, {
     DECODE_A();
-    reduct_int64_t val;
+    int64_t val;
     if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&valC)))
     {
         val = REDUCT_HANDLE_TO_INT(&valC);
@@ -464,10 +464,10 @@ label_closure:
     DECODE_A();
     DECODE_C();
     reduct_handle_t protoHandle = frame->closure->constants[c];
-    REDUCT_ASSERT(REDUCT_HANDLE_IS_ITEM(&protoHandle));
+    assert(REDUCT_HANDLE_IS_ITEM(&protoHandle));
 
     reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(&protoHandle);
-    REDUCT_ASSERT(protoItem->type == REDUCT_ITEM_TYPE_FUNCTION);
+    assert(protoItem->type == REDUCT_ITEM_TYPE_FUNCTION);
 
     reduct_function_t* proto = &protoItem->function;
     base[a] = REDUCT_HANDLE_FROM_CLOSURE(reduct_closure_new(reduct, proto));
@@ -488,13 +488,13 @@ eval_end:
 
 REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_function_t* function)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(function != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(function != NULL);
 
     reduct_eval_ensure_ready(reduct);
 
     reduct_closure_t* closure = reduct_closure_new(reduct, function);
-    reduct_uint32_t initialFrameCount = reduct->frameCount;
+    uint32_t initialFrameCount = reduct->frameCount;
 
     reduct_eval_push_frame(reduct, closure, reduct->regCount);
 
@@ -503,37 +503,37 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_function_t* func
 
 REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(path != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(path != NULL);
 
     reduct_handle_t parsed = reduct_parse_file(reduct, path);
     reduct_function_t* function = reduct_compile(reduct, &parsed);
     return reduct_eval(reduct, function);
 }
 
-REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, reduct_size_t len)
+REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, size_t len)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(str != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(str != NULL);
 
     reduct_handle_t parsed = reduct_parse(reduct, str, len, "<eval>");
     reduct_function_t* function = reduct_compile(reduct, &parsed);
     return reduct_eval(reduct, function);
 }
 
-REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t callable, reduct_size_t argc, reduct_handle_t* argv)
+REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t callable, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(argv != REDUCT_NULL || argc == 0);
+    assert(reduct != NULL);
+    assert(argv != NULL || argc == 0);
 
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&callable), REDUCT_NULL, "cannot call value");
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&callable), NULL, "cannot call value");
 
     reduct_eval_ensure_ready(reduct);
 
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&callable);
     if (item->type == REDUCT_ITEM_TYPE_ATOM)
     {
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, reduct_atom_is_native(reduct, &item->atom), REDUCT_NULL, "cannot call atom, only native functions and closures are callable");
+        REDUCT_ERROR_RUNTIME_ASSERT(reduct, reduct_atom_is_native(reduct, &item->atom), NULL, "cannot call atom, only native functions and closures are callable");
         return item->atom.native(reduct, argc, argv);
     }
 
@@ -541,15 +541,15 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     {
         reduct_closure_t* closure = &item->closure;
         reduct_function_t* func = closure->function;
-        reduct_uint32_t arity = (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC) ? func->arity : (reduct_uint32_t)argc;
-        reduct_uint32_t target = reduct->regCount;
-        reduct_uint32_t needed = REDUCT_MAX(arity, (reduct_uint32_t)argc);
-        needed = REDUCT_MAX(needed, (reduct_uint32_t)func->registerCount);
+        uint32_t arity = (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC) ? func->arity : (uint32_t)argc;
+        uint32_t target = reduct->regCount;
+        uint32_t needed = REDUCT_MAX(arity, (uint32_t)argc);
+        needed = REDUCT_MAX(needed, (uint32_t)func->registerCount);
 
         if (REDUCT_UNLIKELY(target + needed > reduct->regCapacity))
         {
             reduct_bool_t argvInRegs = (argv >= reduct->regs && argv < reduct->regs + reduct->regCapacity);
-            reduct_uint32_t argvOffset = argvInRegs ? (reduct_uint32_t)(argv - reduct->regs) : 0;
+            uint32_t argvOffset = argvInRegs ? (uint32_t)(argv - reduct->regs) : 0;
             reduct_eval_ensure_regs(reduct, target + needed);
 
             if (argvInRegs)
@@ -558,10 +558,10 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
             }
         }
 
-        REDUCT_MEMCPY(reduct->regs + target, argv, argc * sizeof(reduct_handle_t));
-        reduct_eval_bundle_args(reduct, func, (reduct_uint32_t)argc, &reduct->regs[target]);
+        memcpy(reduct->regs + target, argv, argc * sizeof(reduct_handle_t));
+        reduct_eval_bundle_args(reduct, func, (uint32_t)argc, &reduct->regs[target]);
 
-        reduct_uint32_t initialFrameCount = reduct->frameCount;
+        uint32_t initialFrameCount = reduct->frameCount;
         reduct_eval_push_frame(reduct, closure, target);
 
         return reduct_eval_run(reduct, initialFrameCount);

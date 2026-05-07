@@ -16,7 +16,7 @@ static inline void reduct_item_init(reduct_item_t* item)
 
 static inline reduct_item_t* reduct_item_pop_free_list(reduct_t* reduct)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     reduct_item_t* item = reduct->freeList;
     reduct->freeList = item->free;
@@ -26,28 +26,28 @@ static inline reduct_item_t* reduct_item_pop_free_list(reduct_t* reduct)
 
 REDUCT_API reduct_item_t* reduct_item_new(reduct_t* reduct)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
-    if (REDUCT_LIKELY(reduct->freeList != REDUCT_NULL))
+    if (REDUCT_LIKELY(reduct->freeList != NULL))
     {
         return reduct_item_pop_free_list(reduct);
     }
 
-    reduct_item_t* item = REDUCT_NULL;
-    void* allocated = REDUCT_CALLOC(1, sizeof(reduct_item_block_t));
-    if (allocated == REDUCT_NULL)
+    reduct_item_t* item = NULL;
+    void* allocated = calloc(1, sizeof(reduct_item_block_t));
+    if (allocated == NULL)
     {
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
-    reduct_item_block_t* block = (reduct_item_block_t*)REDUCT_ROUND_UP((reduct_size_t)allocated, REDUCT_ALIGNMENT);
+    reduct_item_block_t* block = (reduct_item_block_t*)REDUCT_ROUND_UP((size_t)allocated, REDUCT_ALIGNMENT);
     block->allocated = allocated;
     reduct->blockCount++;
 
-    for (reduct_size_t i = 1; i < REDUCT_ITEM_BLOCK_MAX - 1; i++)
+    for (size_t i = 1; i < REDUCT_ITEM_BLOCK_MAX - 1; i++)
     {
         block->items[i].free = &block->items[i + 1];
     }
-    block->items[REDUCT_ITEM_BLOCK_MAX - 1].free = REDUCT_NULL;
+    block->items[REDUCT_ITEM_BLOCK_MAX - 1].free = NULL;
     reduct->freeCount += REDUCT_ITEM_BLOCK_MAX - 1;
 
     reduct->freeList = &block->items[1];
@@ -66,7 +66,7 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
     case REDUCT_ITEM_TYPE_ATOM:
     {
         reduct_atom_t* atom = &item->atom;
-        if (reduct->atomMap != REDUCT_NULL && atom->index != REDUCT_ATOM_INDEX_NONE)
+        if (reduct->atomMap != NULL && atom->index != REDUCT_ATOM_INDEX_NONE)
         {
             reduct->atomMap[atom->index] = REDUCT_ATOM_TOMBSTONE;
             reduct->atomMapTombstones++;
@@ -77,11 +77,11 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
     case REDUCT_ITEM_TYPE_ATOM_STACK:
     {   
         reduct_atom_stack_t* stack = &item->atomStack;
-        if (stack->next != REDUCT_NULL)
+        if (stack->next != NULL)
         {
             stack->next->prev = stack->prev;
         }
-        if (stack->prev != REDUCT_NULL)
+        if (stack->prev != NULL)
         {
             stack->prev->next = stack->next;
         }
@@ -89,26 +89,26 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         {
             reduct->atomStack = stack->next;
         }
-        if (stack->data != REDUCT_NULL)
+        if (stack->data != NULL)
         {
-            REDUCT_FREE(stack->data);
+            free(stack->data);
         }
         break;
     }
     case REDUCT_ITEM_TYPE_FUNCTION:
     {
         reduct_function_t* func = &item->function;
-        if (func->insts != REDUCT_NULL)
+        if (func->insts != NULL)
         {
-            REDUCT_FREE(func->insts);
+            free(func->insts);
         }
-        if (func->positions != REDUCT_NULL)
+        if (func->positions != NULL)
         {
-            REDUCT_FREE(func->positions);
+            free(func->positions);
         }
-        if (func->constants != REDUCT_NULL)
+        if (func->constants != NULL)
         {
-            REDUCT_FREE(func->constants);
+            free(func->constants);
         }
         break;
     }
@@ -117,7 +117,7 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         reduct_closure_t* closure = &item->closure;
         if (closure->constants != closure->smallConstants)
         {
-            REDUCT_FREE(closure->constants);
+            free(closure->constants);
         }
         break;
     }
@@ -128,14 +128,14 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
     reduct_item_init(item);
 
 #ifndef NDEBUG
-    REDUCT_MEMSET(&item->atom, 0xFE, sizeof(reduct_item_t) - offsetof(reduct_item_t, atom));
+    memset(&item->atom, 0xFE, sizeof(reduct_item_t) - offsetof(reduct_item_t, atom));
 #endif
 }
 
 REDUCT_API void reduct_item_free(reduct_t* reduct, reduct_item_t* item)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(item != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(item != NULL);
 
     reduct_item_deinit(reduct, item);
 
@@ -146,7 +146,7 @@ REDUCT_API void reduct_item_free(reduct_t* reduct, reduct_item_t* item)
 
 REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)
 {
-    if (item == REDUCT_NULL)
+    if (item == NULL)
     {
         return "none";
     }

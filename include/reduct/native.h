@@ -30,7 +30,7 @@ struct reduct_expr;
  * @param argv The array of arguments.
  * @return The result of the function.
  */
-typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, reduct_size_t argc, reduct_handle_t* argv);
+typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 
 /**
  * @brief Intrinsic handler function type.
@@ -60,8 +60,8 @@ typedef struct
  */
 typedef struct reduct_native_entry
 {
-    reduct_uint32_t hash;
-    reduct_uint32_t length;
+    uint32_t hash;
+    uint32_t length;
     reduct_native_fn nativeFn;
     reduct_native_intrinsic_fn intrinsicFn;
     char* name;
@@ -74,10 +74,10 @@ typedef struct reduct_native_entry
  * @param hash The hash of the name.
  * @param str The name string.
  * @param len The length of the name.
- * @return A pointer to the native entry, or `REDUCT_NULL` if not found.
+ * @return A pointer to the native entry, or `NULL` if not found.
  */
-REDUCT_API reduct_native_entry_t* reduct_native_map_find(struct reduct* reduct, reduct_uint32_t hash,
-    const char* str, reduct_size_t len);
+REDUCT_API reduct_native_entry_t* reduct_native_map_find(struct reduct* reduct, uint32_t hash,
+    const char* str, size_t len);
 
 /**
  * @brief Register native functions.
@@ -86,7 +86,7 @@ REDUCT_API reduct_native_entry_t* reduct_native_map_find(struct reduct* reduct, 
  * @param array An array of native function definitions.
  * @param count The number of functions in the array.
  */
-REDUCT_API void reduct_native_register(struct reduct* reduct, reduct_native_t* array, reduct_size_t count);
+REDUCT_API void reduct_native_register(struct reduct* reduct, reduct_native_t* array, size_t count);
 
 /** @} */
 

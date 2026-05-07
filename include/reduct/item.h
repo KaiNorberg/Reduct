@@ -22,7 +22,7 @@
 /**
  * @brief Item type enumeration.
  */
-typedef reduct_uint8_t reduct_item_type_t;
+typedef uint8_t reduct_item_type_t;
 #define REDUCT_ITEM_TYPE_NONE 0      ///< No type.
 #define REDUCT_ITEM_TYPE_ATOM 1      ///< An atom.
 #define REDUCT_ITEM_TYPE_ATOM_STACK 2 ///< An atom stack.
@@ -34,7 +34,7 @@ typedef reduct_uint8_t reduct_item_type_t;
 /**
  * @brief Item flags enumeration.
  */
-typedef reduct_uint8_t reduct_item_flags_t;
+typedef uint8_t reduct_item_flags_t;
 #define REDUCT_ITEM_FLAG_NONE 0                ///< No flags.
 #define REDUCT_ITEM_FLAG_FALSY (1 << 0)        ///< Item is falsy.
 #define REDUCT_ITEM_FLAG_QUOTED (1 << 1)       ///< Item is quoted.
@@ -52,12 +52,12 @@ typedef reduct_uint8_t reduct_item_flags_t;
  */
 typedef struct reduct_item
 {
-    reduct_uint32_t position;    ///< The position in the input buffer where the item was parsed.
+    uint32_t position;    ///< The position in the input buffer where the item was parsed.
     reduct_item_flags_t flags;   ///< Flags for the item.
     reduct_item_type_t type;     ///< The type of the item.
     reduct_input_id_t inputId;   ///< The input ID of the item.
     union {
-        reduct_uint32_t
+        uint32_t
             length;         ///< Common length for the item. (Stored in the union due to padding rules.)
         reduct_atom_t atom; ///< An atom.
         reduct_atom_stack_t atomStack; ///< An atom stack.
@@ -86,9 +86,9 @@ typedef struct reduct_item_block
 {
     void* allocated; ///< The actual pointer returned by the memory allocation.
     struct reduct_item_block* next;    
-    reduct_uint8_t _padding[REDUCT_ALIGNMENT - sizeof(void*) - sizeof(struct reduct_item_block*)];
+    uint8_t _padding[REDUCT_ALIGNMENT - sizeof(void*) - sizeof(struct reduct_item_block*)];
     reduct_item_t items[REDUCT_ITEM_BLOCK_MAX];
-    reduct_uint8_t _alignmentPadding[REDUCT_ALIGNMENT]; ///< Padding space for aligning blocks, should never be accessed.
+    uint8_t _alignmentPadding[REDUCT_ALIGNMENT]; ///< Padding space for aligning blocks, should never be accessed.
 } reduct_item_block_t;
 
 #ifdef _Static_assert

@@ -4,8 +4,8 @@
 
 REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_function_t* function)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(function != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(function != NULL);
 
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_CLOSURE;
@@ -17,10 +17,10 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
     }
     else
     {
-        closure->constants = (reduct_handle_t*)REDUCT_MALLOC(sizeof(reduct_handle_t) * function->constantCount);
+        closure->constants = (reduct_handle_t*)malloc(sizeof(reduct_handle_t) * function->constantCount);
     }
 
-    for (reduct_uint16_t i = 0; i < function->constantCount; i++)
+    for (uint16_t i = 0; i < function->constantCount; i++)
     {
         if (function->constants[i].type != REDUCT_CONST_SLOT_ITEM)
         {

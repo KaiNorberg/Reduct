@@ -1,13 +1,15 @@
 #ifndef REDUCT_FUNCTION_H
 #define REDUCT_FUNCTION_H 1
 
+#include "reduct/inst.h"
 #include "reduct/defs.h"
 
 struct reduct;
 struct reduct_item;
 struct reduct_atom;
 
-#include "reduct/inst.h"
+#include <assert.h>
+#include <stdlib.h>
 
 /**
  * @file function.h
@@ -44,7 +46,7 @@ typedef struct reduct_const_slot
 {
     reduct_const_slot_type_t type; ///< The type of the constant slot.
     union {
-        reduct_uint64_t raw;
+        uint64_t raw;
         struct reduct_item* item;    ///< The item contained in the constant slot.
         struct reduct_atom* capture; ///< The name of the variable to be captured.
     };
@@ -69,7 +71,7 @@ typedef struct reduct_const_slot
  * @brief Constant index type.
  * @typedef reduct_const_t
  */
-typedef reduct_uint16_t reduct_const_t;
+typedef uint16_t reduct_const_t;
 
 /**
  * @brief Function flags.
@@ -87,15 +89,15 @@ typedef enum reduct_function_flags
  */
 typedef struct reduct_function
 {
-    reduct_uint32_t instCount;        ///< Number of instructions.
-    reduct_uint32_t instCapacity;     ///< Capacity of the instruction array.
+    uint32_t instCount;        ///< Number of instructions.
+    uint32_t instCapacity;     ///< Capacity of the instruction array.
     reduct_inst_t* insts;             ///< An array of instructions.
-    reduct_uint32_t* positions;       ///< An array of source positions parallel to the instructions.
+    uint32_t* positions;       ///< An array of source positions parallel to the instructions.
     reduct_const_slot_t* constants;   ///< The array of constant slots forming the constant template.
-    reduct_uint16_t constantCount;    ///< Number of constants.
-    reduct_uint16_t constantCapacity; ///< Capacity of the constant array.
-    reduct_uint16_t registerCount;    ///< The number of registers the function uses.
-    reduct_uint8_t arity;             ///< The number of arguments the function expects.
+    uint16_t constantCount;    ///< Number of constants.
+    uint16_t constantCapacity; ///< Capacity of the constant array.
+    uint16_t registerCount;    ///< The number of registers the function uses.
+    uint8_t arity;             ///< The number of arguments the function expects.
     reduct_function_flags_t flags;    ///< The function flags.
 } reduct_function_t;
 
@@ -131,10 +133,10 @@ REDUCT_API void reduct_function_grow(struct reduct* reduct, reduct_function_t* f
  * @param position The position in the source code.
  */
 static inline void reduct_function_emit(struct reduct* reduct, reduct_function_t* func, reduct_inst_t inst,
-    reduct_uint32_t position)
+    uint32_t position)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(func != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(func != NULL);
     if (func->instCount >= func->instCapacity)
     {
         reduct_function_grow(reduct, func);

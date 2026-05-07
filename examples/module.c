@@ -1,6 +1,6 @@
 #include "reduct/reduct.h"
 
-reduct_handle_t my_native(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
+reduct_handle_t my_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
     return REDUCT_HANDLE_FROM_INT(52);
 }

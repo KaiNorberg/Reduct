@@ -23,7 +23,7 @@
  * @param path The path to the file being parsed (for error reporting).
  * @return The root item of the parsed expression, will be retained by the GC.
  */
-REDUCT_API reduct_handle_t reduct_parse(reduct_t* reduct, const char* str, reduct_size_t len, const char* path);
+REDUCT_API reduct_handle_t reduct_parse(reduct_t* reduct, const char* str, size_t len, const char* path);
 
 /**
  * @brief Parse a Reduct file.

@@ -19,7 +19,7 @@
  * @param function The compiled function to disassemble.
  * @param out The output file stream to write the disassembly to.
  */
-REDUCT_API void reduct_disasm(reduct_t* reduct, reduct_function_t* function, reduct_file_t out);
+REDUCT_API void reduct_disasm(reduct_t* reduct, reduct_function_t* function, FILE* out);
 
 /** @} */
 

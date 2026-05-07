@@ -247,7 +247,7 @@ struct reduct;
  * @param _handle Pointer to the handle.
  * @return The integer value.
  */
-#define REDUCT_HANDLE_TO_INT(_handle) (((reduct_int64_t)((*(_handle)) << 16)) >> 16)
+#define REDUCT_HANDLE_TO_INT(_handle) (((int64_t)((*(_handle)) << 16)) >> 16)
 
 /**
  * @brief Get the float value of a handle.
@@ -350,7 +350,7 @@ struct reduct;
  * @param _str The null-terminated string.
  */
 #define REDUCT_HANDLE_SYM(_reduct, _str) \
-    REDUCT_HANDLE_FROM_ATOM(reduct_atom_lookup(_reduct, _str, REDUCT_STRLEN(_str), REDUCT_ATOM_LOOKUP_NONE))
+    REDUCT_HANDLE_FROM_ATOM(reduct_atom_lookup(_reduct, _str, strlen(_str), REDUCT_ATOM_LOOKUP_NONE))
 
 /**
  * @brief Create an atom handle from an integer.
@@ -472,7 +472,7 @@ struct reduct;
         if (REDUCT_LIKELY( \
                 (((_bVal ^ REDUCT_HANDLE_TAG_INT) | (_cVal ^ REDUCT_HANDLE_TAG_INT)) & REDUCT_HANDLE_MASK_TAG) == 0)) \
         { \
-            reduct_int64_t _cv = REDUCT_HANDLE_TO_INT(&_cVal); \
+            int64_t _cv = REDUCT_HANDLE_TO_INT(&_cVal); \
             if (REDUCT_UNLIKELY(_cv == 0)) \
             { \
                 REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
@@ -527,7 +527,7 @@ struct reduct;
         if (REDUCT_LIKELY( \
                 (((_bVal ^ REDUCT_HANDLE_TAG_INT) | (_cVal ^ REDUCT_HANDLE_TAG_INT)) & REDUCT_HANDLE_MASK_TAG) == 0)) \
         { \
-            reduct_int64_t _cv = REDUCT_HANDLE_TO_INT(&_cVal); \
+            int64_t _cv = REDUCT_HANDLE_TO_INT(&_cVal); \
             if (REDUCT_UNLIKELY(_cv == 0)) \
             { \
                 REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
@@ -536,8 +536,8 @@ struct reduct;
         } \
         else \
         { \
-            reduct_int64_t _bv = reduct_get_int(_reduct, &_bVal); \
-            reduct_int64_t _cv = reduct_get_int(_reduct, &_cVal); \
+            int64_t _bv = reduct_get_int(_reduct, &_bVal); \
+            int64_t _cv = reduct_get_int(_reduct, &_cVal); \
             if (REDUCT_UNLIKELY(_cv == 0)) \
             { \
                 REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
@@ -664,12 +664,12 @@ typedef struct
 {
     reduct_promotion_type_t type;
     union {
-        reduct_int64_t intVal;
-        reduct_float_t floatVal;
+        int64_t intVal;
+        double floatVal;
     } a;
     union {
-        reduct_int64_t intVal;
-        reduct_float_t floatVal;
+        int64_t intVal;
+        double floatVal;
     } b;
 } reduct_promotion_t;
 
@@ -707,7 +707,7 @@ REDUCT_API reduct_bool_t reduct_handle_is_equal(struct reduct* reduct, reduct_ha
  * @param b The second handle.
  * @return A negative value if a < b, zero if a == b, and a positive value if a > b.
  */
-REDUCT_API reduct_int64_t reduct_handle_compare(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b);
+REDUCT_API int64_t reduct_handle_compare(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b);
 
 /**
  * @brief Compare two handles that are most likely atoms.
@@ -770,7 +770,7 @@ REDUCT_API reduct_handle_t reduct_handle_e(struct reduct* reduct);
  * @param outLen Pointer to store the string length.
  */
 REDUCT_API void reduct_handle_atom_string(struct reduct* reduct, reduct_handle_t* handle, const char** outStr,
-    reduct_size_t* outLen);
+    size_t* outLen);
 
 /**
  * @brief Push a value to a list handle.
@@ -791,7 +791,7 @@ REDUCT_API void reduct_handle_push(struct reduct* reduct, reduct_handle_t* list,
  * @param index The index.
  * @return The element handle.
  */
-REDUCT_API reduct_handle_t reduct_handle_at(struct reduct* reduct, reduct_handle_t* handle, reduct_size_t index);
+REDUCT_API reduct_handle_t reduct_handle_at(struct reduct* reduct, reduct_handle_t* handle, size_t index);
 
 /**
  * @brief Get the length of a handle (list elements or atom characters).
@@ -800,7 +800,7 @@ REDUCT_API reduct_handle_t reduct_handle_at(struct reduct* reduct, reduct_handle
  * @param handle The handle.
  * @return The length.
  */
-REDUCT_API reduct_size_t reduct_handle_len(struct reduct* reduct, reduct_handle_t* handle);
+REDUCT_API size_t reduct_handle_len(struct reduct* reduct, reduct_handle_t* handle);
 
 /**
  * @brief Check if an atom handle is equal to a string.

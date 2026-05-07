@@ -46,8 +46,8 @@ typedef struct reduct_list_node
  */
 typedef struct reduct_list
 {
-    reduct_uint32_t length;   ///< Total number of elements.
-    reduct_uint32_t shift;    ///< The amount to shift the index to compute access paths.
+    uint32_t length;   ///< Total number of elements.
+    uint32_t shift;    ///< The amount to shift the index to compute access paths.
     reduct_list_node_t* root; ///< Pointer to the trie root node.
     reduct_list_node_t tail;  ///< The tail node, stored inline.
 } reduct_list_t;
@@ -68,7 +68,7 @@ REDUCT_API reduct_list_t* reduct_list_new(struct reduct* reduct);
  * @param handles The array of handles.
  * @return A pointer to the newly created list.
  */
-REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, reduct_size_t count, reduct_handle_t* handles);
+REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t count, reduct_handle_t* handles);
 
 /**
  * @brief Create a new list of pairs (key-value) from a variable number of pairs.
@@ -78,7 +78,7 @@ REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, reduct_
  * @param ... Each pair should be provided as a `(const char*, reduct_handle_t)`.
  * @return A pointer to the newly created list of pairs.
  */
-REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, reduct_size_t count, ...);
+REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, size_t count, ...);
 
 /**
  * @brief Create a new list with an updated value at the specified index.
@@ -89,7 +89,7 @@ REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, reduct_si
  * @param val The new value to set.
  * @return A pointer to the newly created list.
  */
-REDUCT_API reduct_list_t* reduct_list_assoc(struct reduct* reduct, reduct_list_t* list, reduct_size_t index,
+REDUCT_API reduct_list_t* reduct_list_assoc(struct reduct* reduct, reduct_list_t* list, size_t index,
     reduct_handle_t val);
 
 /**
@@ -100,7 +100,7 @@ REDUCT_API reduct_list_t* reduct_list_assoc(struct reduct* reduct, reduct_list_t
  * @param index The index of the element to remove.
  * @return A pointer to the newly created list.
  */
-REDUCT_API reduct_list_t* reduct_list_dissoc(struct reduct* reduct, reduct_list_t* list, reduct_size_t index);
+REDUCT_API reduct_list_t* reduct_list_dissoc(struct reduct* reduct, reduct_list_t* list, size_t index);
 
 /**
  * @brief Create a new list by slicing an existing list.
@@ -111,8 +111,8 @@ REDUCT_API reduct_list_t* reduct_list_dissoc(struct reduct* reduct, reduct_list_
  * @param end The ending index (exclusive).
  * @return A pointer to the newly created list slice.
  */
-REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t* list, reduct_size_t start,
-    reduct_size_t end);
+REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t* list, size_t start,
+    size_t end);
 
 /**
  * @brief Create a new list by appending an element to an existing list.
@@ -142,7 +142,7 @@ REDUCT_API reduct_list_t* reduct_list_prepend(struct reduct* reduct, reduct_list
  * @param index The index of the element to retrieve.
  * @return The handle of the nth element.
  */
-REDUCT_API reduct_handle_t reduct_list_nth(struct reduct* reduct, reduct_list_t* list, reduct_size_t index);
+REDUCT_API reduct_handle_t reduct_list_nth(struct reduct* reduct, reduct_list_t* list, size_t index);
 
 /**
  * @brief Get the nth element of the list as an item.
@@ -152,7 +152,7 @@ REDUCT_API reduct_handle_t reduct_list_nth(struct reduct* reduct, reduct_list_t*
  * @param index The index of the element to retrieve.
  * @return A pointer to the item of the nth element.
  */
-REDUCT_API struct reduct_item* reduct_list_nth_item(struct reduct* reduct, reduct_list_t* list, reduct_size_t index);
+REDUCT_API struct reduct_item* reduct_list_nth_item(struct reduct* reduct, reduct_list_t* list, size_t index);
 
 /**
  * @brief Push a new element to the list.
@@ -180,7 +180,7 @@ REDUCT_API void reduct_list_push_list(struct reduct* reduct, reduct_list_t* list
  * @param handles The array of handles.
  * @return A pointer to the newly created list.
  */
-REDUCT_API reduct_list_t* reduct_list_new_from_handles(struct reduct* reduct, reduct_size_t count, reduct_handle_t* handles);
+REDUCT_API reduct_list_t* reduct_list_new_from_handles(struct reduct* reduct, size_t count, reduct_handle_t* handles);
 
 /**
  * @brief List iterator structure.
@@ -189,9 +189,9 @@ REDUCT_API reduct_list_t* reduct_list_new_from_handles(struct reduct* reduct, re
 typedef struct reduct_list_iter
 {
     reduct_list_t* list;
-    reduct_size_t index;
+    size_t index;
     reduct_list_node_t* leaf;
-    reduct_size_t tailOffset;
+    size_t tailOffset;
 } reduct_list_iter_t;
 
 /**
@@ -206,7 +206,7 @@ typedef struct reduct_list_iter
  *
  * @param _list The list to iterate over.
  */
-#define REDUCT_LIST_ITER(_list) {(_list), 0, REDUCT_NULL, REDUCT_LIST_TAIL_OFFSET(_list)}
+#define REDUCT_LIST_ITER(_list) {(_list), 0, NULL, REDUCT_LIST_TAIL_OFFSET(_list)}
 
 /**
  * @brief Create a initializer for a list iterator start at a specific index.
@@ -214,7 +214,7 @@ typedef struct reduct_list_iter
  * @param _list The list to iterate over.
  * @param _start The starting index.
  */
-#define REDUCT_LIST_ITER_AT(_list, _start) {(_list), (_start), REDUCT_NULL, REDUCT_LIST_TAIL_OFFSET(_list)}
+#define REDUCT_LIST_ITER_AT(_list, _start) {(_list), (_start), NULL, REDUCT_LIST_TAIL_OFFSET(_list)}
 
 /**
  * @brief Get the next element from the iterator.
@@ -291,8 +291,8 @@ REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, struct 
  *
  * @param reduct Pointer to the Reduct structure.
  * @param entryH Pointer to the entry handle, must be a list.
- * @param outKey Pointer to store the key handle, can be `REDUCT_NULL`.
- * @param outVal Pointer to store the value handle, can be `REDUCT_NULL`.
+ * @param outKey Pointer to store the key handle, can be `NULL`.
+ * @param outVal Pointer to store the value handle, can be `NULL`.
  * @return `REDUCT_TRUE` if the entry is valid and handles were retrieved, `REDUCT_FALSE` otherwise.
  */
 REDUCT_API reduct_bool_t reduct_list_get_entry(struct reduct* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,

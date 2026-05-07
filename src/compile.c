@@ -8,14 +8,14 @@
 
 REDUCT_API reduct_function_t* reduct_compile(reduct_t* reduct, reduct_handle_t* ast)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(ast != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(ast != NULL);
 
     reduct_function_t* func = reduct_function_new(reduct);
     reduct_item_t* funcItem = REDUCT_CONTAINER_OF(func, reduct_item_t, function);
 
     reduct_compiler_t compiler;
-    reduct_compiler_init(&compiler, reduct, func, REDUCT_NULL);
+    reduct_compiler_init(&compiler, reduct, func, NULL);
 
     reduct_item_t* astItem = REDUCT_HANDLE_TO_ITEM(ast);
     compiler.lastItem = astItem;
@@ -35,32 +35,32 @@ REDUCT_API reduct_function_t* reduct_compile(reduct_t* reduct, reduct_handle_t* 
 REDUCT_API void reduct_compiler_init(reduct_compiler_t* compiler, reduct_t* reduct, reduct_function_t* function,
     reduct_compiler_t* enclosing)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(function != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(reduct != NULL);
+    assert(function != NULL);
 
     compiler->enclosing = enclosing;
     compiler->reduct = reduct;
     compiler->function = function;
     compiler->localCount = 0;
-    compiler->lastItem = enclosing != REDUCT_NULL ? enclosing->lastItem : REDUCT_NULL;
+    compiler->lastItem = enclosing != NULL ? enclosing->lastItem : NULL;
 
-    REDUCT_MEMSET(compiler->regAlloc, 0, sizeof(compiler->regAlloc));
-    REDUCT_MEMSET(compiler->regLocal, 0, sizeof(compiler->regLocal));
-    REDUCT_MEMSET(compiler->locals, 0, sizeof(compiler->locals));
+    memset(compiler->regAlloc, 0, sizeof(compiler->regAlloc));
+    memset(compiler->regLocal, 0, sizeof(compiler->regLocal));
+    memset(compiler->locals, 0, sizeof(compiler->locals));
 }
 
 REDUCT_API void reduct_compiler_deinit(reduct_compiler_t* compiler)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
     (void)compiler;
 }
 
 REDUCT_API reduct_reg_t reduct_reg_alloc(reduct_compiler_t* compiler)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
 
-    reduct_size_t index = reduct_bitmap_find_first_clear(compiler->regAlloc, REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX));
+    size_t index = reduct_bitmap_find_first_clear(compiler->regAlloc, REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX));
     if (index != REDUCT_BITMAP_INDEX_NONE)
     {
         reduct_reg_t reg = (reduct_reg_t)index;
@@ -72,21 +72,21 @@ REDUCT_API reduct_reg_t reduct_reg_alloc(reduct_compiler_t* compiler)
     return REDUCT_REG_INVALID;
 }
 
-REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, reduct_uint32_t count)
+REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, uint32_t count)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
 
     if (count == 0)
     {
         return 0;
     }
 
-    for (reduct_uint32_t i = 0; i <= REDUCT_REGISTER_MAX - count; i++)
+    for (uint32_t i = 0; i <= REDUCT_REGISTER_MAX - count; i++)
     {
-        reduct_uint32_t length;
+        uint32_t length;
         for (length = 0; length < count; length++)
         {
-            reduct_uint32_t reg = i + length;
+            uint32_t reg = i + length;
             if (REDUCT_REG_IS_ALLOCATED(compiler, reg))
             {
                 break;
@@ -94,9 +94,9 @@ REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, redu
         }
         if (length == count)
         {
-            for (reduct_uint32_t j = 0; j < count; j++)
+            for (uint32_t j = 0; j < count; j++)
             {
-                reduct_uint32_t reg = i + j;
+                uint32_t reg = i + j;
                 REDUCT_REG_SET_ALLOCATED(compiler, reg);
             }
             return i;
@@ -110,7 +110,7 @@ REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, redu
 
 REDUCT_API void reduct_reg_free(reduct_compiler_t* compiler, reduct_reg_t reg)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
     if (reg >= REDUCT_REGISTER_MAX)
     {
         return;
@@ -124,11 +124,11 @@ REDUCT_API void reduct_reg_free(reduct_compiler_t* compiler, reduct_reg_t reg)
     REDUCT_REG_CLEAR_ALLOCATED(compiler, reg);
 }
 
-REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t start, reduct_uint32_t count)
+REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t start, uint32_t count)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
 
-    for (reduct_uint32_t i = 0; i < count; i++)
+    for (uint32_t i = 0; i < count; i++)
     {
         reduct_reg_free(compiler, start + i);
     }
@@ -136,9 +136,9 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
 
 static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_item_t* atom, reduct_expr_t* out)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(atom != REDUCT_NULL);
-    REDUCT_ASSERT(out != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(atom != NULL);
+    assert(out != NULL);
 
     if (atom->flags & REDUCT_ITEM_FLAG_QUOTED || reduct_atom_is_intrinsic(compiler->reduct, &atom->atom) || reduct_atom_is_number(&atom->atom) || reduct_atom_is_native(compiler->reduct, &atom->atom))
     {
@@ -147,7 +147,7 @@ static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_it
     }
 
     reduct_local_t* local = reduct_local_lookup(compiler, &atom->atom);
-    if (local != REDUCT_NULL)
+    if (local != NULL)
     {
         if (!REDUCT_LOCAL_IS_DEFINED(local))
         {
@@ -158,7 +158,7 @@ static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_it
         return;
     }
 
-    for (reduct_uint32_t i = 0; i < compiler->reduct->constantCount; i++)
+    for (uint32_t i = 0; i < compiler->reduct->constantCount; i++)
     {
         if (&atom->atom == compiler->reduct->constants[i].name)
         {
@@ -198,9 +198,9 @@ static inline reduct_bool_t reduct_compiler_is_data(reduct_compiler_t* compiler,
 
 static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_item_t* list, reduct_expr_t* out)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(list != REDUCT_NULL);
-    REDUCT_ASSERT(out != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(list != NULL);
+    assert(out != NULL);
 
     if (list->flags & REDUCT_ITEM_FLAG_QUOTED)
     {
@@ -227,8 +227,8 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_it
         return;
     }
 
-    reduct_uint32_t arity = (reduct_uint32_t)list->length - 1;
-    reduct_uint32_t regCount = arity == 0 ? 1 : arity;
+    uint32_t arity = (uint32_t)list->length - 1;
+    uint32_t regCount = arity == 0 ? 1 : arity;
 
     reduct_reg_t base = reduct_reg_get_base(compiler);
 
@@ -237,7 +237,7 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_it
         REDUCT_ERROR_COMPILE(compiler, list, "too many registers in function, limit is %u", REDUCT_REGISTER_MAX);
     }
 
-    for (reduct_uint32_t i = 0; i < regCount; i++)
+    for (uint32_t i = 0; i < regCount; i++)
     {
         REDUCT_REG_SET_ALLOCATED(compiler, base + i);
     }
@@ -273,12 +273,12 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_it
 
 REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_item_t* item, reduct_expr_t* out)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(item != REDUCT_NULL);
-    REDUCT_ASSERT(out != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(item != NULL);
+    assert(out != NULL);
 
     reduct_item_t* previousItem = compiler->lastItem;
-    if (item != REDUCT_NULL && item->inputId != REDUCT_INPUT_ID_NONE)
+    if (item != NULL && item->inputId != REDUCT_INPUT_ID_NONE)
     {
         compiler->lastItem = item;
     }
@@ -297,8 +297,8 @@ REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_item_t* it
 
 REDUCT_API reduct_local_t* reduct_local_def(reduct_compiler_t* compiler, reduct_atom_t* name)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(name != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(name != NULL);
 
     if (compiler->localCount >= REDUCT_REGISTER_MAX)
     {
@@ -312,9 +312,9 @@ REDUCT_API reduct_local_t* reduct_local_def(reduct_compiler_t* compiler, reduct_
 
 REDUCT_API void reduct_local_def_done(reduct_compiler_t* compiler, reduct_local_t* local, reduct_expr_t* expr)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(local != REDUCT_NULL);
-    REDUCT_ASSERT(expr != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(local != NULL);
+    assert(expr != NULL);
 
     if (local->expr.mode != REDUCT_MODE_NONE)
     {
@@ -331,8 +331,8 @@ REDUCT_API void reduct_local_def_done(reduct_compiler_t* compiler, reduct_local_
 
 REDUCT_API reduct_local_t* reduct_local_add_arg(reduct_compiler_t* compiler, reduct_atom_t* name)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(name != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(name != NULL);
 
     if (compiler->localCount >= REDUCT_REGISTER_MAX)
     {
@@ -347,20 +347,20 @@ REDUCT_API reduct_local_t* reduct_local_add_arg(reduct_compiler_t* compiler, red
     return &compiler->locals[compiler->localCount++];
 }
 
-REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, reduct_uint16_t toCount, reduct_expr_t* result)
+REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, uint16_t toCount, reduct_expr_t* result)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
     reduct_reg_t resultReg =
-        (result != REDUCT_NULL && result->mode == REDUCT_MODE_REG) ? result->reg : REDUCT_REG_INVALID;
+        (result != NULL && result->mode == REDUCT_MODE_REG) ? result->reg : REDUCT_REG_INVALID;
 
-    for (reduct_uint32_t i = compiler->localCount; i > (reduct_uint32_t)toCount; i--)
+    for (uint32_t i = compiler->localCount; i > (uint32_t)toCount; i--)
     {
         reduct_local_t* local = &compiler->locals[i - 1];
         if (local->expr.mode == REDUCT_MODE_REG)
         {
             reduct_bool_t isResult = (local->expr.reg == resultReg);
             reduct_bool_t isOuterLocal = REDUCT_FALSE;
-            for (reduct_uint32_t j = 0; j < (reduct_uint32_t)toCount; j++)
+            for (uint32_t j = 0; j < (uint32_t)toCount; j++)
             {
                 if (compiler->locals[j].expr.mode == REDUCT_MODE_REG && compiler->locals[j].expr.reg == local->expr.reg)
                 {
@@ -378,7 +378,7 @@ REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, reduct_uint16_t to
                 }
             }
         }
-        local->name = REDUCT_NULL;
+        local->name = NULL;
         local->expr = REDUCT_EXPR_NONE();
     }
     compiler->localCount = toCount;
@@ -386,10 +386,10 @@ REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, reduct_uint16_t to
 
 REDUCT_API reduct_local_t* reduct_local_lookup(reduct_compiler_t* compiler, reduct_atom_t* name)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(name != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(name != NULL);
 
-    for (reduct_int16_t i = compiler->localCount - 1; i >= 0; i--)
+    for (int16_t i = compiler->localCount - 1; i >= 0; i--)
     {
         if (compiler->locals[i].name == name)
         {
@@ -398,9 +398,9 @@ REDUCT_API reduct_local_t* reduct_local_lookup(reduct_compiler_t* compiler, redu
     }
 
     reduct_compiler_t* current = compiler->enclosing;
-    while (current != REDUCT_NULL)
+    while (current != NULL)
     {
-        for (reduct_int16_t i = current->localCount - 1; i >= 0; i--)
+        for (int16_t i = current->localCount - 1; i >= 0; i--)
         {
             if (current->locals[i].name != name)
             {
@@ -429,5 +429,5 @@ REDUCT_API reduct_local_t* reduct_local_lookup(reduct_compiler_t* compiler, redu
         current = current->enclosing;
     }
 
-    return REDUCT_NULL;
+    return NULL;
 }

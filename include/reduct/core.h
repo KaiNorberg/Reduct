@@ -1,16 +1,19 @@
 #ifndef REDUCT_CORE_H
 #define REDUCT_CORE_H 1
 
-#include "reduct/defs.h"
-
-struct reduct_item;
-
 #include "reduct/atom.h"
 #include "reduct/error.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
 #include "reduct/eval.h"
 #include "reduct/native.h"
+#include "reduct/defs.h"
+
+struct reduct_item;
+
+#include <stdlib.h>
+#include <setjmp.h>
+#include <assert.h>
 
 /**
  * @file core.h
@@ -66,7 +69,7 @@ typedef struct reduct_constant
 typedef struct reduct_scratch
 {
     char* buffer;
-    reduct_size_t length;
+    size_t length;
 } reduct_scratch_t;
 
 #define REDUCT_SCRATCH_INITIAL 128 ///< Initial scratch buffer size.
@@ -82,31 +85,31 @@ typedef struct reduct_scratch
 typedef struct reduct
 {
     reduct_eval_frame_t* frames;
-    reduct_size_t frameCount;
-    reduct_size_t frameCapacity;
+    size_t frameCount;
+    size_t frameCapacity;
     reduct_handle_t* regs;
-    reduct_size_t regCount;
-    reduct_size_t regCapacity;
+    size_t regCount;
+    size_t regCapacity;
     reduct_item_t** retained;
-    reduct_size_t retainedCount;
-    reduct_size_t retainedCapacity;
-    reduct_size_t prevBlockCount;
-    reduct_size_t blockCount;
+    size_t retainedCount;
+    size_t retainedCapacity;
+    size_t prevBlockCount;
+    size_t blockCount;
     reduct_item_block_t* block;
-    reduct_size_t freeCount;
+    size_t freeCount;
     reduct_item_t* freeList;
     reduct_atom_stack_t* atomStack;
-    reduct_size_t atomMapSize;
-    reduct_size_t atomMapTombstones;
-    reduct_size_t atomMapCapacity;
-    reduct_size_t atomMapMask;
+    size_t atomMapSize;
+    size_t atomMapTombstones;
+    size_t atomMapCapacity;
+    size_t atomMapMask;
     struct reduct_atom** atomMap;
-    reduct_size_t nativeMapSize;
-    reduct_size_t nativeMapCapacity;
-    reduct_size_t nativeMapMask;
+    size_t nativeMapSize;
+    size_t nativeMapCapacity;
+    size_t nativeMapMask;
     reduct_native_entry_t* nativeMap;
-    reduct_size_t scratchSize;
-    reduct_size_t scratchCapacity;
+    size_t scratchSize;
+    size_t scratchCapacity;
     reduct_scratch_t scratch[REDUCT_SCRATCH_MAX];
     reduct_input_t* input;
     reduct_input_t firstInput;
@@ -115,17 +118,16 @@ typedef struct reduct
     reduct_item_t* nilItem;
     reduct_item_t* piItem;
     reduct_item_t* eItem;
-    reduct_uint32_t constantCount;
+    uint32_t constantCount;
     reduct_constant_t constants[REDUCT_CONSTANTS_MAX];
-    reduct_jmp_buf_t jmp;
     reduct_error_t* error;
     reduct_input_id_t newInputId;
     reduct_lib_t* libs;
-    reduct_size_t libCount;
-    reduct_size_t libCapacity;
+    size_t libCount;
+    size_t libCapacity;
     char** importPaths;
-    reduct_size_t importPathCount;
-    reduct_size_t importPathCapacity;
+    size_t importPathCount;
+    size_t importPathCapacity;
     int argc;
     char** argv;  
 } reduct_t;
@@ -183,7 +185,7 @@ REDUCT_API void reduct_constant_register(reduct_t* reduct, const char* name, str
  * @param flags Input flags.
  * @return A pointer to the newly created input structure.
  */
-REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer, reduct_size_t length,
+REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer, size_t length,
     const char* path, reduct_input_flags_t flags);
 
 /**
@@ -191,7 +193,7 @@ REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer
  *
  * @param reduct Pointer to the Reduct structure.
  * @param id The ID of the input structure.
- * @return A pointer to the input structure, or `REDUCT_NULL` if not found.
+ * @return A pointer to the input structure, or `NULL` if not found.
  */
 REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id_t id);
 
@@ -204,17 +206,17 @@ REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id
  * @param _length The number of elements of `_type` to reserve memory for.
  */
 #define REDUCT_SCRATCH(_reduct, _name, _type, _length) \
-    _type* _name = REDUCT_NULL; \
+    _type* _name = NULL; \
     do \
     { \
-        reduct_size_t _needed = (_length) * sizeof(_type); \
+        size_t _needed = (_length) * sizeof(_type); \
         if ((_reduct)->scratchSize >= REDUCT_SCRATCH_MAX) \
         { \
             REDUCT_ERROR_INTERNAL(_reduct, "scratch buffer overflow"); \
         } \
         reduct_scratch_t* _s = &(_reduct)->scratch[(_reduct)->scratchSize++]; \
-        _s->buffer = REDUCT_MALLOC(_needed); \
-        if (_s->buffer == REDUCT_NULL) \
+        _s->buffer = malloc(_needed); \
+        if (_s->buffer == NULL) \
         { \
             REDUCT_ERROR_INTERNAL(_reduct, "out of memory"); \
         } \
@@ -233,10 +235,10 @@ REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id
 #define REDUCT_SCRATCH_GROW(_reduct, _name, _type, _length) \
     do \
     { \
-        reduct_size_t _needed = (_length) * sizeof(_type); \
+        size_t _needed = (_length) * sizeof(_type); \
         reduct_scratch_t* _s = &(_reduct)->scratch[(_reduct)->scratchSize - 1]; \
-        _s->buffer = REDUCT_REALLOC(_s->buffer, _needed); \
-        if (_s->buffer == REDUCT_NULL) \
+        _s->buffer = realloc(_s->buffer, _needed); \
+        if (_s->buffer == NULL) \
         { \
             REDUCT_ERROR_INTERNAL(_reduct, "out of memory"); \
         } \
@@ -253,12 +255,12 @@ REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id
 #define REDUCT_SCRATCH_FREE(_reduct, _name) \
     do \
     { \
-        REDUCT_ASSERT((_reduct)->scratchSize > 0); \
+        assert((_reduct)->scratchSize > 0); \
         reduct_scratch_t* _s = &(_reduct)->scratch[--(_reduct)->scratchSize]; \
-        REDUCT_FREE(_s->buffer); \
-        _s->buffer = REDUCT_NULL; \
+        free(_s->buffer); \
+        _s->buffer = NULL; \
         _s->length = 0; \
-        _name = REDUCT_NULL; \
+        _name = NULL; \
     } while (0)
 
 /**
@@ -268,10 +270,10 @@ REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id
  * @param len The length of the string.
  * @return The hash of the string.
  */
-static inline REDUCT_ALWAYS_INLINE reduct_uint32_t reduct_hash(const char* str, reduct_size_t len)
+static inline REDUCT_ALWAYS_INLINE uint32_t reduct_hash(const char* str, size_t len)
 {
-    reduct_uint32_t hash = REDUCT_FNV_OFFSET;
-    for (reduct_size_t i = 0; i < len; i++)
+    uint32_t hash = REDUCT_FNV_OFFSET;
+    for (size_t i = 0; i < len; i++)
     {
         hash ^= (unsigned char)str[i];
         hash *= REDUCT_FNV_PRIME;

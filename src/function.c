@@ -6,11 +6,11 @@
 
 REDUCT_API void reduct_function_init(reduct_function_t* func)
 {
-    REDUCT_ASSERT(func != REDUCT_NULL);
+    assert(func != NULL);
 
-    func->insts = REDUCT_NULL;
-    func->positions = REDUCT_NULL;
-    func->constants = REDUCT_NULL;
+    func->insts = NULL;
+    func->positions = NULL;
+    func->constants = NULL;
     func->instCount = 0;
     func->instCapacity = 0;
     func->constantCount = 0;
@@ -22,25 +22,25 @@ REDUCT_API void reduct_function_init(reduct_function_t* func)
 
 REDUCT_API void reduct_function_deinit(reduct_function_t* func)
 {
-    REDUCT_ASSERT(func != REDUCT_NULL);
+    assert(func != NULL);
 
-    if (func->insts != REDUCT_NULL)
+    if (func->insts != NULL)
     {
-        REDUCT_FREE(func->insts);
+        free(func->insts);
     }
-    if (func->positions != REDUCT_NULL)
+    if (func->positions != NULL)
     {
-        REDUCT_FREE(func->positions);
+        free(func->positions);
     }
-    if (func->constants != REDUCT_NULL)
+    if (func->constants != NULL)
     {
-        REDUCT_FREE(func->constants);
+        free(func->constants);
     }
 }
 
 REDUCT_API reduct_function_t* reduct_function_new(reduct_t* reduct)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_FUNCTION;
@@ -51,15 +51,15 @@ REDUCT_API reduct_function_t* reduct_function_new(reduct_t* reduct)
 
 REDUCT_API void reduct_function_grow(reduct_t* reduct, reduct_function_t* func)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(func != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(func != NULL);
 
-    reduct_size_t newCapacity = func->instCapacity == 0 ? 16 : func->instCapacity * 2;
-    reduct_inst_t* newInsts = (reduct_inst_t*)REDUCT_REALLOC(func->insts, newCapacity * sizeof(reduct_inst_t));
-    reduct_uint32_t* newPositions =
-        (reduct_uint32_t*)REDUCT_REALLOC(func->positions, newCapacity * sizeof(reduct_uint32_t));
+    size_t newCapacity = func->instCapacity == 0 ? 16 : func->instCapacity * 2;
+    reduct_inst_t* newInsts = (reduct_inst_t*)realloc(func->insts, newCapacity * sizeof(reduct_inst_t));
+    uint32_t* newPositions =
+        (uint32_t*)realloc(func->positions, newCapacity * sizeof(uint32_t));
 
-    if (newInsts == REDUCT_NULL || newPositions == REDUCT_NULL)
+    if (newInsts == NULL || newPositions == NULL)
     {
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
@@ -72,9 +72,9 @@ REDUCT_API void reduct_function_grow(reduct_t* reduct, reduct_function_t* func)
 REDUCT_API reduct_const_t reduct_function_lookup_constant(reduct_t* reduct, reduct_function_t* func,
     reduct_const_slot_t* slot)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(func != REDUCT_NULL);
-    REDUCT_ASSERT(slot != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(func != NULL);
+    assert(slot != NULL);
 
     for (reduct_const_t i = 0; i < func->constantCount; i++)
     {
@@ -86,13 +86,13 @@ REDUCT_API reduct_const_t reduct_function_lookup_constant(reduct_t* reduct, redu
 
     if (func->constantCount >= func->constantCapacity)
     {
-        reduct_uint32_t newCapacity = func->constantCapacity == 0 ? 16 : func->constantCapacity * 2;
+        uint32_t newCapacity = func->constantCapacity == 0 ? 16 : func->constantCapacity * 2;
         if (newCapacity > REDUCT_CONSTANT_MAX)
         {
             REDUCT_ERROR_RUNTIME(reduct, "too many constants in function");
         }
-        reduct_const_slot_t* newConstants = REDUCT_REALLOC(func->constants, newCapacity * sizeof(reduct_const_slot_t));
-        if (newConstants == REDUCT_NULL)
+        reduct_const_slot_t* newConstants = realloc(func->constants, newCapacity * sizeof(reduct_const_slot_t));
+        if (newConstants == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }

@@ -22,7 +22,7 @@
  * @return The number of characters that would have been written if the buffer was large enough, excluding the null
  * terminator.
  */
-REDUCT_API reduct_size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, char* buffer, reduct_size_t size);
+REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, char* buffer, size_t size);
 
 /** @} */
 

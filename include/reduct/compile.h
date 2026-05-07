@@ -29,7 +29,7 @@ typedef struct reduct_expr
 {
     reduct_mode_t mode; ///< Expression mode.
     union {
-        reduct_uint16_t value;   ///< Raw union value
+        uint16_t value;   ///< Raw union value
         reduct_reg_t reg;        ///< Register index
         reduct_const_t constant; ///< Constant index
     };
@@ -51,10 +51,10 @@ typedef struct reduct_local
  */
 typedef struct reduct_compiler
 {
-    struct reduct_compiler* enclosing;                  ///< The enclosing compiler context, or `REDUCT_NULL`.
+    struct reduct_compiler* enclosing;                  ///< The enclosing compiler context, or `NULL`.
     reduct_t* reduct;                                   ///< Pointer to the Reduct structure.
     reduct_function_t* function;                        ///< The function being compiled.
-    reduct_uint16_t localCount;                         ///< The amount of local variables.
+    uint16_t localCount;                         ///< The amount of local variables.
     reduct_bitmap_t regAlloc[REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX)]; ///< Bitmask of allocated registers.
     reduct_bitmap_t regLocal[REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX)]; ///< Bitmask of registers used by locals.
     reduct_local_t locals[REDUCT_REGISTER_MAX];         ///< The local variables.
@@ -78,7 +78,7 @@ REDUCT_API reduct_function_t* reduct_compile(reduct_t* reduct, reduct_handle_t* 
  * @param compiler The compiler context to initialize.
  * @param reduct Pointer to the Reduct structure.
  * @param function The function to compile into.
- * @param enclosing The enclosing compiler context, or `REDUCT_NULL`.
+ * @param enclosing The enclosing compiler context, or `NULL`.
  */
 REDUCT_API void reduct_compiler_init(reduct_compiler_t* compiler, reduct_t* reduct, reduct_function_t* function,
     reduct_compiler_t* enclosing);
@@ -161,7 +161,7 @@ REDUCT_API reduct_reg_t reduct_reg_alloc(reduct_compiler_t* compiler);
  * @param count The number of registers to allocate.
  * @return The first register index in the allocated range.
  */
-REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, reduct_uint32_t count);
+REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, uint32_t count);
 
 /**
  * @brief Free a register.
@@ -178,7 +178,7 @@ REDUCT_API void reduct_reg_free(reduct_compiler_t* compiler, reduct_reg_t reg);
  * @param start The first register index in the range to free.
  * @param count The number of registers to free.
  */
-REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t start, reduct_uint32_t count);
+REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t start, uint32_t count);
 
 /**
  * @brief Create a `REDUCT_MODE_NONE` mode expression.
@@ -295,8 +295,8 @@ REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_item_t* it
  */
 static inline void reduct_expr_done(reduct_compiler_t* compiler, reduct_expr_t* expr)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(expr != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(expr != NULL);
     if (expr->mode == REDUCT_MODE_REG)
     {
         reduct_reg_free(compiler, expr->reg);
@@ -312,8 +312,8 @@ static inline void reduct_expr_done(reduct_compiler_t* compiler, reduct_expr_t* 
  */
 static inline reduct_reg_t reduct_expr_get_reg(reduct_compiler_t* compiler, reduct_expr_t* out)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    if (out != REDUCT_NULL && out->mode == REDUCT_MODE_TARGET)
+    assert(compiler != NULL);
+    if (out != NULL && out->mode == REDUCT_MODE_TARGET)
     {
         return out->reg;
     }
@@ -328,7 +328,7 @@ static inline reduct_reg_t reduct_expr_get_reg(reduct_compiler_t* compiler, redu
  */
 static inline reduct_reg_t reduct_reg_get_base(reduct_compiler_t* compiler)
 {
-    for (reduct_int32_t i = REDUCT_REGISTER_MAX - 1; i >= 0; i--)
+    for (int32_t i = REDUCT_REGISTER_MAX - 1; i >= 0; i--)
     {
         if (REDUCT_REG_IS_ALLOCATED(compiler, i))
         {
@@ -383,14 +383,14 @@ REDUCT_API reduct_local_t* reduct_local_add_arg(reduct_compiler_t* compiler, red
  * @param toCount The local count to restore to.
  * @param result The result expression of the block, whose register should not be freed.
  */
-REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, reduct_uint16_t toCount, reduct_expr_t* result);
+REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, uint16_t toCount, reduct_expr_t* result);
 
 /**
  * @brief Look up a local by name and return its expression.
  *
  * @param compiler The compiler context.
  * @param name The name of the local.
- * @return A pointer to the local variable descriptor, or `REDUCT_NULL` if not found.
+ * @return A pointer to the local variable descriptor, or `NULL` if not found.
  */
 REDUCT_API reduct_local_t* reduct_local_lookup(reduct_compiler_t* compiler, reduct_atom_t* name);
 
@@ -402,8 +402,8 @@ REDUCT_API reduct_local_t* reduct_local_lookup(reduct_compiler_t* compiler, redu
  */
 static inline void reduct_compile_inst(reduct_compiler_t* compiler, reduct_inst_t inst)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    reduct_uint32_t pos = compiler->lastItem != REDUCT_NULL ? compiler->lastItem->position : 0;
+    assert(compiler != NULL);
+    uint32_t pos = compiler->lastItem != NULL ? compiler->lastItem->position : 0;
     reduct_function_emit(compiler->reduct, compiler->function, inst, pos);
 }
 
@@ -414,9 +414,9 @@ static inline void reduct_compile_inst(reduct_compiler_t* compiler, reduct_inst_
  * @param target The target register.
  * @param count The number of elements to include in the list.
  */
-static inline void reduct_compile_list(reduct_compiler_t* compiler, reduct_reg_t target, reduct_uint32_t count)
+static inline void reduct_compile_list(reduct_compiler_t* compiler, reduct_reg_t target, uint32_t count)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
     reduct_compile_inst(compiler, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_LIST, target, count, 0));
 }
 
@@ -429,11 +429,11 @@ static inline void reduct_compile_list(reduct_compiler_t* compiler, reduct_reg_t
  * @param arity The number of arguments.
  */
 static inline void reduct_compile_call(reduct_compiler_t* compiler, reduct_reg_t target, reduct_expr_t* callable,
-    reduct_uint32_t arity)
+    uint32_t arity)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(callable != REDUCT_NULL);
-    REDUCT_ASSERT(callable->mode == REDUCT_MODE_REG || callable->mode == REDUCT_MODE_CONST);
+    assert(compiler != NULL);
+    assert(callable != NULL);
+    assert(callable->mode == REDUCT_MODE_REG || callable->mode == REDUCT_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_CALL | callable->mode), target, arity, callable->value));
 }
@@ -448,11 +448,11 @@ static inline void reduct_compile_call(reduct_compiler_t* compiler, reduct_reg_t
  */
 static inline void reduct_compile_move(reduct_compiler_t* compiler, reduct_reg_t target, reduct_expr_t* expr)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(expr != REDUCT_NULL);
-    REDUCT_ASSERT(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
-    REDUCT_ASSERT(target < REDUCT_REGISTER_MAX);
-    REDUCT_ASSERT(expr->mode != REDUCT_MODE_REG || expr->reg < REDUCT_REGISTER_MAX);
+    assert(compiler != NULL);
+    assert(expr != NULL);
+    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(target < REDUCT_REGISTER_MAX);
+    assert(expr->mode != REDUCT_MODE_REG || expr->reg < REDUCT_REGISTER_MAX);
 
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_MOV | (reduct_opcode_t)expr->mode), target, 0, expr->value));
@@ -466,10 +466,10 @@ static inline void reduct_compile_move(reduct_compiler_t* compiler, reduct_reg_t
  * @param a The register to test (if not `REDUCT_OPCODE_JMP`).
  * @return The index of the emitted instruction to be patched later.
  */
-static inline reduct_size_t reduct_compile_jump(reduct_compiler_t* compiler, reduct_opcode_t op, reduct_reg_t a)
+static inline size_t reduct_compile_jump(reduct_compiler_t* compiler, reduct_opcode_t op, reduct_reg_t a)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    reduct_size_t pos = compiler->function->instCount;
+    assert(compiler != NULL);
+    size_t pos = compiler->function->instCount;
     reduct_compile_inst(compiler, REDUCT_INST_MAKE_ASBX(op, a, 0));
     return pos;
 }
@@ -480,10 +480,10 @@ static inline reduct_size_t reduct_compile_jump(reduct_compiler_t* compiler, red
  * @param compiler The compiler context.
  * @param pos The index of the jump instruction to patch.
  */
-static inline void reduct_compile_jump_patch(reduct_compiler_t* compiler, reduct_size_t pos)
+static inline void reduct_compile_jump_patch(reduct_compiler_t* compiler, size_t pos)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    reduct_int64_t offset = (reduct_int64_t)(compiler->function->instCount - pos - 1);
+    assert(compiler != NULL);
+    int64_t offset = (int64_t)(compiler->function->instCount - pos - 1);
     compiler->function->insts[pos] = REDUCT_INST_SET_SBX(compiler->function->insts[pos], offset);
 }
 
@@ -494,10 +494,10 @@ static inline void reduct_compile_jump_patch(reduct_compiler_t* compiler, reduct
  * @param jumps Array of jump instruction indices.
  * @param count Number of jumps in the array.
  */
-static inline void reduct_compile_jump_patch_list(reduct_compiler_t* compiler, reduct_size_t* jumps,
-    reduct_size_t count)
+static inline void reduct_compile_jump_patch_list(reduct_compiler_t* compiler, size_t* jumps,
+    size_t count)
 {
-    for (reduct_size_t i = 0; i < count; i++)
+    for (size_t i = 0; i < count; i++)
     {
         reduct_compile_jump_patch(compiler, jumps[i]);
     }
@@ -512,9 +512,9 @@ static inline void reduct_compile_jump_patch_list(reduct_compiler_t* compiler, r
  */
 static inline reduct_reg_t reduct_compile_move_or_alloc(reduct_compiler_t* compiler, reduct_expr_t* expr)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(expr != REDUCT_NULL);
-    REDUCT_ASSERT(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(compiler != NULL);
+    assert(expr != NULL);
+    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
     if (expr->mode == REDUCT_MODE_REG)
     {
         return expr->reg;
@@ -534,15 +534,15 @@ static inline reduct_reg_t reduct_compile_move_or_alloc(reduct_compiler_t* compi
  */
 static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_expr_t* expr)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(expr != REDUCT_NULL);
+    assert(compiler != NULL);
+    assert(expr != NULL);
 
     if (expr->mode == REDUCT_MODE_REG)
     {
         reduct_reg_t retReg = expr->reg;
-        reduct_uint32_t retInstPos = compiler->function->instCount;
+        uint32_t retInstPos = compiler->function->instCount;
 
-        for (reduct_size_t i = 0; i < retInstPos; i++)
+        for (size_t i = 0; i < retInstPos; i++)
         {
             reduct_inst_t inst = compiler->function->insts[i];
             reduct_opcode_t op = REDUCT_INST_GET_OP_BASE(inst);
@@ -554,7 +554,7 @@ static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_exp
 
             reduct_bool_t isTail = REDUCT_FALSE;
 
-            reduct_size_t curr = i + 1;
+            size_t curr = i + 1;
             reduct_reg_t currentReg = REDUCT_INST_GET_A(inst);
             reduct_bool_t valid = REDUCT_TRUE;
 
@@ -572,7 +572,7 @@ static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_exp
                 }
                 else if (nextOpBase == REDUCT_OPCODE_JMP)
                 {
-                    reduct_int32_t offset = REDUCT_INST_GET_SBX(nextInst);
+                    int32_t offset = REDUCT_INST_GET_SBX(nextInst);
                     if (offset < 0)
                     {
                         valid = REDUCT_FALSE;
@@ -604,13 +604,13 @@ static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_exp
     if (expr->mode == REDUCT_MODE_NONE)
     {
         reduct_expr_t nilExpr = REDUCT_EXPR_NIL(compiler);
-        reduct_uint32_t pos = compiler->lastItem != REDUCT_NULL ? compiler->lastItem->position : 0;
+        uint32_t pos = compiler->lastItem != NULL ? compiler->lastItem->position : 0;
         reduct_function_emit(compiler->reduct, compiler->function,
             REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_RET | REDUCT_MODE_CONST, 0, 0, nilExpr.constant), pos);
         return;
     }
 
-    REDUCT_ASSERT(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_RET | (reduct_opcode_t)expr->mode), 0, 0, expr->value));
 }
@@ -627,9 +627,9 @@ static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_exp
 static inline void reduct_compile_binary(reduct_compiler_t* compiler, reduct_opcode_t opBase, reduct_reg_t target,
     reduct_reg_t left, reduct_expr_t* right)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(right != REDUCT_NULL);
-    REDUCT_ASSERT(right->mode == REDUCT_MODE_REG || right->mode == REDUCT_MODE_CONST);
+    assert(compiler != NULL);
+    assert(right != NULL);
+    assert(right->mode == REDUCT_MODE_REG || right->mode == REDUCT_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(opBase | right->mode), target, left, right->value));
 }
@@ -643,7 +643,7 @@ static inline void reduct_compile_binary(reduct_compiler_t* compiler, reduct_opc
  */
 static inline void reduct_compile_closure(reduct_compiler_t* compiler, reduct_reg_t target, reduct_const_t funcConst)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
+    assert(compiler != NULL);
     reduct_compile_inst(compiler, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_CLOSURE, target, 0, funcConst));
 }
 
@@ -655,12 +655,12 @@ static inline void reduct_compile_closure(reduct_compiler_t* compiler, reduct_re
  * @param slot The constant slot index in the closure to capture into.
  * @param expr The expression to be captured.
  */
-static inline void reduct_compile_capture(reduct_compiler_t* compiler, reduct_reg_t closureReg, reduct_uint32_t slot,
+static inline void reduct_compile_capture(reduct_compiler_t* compiler, reduct_reg_t closureReg, uint32_t slot,
     reduct_expr_t* expr)
 {
-    REDUCT_ASSERT(compiler != REDUCT_NULL);
-    REDUCT_ASSERT(expr != REDUCT_NULL);
-    REDUCT_ASSERT(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(compiler != NULL);
+    assert(expr != NULL);
+    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_CAPTURE | (reduct_opcode_t)expr->mode), closureReg, slot, expr->value));
 }

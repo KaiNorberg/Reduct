@@ -5,6 +5,10 @@
 #include "reduct/intrinsic.h"
 #include "reduct/native.h"
 
+#include <string.h>
+#include <stdint.h>
+#include <assert.h>
+
 struct reduct;
 
 /**
@@ -44,7 +48,7 @@ struct reduct;
 
 #define REDUCT_ATOM_TOMBSTONE ((reduct_atom_t*)(uintptr_t)1) ///< Tombstone value for the atom map.
 
-#define REDUCT_ATOM_INDEX_NONE ((reduct_uint32_t)-1) ///< The value of an unindexed atom.
+#define REDUCT_ATOM_INDEX_NONE ((uint32_t)-1) ///< The value of an unindexed atom.
 
 /**
  * @brief Atom lookup flags.
@@ -55,7 +59,7 @@ typedef enum
     REDUCT_ATOM_LOOKUP_QUOTED = 1 << 0 ///< Atom should be explicitly quoted.
 } reduct_atom_lookup_flags_t;
 
-typedef reduct_uint8_t reduct_atom_flags_t;
+typedef uint8_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NONE 0                ///< No flags.
 #define REDUCT_ATOM_FLAG_INTEGER (1 << 0)   ///< Atom is known to be integer shaped.
 #define REDUCT_ATOM_FLAG_FLOAT (1 << 1) ///< Atom is known to be float shaped.
@@ -79,8 +83,8 @@ typedef struct reduct_atom_stack
 {
     struct reduct_atom_stack* next;
     struct reduct_atom_stack* prev;
-    reduct_uint32_t capacity;
-    reduct_uint32_t count;
+    uint32_t capacity;
+    uint32_t count;
     char* data;
 } reduct_atom_stack_t;
 
@@ -90,11 +94,11 @@ typedef struct reduct_atom_stack
  */
 typedef struct reduct_atom
 {
-    reduct_uint32_t length; ///< The length of the string (must be first, check the `reduct_item_t` structure).
-    reduct_uint32_t hash;   ///< The hash of the string.
-    reduct_uint32_t index; ///< The index within the atom map.
+    uint32_t length; ///< The length of the string (must be first, check the `reduct_item_t` structure).
+    uint32_t hash;   ///< The hash of the string.
+    uint32_t index; ///< The index within the atom map.
     reduct_atom_flags_t flags; ///< Atom flags.
-    reduct_uint8_t _padding[3];
+    uint8_t _padding[3];
     char* string; ///< Pointer to the data.
     union
     {
@@ -102,8 +106,8 @@ typedef struct reduct_atom
         struct reduct_atom_stack* stack; ///< The stack that this atoms string was allocated from, atom must have `REDUCT_ATOM_FLAG_LARGE`.
     };
     union {
-        reduct_int64_t integerValue; ///< Pre-computed integer value, atom must have `REDUCT_ATOM_FLAG_INTEGER`.
-        reduct_float_t floatValue;   ///< Pre-computed float value, atom must have `REDUCT_ATOM_FLAG_FLOAT`.
+        int64_t integerValue; ///< Pre-computed integer value, atom must have `REDUCT_ATOM_FLAG_INTEGER`.
+        double floatValue;   ///< Pre-computed float value, atom must have `REDUCT_ATOM_FLAG_FLOAT`.
         struct
         {
             reduct_native_fn native;     ///< Cached native function, atom must have `REDUCT_ATOM_FLAG_NATIVE`.
@@ -124,7 +128,7 @@ typedef struct reduct_atom
  * @return `REDUCT_TRUE` if the atom is equal to the string, `REDUCT_FALSE` otherwise.
  */
 REDUCT_API reduct_bool_t reduct_atom_is_equal(reduct_atom_t* atom, const char* str,
-    reduct_size_t len);
+    size_t len);
 
 /**
  * @brief Check if two atoms are equal.
@@ -143,7 +147,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_atom_is_equal_atom(reduc
     {
         return REDUCT_FALSE;
     }
-    return REDUCT_MEMCMP(a->string, b->string, a->length) == 0;
+    return memcmp(a->string, b->string, a->length) == 0;
 }
 
 /**
@@ -154,7 +158,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_atom_is_equal_atom(reduc
  * @param len The length of the buffer.
  * @return A pointer to the atom.
  */
-REDUCT_API reduct_atom_t* reduct_atom_new(struct reduct* reduct, reduct_size_t len);
+REDUCT_API reduct_atom_t* reduct_atom_new(struct reduct* reduct, size_t len);
 
 /**
  * @brief Create an atom from a null-terminated string.
@@ -172,7 +176,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new_string(struct reduct* reduct, const ch
  * @param value The integer value.
  * @return A pointer to the atom.
  */
-REDUCT_API reduct_atom_t* reduct_atom_new_int(struct reduct* reduct, reduct_int64_t value);
+REDUCT_API reduct_atom_t* reduct_atom_new_int(struct reduct* reduct, int64_t value);
 
 /**
  * @brief Create an atom from a float value.
@@ -181,7 +185,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new_int(struct reduct* reduct, reduct_int6
  * @param value The float value.
  * @return A pointer to the atom.
  */
-REDUCT_API reduct_atom_t* reduct_atom_new_float(struct reduct* reduct, reduct_float_t value);
+REDUCT_API reduct_atom_t* reduct_atom_new_float(struct reduct* reduct, double value);
 
 /**
  * @brief Create an atom for a anonymous native function.
@@ -211,7 +215,7 @@ REDUCT_API void reduct_atom_intern(struct reduct* reduct, reduct_atom_t* atom);
  * @param flags Lookup flags to alter the interning behavior.
  * @return A pointer to the atom.
  */
-REDUCT_API reduct_atom_t* reduct_atom_lookup(struct reduct* reduct, const char* str, reduct_size_t len,
+REDUCT_API reduct_atom_t* reduct_atom_lookup(struct reduct* reduct, const char* str, size_t len,
     reduct_atom_lookup_flags_t flags);
 
 /**
@@ -312,9 +316,9 @@ static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_atom_is_number(reduct_at
  * @param atom Pointer to the atom.
  * @return The integer value.
  */
-static inline REDUCT_ALWAYS_INLINE reduct_int64_t reduct_atom_get_int(reduct_atom_t* atom)
+static inline REDUCT_ALWAYS_INLINE int64_t reduct_atom_get_int(reduct_atom_t* atom)
 {
-    REDUCT_ASSERT(reduct_atom_is_number(atom));
+    assert(reduct_atom_is_number(atom));
 
     if (reduct_atom_is_int(atom))
     {
@@ -322,7 +326,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_int64_t reduct_atom_get_int(reduct_ato
     }
     else
     {
-        return (reduct_int64_t)atom->floatValue;
+        return (int64_t)atom->floatValue;
     }
 }
 
@@ -332,9 +336,9 @@ static inline REDUCT_ALWAYS_INLINE reduct_int64_t reduct_atom_get_int(reduct_ato
  * @param atom Pointer to the atom.
  * @return The float value.
  */
-static inline REDUCT_ALWAYS_INLINE reduct_float_t reduct_atom_get_float(reduct_atom_t* atom)
+static inline REDUCT_ALWAYS_INLINE double reduct_atom_get_float(reduct_atom_t* atom)
 {
-    REDUCT_ASSERT(reduct_atom_is_number(atom));
+    assert(reduct_atom_is_number(atom));
 
     if (reduct_atom_is_float(atom))
     {
@@ -342,7 +346,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_float_t reduct_atom_get_float(reduct_a
     }
     else
     {
-        return (reduct_float_t)atom->integerValue;
+        return (double)atom->integerValue;
     }
 }
 
@@ -355,8 +359,8 @@ static inline REDUCT_ALWAYS_INLINE reduct_float_t reduct_atom_get_float(reduct_a
  * @param len The length of the substring.
  * @return A pointer to the new atom.
  */
-REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_t* atom, reduct_size_t start,
-    reduct_size_t len);
+REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_t* atom, size_t start,
+    size_t len);
 
 /**
  * @brief Create a superstring of an existing atom.
@@ -368,7 +372,7 @@ REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_
  * @param len The new total length.
  * @return A pointer to the new atom.
  */
-REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_atom_t* atom, reduct_size_t len);
+REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_atom_t* atom, size_t len);
 
 /**
  * @brief Create a new atom by copying data directly into it.
@@ -382,10 +386,10 @@ REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_ato
  * @return A pointer to the new atom.
  */
 static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_atom_new_copy(struct reduct* reduct, const char* data,
-    reduct_size_t len)
+    size_t len)
 {
     reduct_atom_t* atom = reduct_atom_new(reduct, len);
-    REDUCT_MEMCPY(atom->string, data, len);
+    memcpy(atom->string, data, len);
     return atom;
 }
 

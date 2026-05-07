@@ -4,34 +4,37 @@
 #include "reduct/char.h"
 #include "reduct/core.h"
 
+#include <stdint.h>
+#include <string.h>
+
 #define REDUCT_ATOM_TOMBSTONE ((reduct_atom_t*)(uintptr_t)1)
 
 static inline reduct_bool_t reduct_atom_map_is_alive(reduct_atom_t* slot)
 {
-    return slot != REDUCT_NULL && slot != REDUCT_ATOM_TOMBSTONE;
+    return slot != NULL && slot != REDUCT_ATOM_TOMBSTONE;
 }
 
-static inline reduct_size_t reduct_atom_map_find(
+static inline size_t reduct_atom_map_find(
     reduct_t* reduct,
-    reduct_uint32_t hash,
+    uint32_t hash,
     const char* str,
-    reduct_size_t len,
+    size_t len,
     reduct_atom_lookup_flags_t flags)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(str != REDUCT_NULL);
-    REDUCT_ASSERT(reduct->atomMapCapacity != 0);
-    REDUCT_ASSERT((reduct->atomMapCapacity & (reduct->atomMapCapacity - 1)) == 0);
-    REDUCT_ASSERT(reduct->atomMapSize <= reduct->atomMapCapacity);
+    assert(reduct != NULL);
+    assert(str != NULL);
+    assert(reduct->atomMapCapacity != 0);
+    assert((reduct->atomMapCapacity & (reduct->atomMapCapacity - 1)) == 0);
+    assert(reduct->atomMapSize <= reduct->atomMapCapacity);
 
     reduct_bool_t wantQuoted = (flags & REDUCT_ATOM_LOOKUP_QUOTED) != 0;
 
-    reduct_size_t index = hash & reduct->atomMapMask;
-    reduct_size_t step = 1;
+    size_t index = hash & reduct->atomMapMask;
+    size_t step = 1;
 
-    reduct_size_t tombstoneIndex = REDUCT_ATOM_INDEX_NONE;
+    size_t tombstoneIndex = REDUCT_ATOM_INDEX_NONE;
 
-    while (reduct->atomMap[index] != REDUCT_NULL)
+    while (reduct->atomMap[index] != NULL)
     {
         reduct_atom_t* atom = reduct->atomMap[index];
 
@@ -65,44 +68,44 @@ static inline reduct_size_t reduct_atom_map_find(
     return index;
 }
 
-static inline reduct_size_t reduct_atom_map_find_or_alloc(
+static inline size_t reduct_atom_map_find_or_alloc(
     reduct_t* reduct,
-    reduct_uint32_t hash,
+    uint32_t hash,
     const char* str,
-    reduct_size_t len,
+    size_t len,
     reduct_atom_lookup_flags_t flags)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(str != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(str != NULL);
 
     if (reduct->atomMapCapacity == 0)
     {
         reduct->atomMapCapacity = REDUCT_ATOM_MAP_INITIAL;
         reduct->atomMapMask = reduct->atomMapCapacity - 1;
         reduct->atomMapTombstones = 0;
-        reduct->atomMap = REDUCT_CALLOC(reduct->atomMapCapacity, sizeof(reduct_atom_t*));
-        if (reduct->atomMap == REDUCT_NULL)
+        reduct->atomMap = calloc(reduct->atomMapCapacity, sizeof(reduct_atom_t*));
+        if (reduct->atomMap == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
     }
 
-    reduct_size_t occupied = reduct->atomMapSize + reduct->atomMapTombstones;
+    size_t occupied = reduct->atomMapSize + reduct->atomMapTombstones;
     if (occupied * 4 > reduct->atomMapCapacity * 3)
     {
-        reduct_size_t oldCapacity = reduct->atomMapCapacity;
+        size_t oldCapacity = reduct->atomMapCapacity;
         reduct_atom_t** oldMap = reduct->atomMap;
 
         reduct->atomMapCapacity = oldCapacity * REDUCT_ATOM_MAP_GROWTH;
         reduct->atomMapMask = reduct->atomMapCapacity - 1;
         reduct->atomMapTombstones = 0;
-        reduct->atomMap = REDUCT_CALLOC(reduct->atomMapCapacity, sizeof(reduct_atom_t*));
-        if (reduct->atomMap == REDUCT_NULL)
+        reduct->atomMap = calloc(reduct->atomMapCapacity, sizeof(reduct_atom_t*));
+        if (reduct->atomMap == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
 
-        for (reduct_size_t i = 0; i < oldCapacity; i++)
+        for (size_t i = 0; i < oldCapacity; i++)
         {
             reduct_atom_t* atom = oldMap[i];
 
@@ -111,25 +114,25 @@ static inline reduct_size_t reduct_atom_map_find_or_alloc(
                 continue;
             }
 
-            reduct_size_t index = atom->hash & reduct->atomMapMask;
-            reduct_size_t step = 1;
-            while (reduct->atomMap[index] != REDUCT_NULL)
+            size_t index = atom->hash & reduct->atomMapMask;
+            size_t step = 1;
+            while (reduct->atomMap[index] != NULL)
             {
                 index = (index + step) & reduct->atomMapMask;
                 step++;
             }
 
             reduct->atomMap[index] = atom;
-            atom->index = (reduct_uint32_t)index;
+            atom->index = (uint32_t)index;
         }
 
-        if (oldMap != REDUCT_NULL)
+        if (oldMap != NULL)
         {
-            REDUCT_FREE(oldMap);
+            free(oldMap);
         }
     }
 
-    reduct_size_t index = reduct_atom_map_find(reduct, hash, str, len, flags);
+    size_t index = reduct_atom_map_find(reduct, hash, str, len, flags);
 
     if (reduct_atom_map_is_alive(reduct->atomMap[index]))
     {
@@ -145,10 +148,10 @@ static inline reduct_size_t reduct_atom_map_find_or_alloc(
     return index;
 }
 
-static inline void reduct_atom_map_update(reduct_t* reduct, reduct_atom_t* atom, reduct_size_t newIndex, reduct_uint32_t hash)
+static inline void reduct_atom_map_update(reduct_t* reduct, reduct_atom_t* atom, size_t newIndex, uint32_t hash)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(atom != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(atom != NULL);
 
     if (atom->index != REDUCT_ATOM_INDEX_NONE)
     {
@@ -157,13 +160,13 @@ static inline void reduct_atom_map_update(reduct_t* reduct, reduct_atom_t* atom,
     }
 
     reduct->atomMap[newIndex] = atom;
-    atom->index = (reduct_uint32_t)newIndex;
+    atom->index = (uint32_t)newIndex;
     atom->hash = hash;
 
 }
 
 REDUCT_API reduct_bool_t reduct_atom_is_equal(reduct_atom_t* atom, const char* str,
-    reduct_size_t len)
+    size_t len)
 {
     if (atom->length != len)
     {
@@ -174,26 +177,26 @@ REDUCT_API reduct_bool_t reduct_atom_is_equal(reduct_atom_t* atom, const char* s
         return REDUCT_FALSE;
     }
 
-    return REDUCT_MEMCMP(atom->string, str, len) == 0;
+    return memcmp(atom->string, str, len) == 0;
 }
 
-static inline reduct_atom_stack_t* reduct_atom_stack_new(reduct_t* reduct, reduct_size_t capacity)
+static inline reduct_atom_stack_t* reduct_atom_stack_new(reduct_t* reduct, size_t capacity)
 {
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_ATOM_STACK;
 
     reduct_atom_stack_t* stack = &item->atomStack;
-    stack->capacity = (reduct_uint32_t)capacity;
+    stack->capacity = (uint32_t)capacity;
     stack->count = 0;
-    stack->data = REDUCT_MALLOC(capacity);
-    if (stack->data == REDUCT_NULL)
+    stack->data = malloc(capacity);
+    if (stack->data == NULL)
     {
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
 
     stack->next = reduct->atomStack;
-    stack->prev = REDUCT_NULL;
-    if (reduct->atomStack != REDUCT_NULL)
+    stack->prev = NULL;
+    if (reduct->atomStack != NULL)
     {
         reduct->atomStack->prev = stack;
     }
@@ -201,35 +204,35 @@ static inline reduct_atom_stack_t* reduct_atom_stack_new(reduct_t* reduct, reduc
     return stack;
 }
 
-static inline char* reduct_atom_stack_alloc(reduct_t* reduct, reduct_size_t size, reduct_atom_stack_t** out)
+static inline char* reduct_atom_stack_alloc(reduct_t* reduct, size_t size, reduct_atom_stack_t** out)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     reduct_atom_stack_t* stack = reduct->atomStack;
-    if (stack == REDUCT_NULL || stack->count + size > stack->capacity)
+    if (stack == NULL || stack->count + size > stack->capacity)
     {
-        reduct_size_t capacity = REDUCT_ATOM_STACK_MIN;
+        size_t capacity = REDUCT_ATOM_STACK_MIN;
         while (capacity < size)
         {
             capacity *= REDUCT_ATOM_MAP_GROWTH;
         }
         stack = reduct_atom_stack_new(reduct, capacity);
-        if (stack == REDUCT_NULL)
+        if (stack == NULL)
         {
-            return REDUCT_NULL;
+            return NULL;
         }
     }
 
     char* data = stack->data + stack->count;
-    stack->count += (reduct_uint32_t)size;
-    if (out != REDUCT_NULL)
+    stack->count += (uint32_t)size;
+    if (out != NULL)
     {
         *out = stack;
     }
     return data;
 }
 
-REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, reduct_size_t len)
+REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, size_t len)
 {
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_ATOM;
@@ -238,8 +241,8 @@ REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, reduct_size_t len)
     atom->hash = 0;
     atom->index = REDUCT_ATOM_INDEX_NONE;
     atom->flags = 0;
-    atom->string = REDUCT_NULL;
-    atom->length = (reduct_uint32_t)len;
+    atom->string = NULL;
+    atom->length = (uint32_t)len;
 
     if (len == 0)
     {
@@ -253,7 +256,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, reduct_size_t len)
     else
     {
         atom->string = reduct_atom_stack_alloc(reduct, len, &atom->stack);
-        if (atom->string == REDUCT_NULL)
+        if (atom->string == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
@@ -265,21 +268,21 @@ REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, reduct_size_t len)
 
 REDUCT_API reduct_atom_t* reduct_atom_new_string(struct reduct* reduct, const char* str)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(str != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(str != NULL);
 
-    reduct_size_t len = REDUCT_STRLEN(str);
+    size_t len = strlen(str);
     reduct_atom_t* atom = reduct_atom_new(reduct, len);
-    REDUCT_MEMCPY(atom->string, str, len);
+    memcpy(atom->string, str, len);
     return atom;
 }
 
-REDUCT_API reduct_atom_t* reduct_atom_new_int(reduct_t* reduct, reduct_int64_t value)
+REDUCT_API reduct_atom_t* reduct_atom_new_int(reduct_t* reduct, int64_t value)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     char buf[32];
-    reduct_size_t len = 0;
+    size_t len = 0;
 
     unsigned long long uval;
     reduct_bool_t isNegative;
@@ -310,7 +313,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new_int(reduct_t* reduct, reduct_int64_t v
 
     const char* str = buf + sizeof(buf) - len;
     reduct_atom_t* atom = reduct_atom_new(reduct, len);
-    REDUCT_MEMCPY(atom->string, str, len);
+    memcpy(atom->string, str, len);
     atom->integerValue = value;
     atom->flags |= REDUCT_ATOM_FLAG_INTEGER | REDUCT_ATOM_FLAG_NUMBER_CHECKED;
     if (value == 0)
@@ -321,9 +324,9 @@ REDUCT_API reduct_atom_t* reduct_atom_new_int(reduct_t* reduct, reduct_int64_t v
     return atom;
 }
 
-REDUCT_API reduct_atom_t* reduct_atom_new_float(reduct_t* reduct, reduct_float_t value)
+REDUCT_API reduct_atom_t* reduct_atom_new_float(reduct_t* reduct, double value)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     char buf[64];
     char sign = 1;
@@ -343,7 +346,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new_float(reduct_t* reduct, reduct_float_t
         fracPart = 0;
     }
 
-    reduct_size_t len = 0;
+    size_t len = 0;
     char* p = buf + 32;
     unsigned long long uIntPart = intPart;
 
@@ -384,7 +387,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new_float(reduct_t* reduct, reduct_float_t
     }
 
     reduct_atom_t* atom = reduct_atom_new(reduct, len);
-    REDUCT_MEMCPY(atom->string, res, len);
+    memcpy(atom->string, res, len);
     atom->floatValue = value;
     atom->flags |= REDUCT_ATOM_FLAG_FLOAT | REDUCT_ATOM_FLAG_NUMBER_CHECKED;
     if (value == 0.0)
@@ -397,7 +400,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new_float(reduct_t* reduct, reduct_float_t
 
 REDUCT_API reduct_atom_t* reduct_atom_new_native(struct reduct* reduct, reduct_native_fn native)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     reduct_atom_t* atom = reduct_atom_new(reduct, 0);
     atom->native = native;
@@ -407,12 +410,12 @@ REDUCT_API reduct_atom_t* reduct_atom_new_native(struct reduct* reduct, reduct_n
 
 static inline void reduct_atom_normalize_escape(reduct_atom_t* atom)
 {
-    REDUCT_ASSERT(atom != REDUCT_NULL);
+    assert(atom != NULL);
 
     char* str = atom->string;
-    reduct_size_t len = atom->length;
-    reduct_size_t j = 0;
-    for (reduct_size_t i = 0; i < len; i++)
+    size_t len = atom->length;
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++)
     {
         if (str[i] == '\\' && i + 1 < len)
         {
@@ -442,8 +445,8 @@ static inline void reduct_atom_normalize_escape(reduct_atom_t* atom)
 
 REDUCT_API void reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(atom != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(atom != NULL);
 
     if (atom->index != REDUCT_ATOM_INDEX_NONE)
     {
@@ -451,7 +454,7 @@ REDUCT_API void reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
     }
 
     atom->hash = reduct_hash(atom->string, atom->length);
-    reduct_size_t index = reduct_atom_map_find_or_alloc(reduct, atom->hash, atom->string, atom->length, REDUCT_ATOM_LOOKUP_NONE);
+    size_t index = reduct_atom_map_find_or_alloc(reduct, atom->hash, atom->string, atom->length, REDUCT_ATOM_LOOKUP_NONE);
     if (reduct_atom_map_is_alive(reduct->atomMap[index]))
     {
         REDUCT_ERROR_INTERNAL(reduct, "atom already interned");
@@ -461,27 +464,27 @@ REDUCT_API void reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
     reduct->atomMapTombstones++;
 
     reduct->atomMap[index] = atom;
-    atom->index = (reduct_uint32_t)index;
+    atom->index = (uint32_t)index;
 }
 
-REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, reduct_size_t len,
+REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, size_t len,
     reduct_atom_lookup_flags_t flags)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(str != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(str != NULL);
 
-    reduct_uint32_t hash = reduct_hash(str, len);
-    reduct_size_t index = reduct_atom_map_find_or_alloc(reduct, hash, str, len, flags);
-    if (reduct->atomMap[index] != REDUCT_NULL && reduct->atomMap[index] != REDUCT_ATOM_TOMBSTONE)
+    uint32_t hash = reduct_hash(str, len);
+    size_t index = reduct_atom_map_find_or_alloc(reduct, hash, str, len, flags);
+    if (reduct->atomMap[index] != NULL && reduct->atomMap[index] != REDUCT_ATOM_TOMBSTONE)
     {
         return reduct->atomMap[index];
     }
 
     reduct_atom_t* atom = reduct_atom_new(reduct, len);
-    REDUCT_MEMCPY(atom->string, str, len);
+    memcpy(atom->string, str, len);
 
     atom->hash = hash;
-    atom->index = (reduct_uint32_t)index;
+    atom->index = (uint32_t)index;
     reduct->atomMap[index] = atom;
 
     if (flags & REDUCT_ATOM_LOOKUP_QUOTED)
@@ -490,7 +493,7 @@ REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, 
         item->flags |= REDUCT_ITEM_FLAG_QUOTED;
 
         reduct_atom_normalize_escape(atom);
-        reduct_uint32_t hash = reduct_hash(atom->string, atom->length);
+        uint32_t hash = reduct_hash(atom->string, atom->length);
         reduct_atom_map_update(reduct, atom, index, hash);
     }
 
@@ -501,7 +504,7 @@ REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, 
 
 REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
 {
-    REDUCT_ASSERT(atom != REDUCT_NULL);
+    assert(atom != NULL);
 
     if (atom->flags & REDUCT_ATOM_FLAG_NUMBER_CHECKED)
     {
@@ -583,7 +586,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
 
     if (base != 10)
     {
-        reduct_uint64_t intValue = 0;
+        uint64_t intValue = 0;
         while (p < end)
         {
             if (*p == '_')
@@ -626,7 +629,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
                 return;
             }
             atom->flags |= REDUCT_ATOM_FLAG_INTEGER;
-            atom->integerValue = sign * (reduct_int64_t)intValue;
+            atom->integerValue = sign * (int64_t)intValue;
             if (atom->integerValue == 0)
             {
                 item->flags |= REDUCT_ITEM_FLAG_FALSY;
@@ -637,14 +640,14 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
     }
 
     reduct_bool_t isFloat = REDUCT_FALSE;
-    reduct_uint64_t intValue = 0;
+    uint64_t intValue = 0;
     double floatValue = 0.0;
     double fractionDiv = 10.0;
     reduct_bool_t inFraction = REDUCT_FALSE;
     reduct_bool_t inExponent = REDUCT_FALSE;
-    reduct_int64_t expSign = 1;
-    reduct_int64_t expValue = 0;
-    reduct_int64_t exponentDigits = 0;
+    int64_t expSign = 1;
+    int64_t expValue = 0;
+    int64_t exponentDigits = 0;
 
     if (*p == '.')
     {
@@ -776,7 +779,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
             return;
         }
         atom->flags |= REDUCT_ATOM_FLAG_INTEGER;
-        atom->integerValue = sign * (reduct_int64_t)intValue;
+        atom->integerValue = sign * (int64_t)intValue;
         if (atom->integerValue == 0)
         {
             item->flags |= REDUCT_ITEM_FLAG_FALSY;
@@ -786,8 +789,8 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
 
 REDUCT_API void reduct_atom_check_native(reduct_t* reduct, reduct_atom_t* atom)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(atom != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(atom != NULL);
 
     if (atom->flags & REDUCT_ATOM_FLAG_NATIVE_CHECKED)
     {
@@ -795,14 +798,14 @@ REDUCT_API void reduct_atom_check_native(reduct_t* reduct, reduct_atom_t* atom)
     }
     atom->flags |= REDUCT_ATOM_FLAG_NATIVE_CHECKED;
 
-    reduct_uint32_t hash = atom->hash;
+    uint32_t hash = atom->hash;
     if (hash == 0)
     {
         hash = reduct_hash(atom->string, atom->length);
     }
 
     reduct_native_entry_t* entry = reduct_native_map_find(reduct, hash, atom->string, atom->length);
-    if (entry == REDUCT_NULL)
+    if (entry == NULL)
     {
         return;
     }
@@ -810,18 +813,18 @@ REDUCT_API void reduct_atom_check_native(reduct_t* reduct, reduct_atom_t* atom)
     atom->native = entry->nativeFn;
     atom->flags |= REDUCT_ATOM_FLAG_NATIVE;
 
-    if (entry->intrinsicFn != REDUCT_NULL)
+    if (entry->intrinsicFn != NULL)
     {
         atom->intrinsic = entry->intrinsicFn;
         atom->flags |= REDUCT_ATOM_FLAG_INTRINSIC;
     }
 }
 
-REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_t* atom, reduct_size_t start,
-    reduct_size_t len)
+REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_t* atom, size_t start,
+    size_t len)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(atom != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(atom != NULL);
 
     if (len == 0)
     {
@@ -833,7 +836,7 @@ REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_
         return atom;
     }
 
-    REDUCT_ASSERT(start + len <= atom->length);
+    assert(start + len <= atom->length);
 
     const char* str = atom->string;
 
@@ -854,23 +857,23 @@ REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_
     {
         subAtom->flags = 0;
         subAtom->string = subAtom->smallString;
-        REDUCT_MEMCPY(subAtom->string, str + start, len);
+        memcpy(subAtom->string, str + start, len);
     }
     return subAtom;
 }
 
-REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_atom_t* atom, reduct_size_t len)
+REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_atom_t* atom, size_t len)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(atom != REDUCT_NULL);
-    REDUCT_ASSERT(len > atom->length);
+    assert(reduct != NULL);
+    assert(atom != NULL);
+    assert(len > atom->length);
 
     if (len == 0)
     {
         return reduct_atom_new(reduct, 0);
     }
 
-    if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->stack != REDUCT_NULL)
+    if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->stack != NULL)
     {
         reduct_atom_stack_t* stack = atom->stack;
         if (stack->data + stack->count == atom->string + atom->length && stack->count + len - atom->length <= stack->capacity)
@@ -892,6 +895,6 @@ REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_ato
     }
     
     reduct_atom_t* superAtom = reduct_atom_new(reduct, len);
-    REDUCT_MEMCPY(superAtom->string, atom->string, atom->length);
+    memcpy(superAtom->string, atom->string, atom->length);
     return superAtom;
 }

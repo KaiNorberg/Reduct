@@ -83,7 +83,7 @@ typedef enum
 /**
  * @brief Register type.
  */
-typedef reduct_uint16_t reduct_reg_t;
+typedef uint16_t reduct_reg_t;
 
 /**
  * @brief Invalid register value.
@@ -93,7 +93,7 @@ typedef reduct_uint16_t reduct_reg_t;
 /**
  * @brief Instruction type.
  */
-typedef reduct_uint32_t reduct_inst_t;
+typedef uint32_t reduct_inst_t;
 
 #define REDUCT_INST_WIDTH_OPCODE 6ULL                                     ///< Opcode width in bits.
 #define REDUCT_INST_WIDTH_A 8ULL                                          ///< A operand width in bits.
@@ -189,7 +189,7 @@ typedef reduct_uint32_t reduct_inst_t;
  * @param _inst Instruction.
  */
 #define REDUCT_INST_GET_SBX(_inst) \
-    ((reduct_int64_t)(((_inst) >> REDUCT_INST_POS_B) & REDUCT_INST_MASK_SBX) << (32ULL - REDUCT_INST_WIDTH_SBX) >> \
+    ((int64_t)(((_inst) >> REDUCT_INST_POS_B) & REDUCT_INST_MASK_SBX) << (32ULL - REDUCT_INST_WIDTH_SBX) >> \
         (32ULL - REDUCT_INST_WIDTH_SBX))
 
 /**

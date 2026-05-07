@@ -31,8 +31,8 @@ typedef struct reduct_eval_frame
 {
     struct reduct_closure* closure; ///< The closure being evaluated.
     reduct_inst_t* ip;              ///< The current instruction pointer.
-    reduct_uint32_t base;           ///< The base register, where the functions registers start.
-    reduct_uint32_t prevRegCount;   ///< The previous register count to restore upon return.
+    uint32_t base;           ///< The base register, where the functions registers start.
+    uint32_t prevRegCount;   ///< The previous register count to restore upon return.
 } reduct_eval_frame_t;
 
 /**
@@ -61,7 +61,7 @@ REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* p
  * @param len The length of the string.
  * @return The result of the evaluation.
  */
-REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char* str, reduct_size_t len);
+REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char* str, size_t len);
 
 /**
  * @brief Calls a Reduct callable (closure or native) with arguments.
@@ -72,7 +72,7 @@ REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char*
  * @param argv Pointer to the arguments array.
  * @return The result of the call.
  */
-REDUCT_API reduct_handle_t reduct_eval_call(struct reduct* reduct, reduct_handle_t callable, reduct_size_t argc,
+REDUCT_API reduct_handle_t reduct_eval_call(struct reduct* reduct, reduct_handle_t callable, size_t argc,
     reduct_handle_t* argv);
 
 /** @} */

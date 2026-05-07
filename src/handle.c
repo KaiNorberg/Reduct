@@ -10,8 +10,8 @@
 
 REDUCT_API void reduct_handle_ensure_item(reduct_t* reduct, reduct_handle_t* handle)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(handle != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(handle != NULL);
 
     if (REDUCT_HANDLE_IS_ITEM(handle))
     {
@@ -32,10 +32,10 @@ REDUCT_API void reduct_handle_ensure_item(reduct_t* reduct, reduct_handle_t* han
 REDUCT_API void reduct_handle_promote(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b,
     reduct_promotion_t* out)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(a != REDUCT_NULL);
-    REDUCT_ASSERT(b != REDUCT_NULL);
-    REDUCT_ASSERT(out != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(a != NULL);
+    assert(b != NULL);
+    assert(out != NULL);
 
     if (REDUCT_HANDLE_IS_INT(a) && REDUCT_HANDLE_IS_INT(b))
     {
@@ -89,9 +89,9 @@ REDUCT_API void reduct_handle_promote(struct reduct* reduct, reduct_handle_t* a,
 
 REDUCT_API reduct_bool_t reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t* a, reduct_handle_t* b)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(a != REDUCT_NULL);
-    REDUCT_ASSERT(b != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(a != NULL);
+    assert(b != NULL);
 
     if (*a == *b)
     {
@@ -163,23 +163,23 @@ typedef struct
     int group;
     reduct_bool_t isFloat;
     union {
-        reduct_int64_t i;
-        reduct_float_t f;
+        int64_t i;
+        double f;
     } num;
     reduct_item_t* item;
 } reduct_cmp_val_t;
 
 static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_t* out)
 {
-    REDUCT_ASSERT(handle != REDUCT_NULL);
-    REDUCT_ASSERT(out != REDUCT_NULL);
+    assert(handle != NULL);
+    assert(out != NULL);
 
     if (REDUCT_HANDLE_IS_INT(handle))
     {
         out->group = 0;
         out->isFloat = REDUCT_FALSE;
         out->num.i = REDUCT_HANDLE_TO_INT(handle);
-        out->item = REDUCT_NULL;
+        out->item = NULL;
         return;
     }
 
@@ -188,12 +188,12 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
         out->group = 0;
         out->isFloat = REDUCT_TRUE;
         out->num.f = REDUCT_HANDLE_TO_FLOAT(handle);
-        out->item = REDUCT_NULL;
+        out->item = NULL;
         return;
     }
 
     out->item = REDUCT_HANDLE_TO_ITEM(handle);
-    if (out->item == REDUCT_NULL)
+    if (out->item == NULL)
     {
         out->group = 1;
         return;
@@ -224,11 +224,11 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
     out->group = 1;
 }
 
-REDUCT_API reduct_int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t* a, reduct_handle_t* b)
+REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t* a, reduct_handle_t* b)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(a != REDUCT_NULL);
-    REDUCT_ASSERT(b != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(a != NULL);
+    assert(b != NULL);
 
     if (a == b || *a == *b)
     {
@@ -255,8 +255,8 @@ REDUCT_API reduct_int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_
             return (va.num.f < vb.num.f) ? -1 : ((va.num.f > vb.num.f) ? 1 : 0);
         }
 
-        reduct_float_t fa = va.isFloat ? va.num.f : (reduct_float_t)va.num.i;
-        reduct_float_t fb = vb.isFloat ? vb.num.f : (reduct_float_t)vb.num.i;
+        double fa = va.isFloat ? va.num.f : (double)va.num.i;
+        double fb = vb.isFloat ? vb.num.f : (double)vb.num.i;
         if (fa < fb)
         {
             return -1;
@@ -271,65 +271,65 @@ REDUCT_API reduct_int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_
     {
         reduct_atom_t* atomA = &va.item->atom;
         reduct_atom_t* atomB = &vb.item->atom;
-        reduct_size_t lenA = atomA->length;
-        reduct_size_t lenB = atomB->length;
-        reduct_size_t minLen = lenA < lenB ? lenA : lenB;
+        size_t lenA = atomA->length;
+        size_t lenB = atomB->length;
+        size_t minLen = lenA < lenB ? lenA : lenB;
 
         const char* strA = atomA->string;
         const char* strB = atomB->string;
 
-        int cmp = REDUCT_MEMCMP(strA, strB, minLen);
+        int cmp = memcmp(strA, strB, minLen);
         if (cmp != 0)
         {
             return cmp;
         }
 
-        return (reduct_int64_t)lenA - (reduct_int64_t)lenB;
+        return (int64_t)lenA - (int64_t)lenB;
     }
 
-    reduct_list_t* listA = va.item ? &va.item->list : REDUCT_NULL;
-    reduct_list_t* listB = vb.item ? &vb.item->list : REDUCT_NULL;
-    reduct_size_t lenA = listA ? listA->length : 0;
-    reduct_size_t lenB = listB ? listB->length : 0;
-    reduct_size_t minLen = lenA < lenB ? lenA : lenB;
+    reduct_list_t* listA = va.item ? &va.item->list : NULL;
+    reduct_list_t* listB = vb.item ? &vb.item->list : NULL;
+    size_t lenA = listA ? listA->length : 0;
+    size_t lenB = listB ? listB->length : 0;
+    size_t minLen = lenA < lenB ? lenA : lenB;
 
-    for (reduct_size_t i = 0; i < minLen; i++)
+    for (size_t i = 0; i < minLen; i++)
     {
         reduct_handle_t ha = reduct_list_nth(reduct, listA, i);
         reduct_handle_t hb = reduct_list_nth(reduct, listB, i);
-        reduct_int64_t cmp = reduct_handle_compare(reduct, &ha, &hb);
+        int64_t cmp = reduct_handle_compare(reduct, &ha, &hb);
         if (cmp != 0)
         {
             return cmp;
         }
     }
 
-    return (reduct_int64_t)lenA - (reduct_int64_t)lenB;
+    return (int64_t)lenA - (int64_t)lenB;
 }
 
 REDUCT_API reduct_handle_t reduct_handle_nil(reduct_t* reduct)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     return REDUCT_HANDLE_FROM_ITEM(reduct->nilItem);
 }
 
 REDUCT_API reduct_handle_t reduct_handle_pi(reduct_t* reduct)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     return REDUCT_HANDLE_FROM_ITEM(reduct->piItem);
 }
 
 REDUCT_API reduct_handle_t reduct_handle_e(reduct_t* reduct)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    assert(reduct != NULL);
 
     return REDUCT_HANDLE_FROM_ITEM(reduct->eItem);
 }
 
 REDUCT_API void reduct_handle_atom_string(reduct_t* reduct, reduct_handle_t* handle, const char** outStr,
-    reduct_size_t* outLen)
+    size_t* outLen)
 {
     reduct_handle_ensure_item(reduct, handle);
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(handle);
@@ -343,8 +343,8 @@ REDUCT_API void reduct_handle_atom_string(reduct_t* reduct, reduct_handle_t* han
 
 REDUCT_API void reduct_handle_push(reduct_t* reduct, reduct_handle_t* list, reduct_handle_t val)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(list != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(list != NULL);
 
     if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(list)))
     {
@@ -354,10 +354,10 @@ REDUCT_API void reduct_handle_push(reduct_t* reduct, reduct_handle_t* list, redu
     reduct_list_push(reduct, &REDUCT_HANDLE_TO_ITEM(list)->list, val);
 }
 
-REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t* handle, reduct_size_t index)
+REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t* handle, size_t index)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(handle != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(handle != NULL);
 
     reduct_item_t* item = reduct_handle_as_item(reduct, handle);
 
@@ -381,10 +381,10 @@ REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t* h
     }
 }
 
-REDUCT_API reduct_size_t reduct_handle_len(reduct_t* reduct, reduct_handle_t* handle)
+REDUCT_API size_t reduct_handle_len(reduct_t* reduct, reduct_handle_t* handle)
 {
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(handle != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(handle != NULL);
 
     return reduct_handle_as_item(reduct, handle)->length;
 }
@@ -393,9 +393,9 @@ REDUCT_API reduct_bool_t reduct_handle_is_str(reduct_t* reduct, reduct_handle_t*
 {
     REDUCT_UNUSED(reduct);
 
-    REDUCT_ASSERT(reduct != REDUCT_NULL);
-    REDUCT_ASSERT(handle != REDUCT_NULL);
-    REDUCT_ASSERT(str != REDUCT_NULL);
+    assert(reduct != NULL);
+    assert(handle != NULL);
+    assert(str != NULL);
 
     if (!REDUCT_HANDLE_IS_ATOM(handle))
     {
@@ -408,5 +408,5 @@ REDUCT_API reduct_bool_t reduct_handle_is_str(reduct_t* reduct, reduct_handle_t*
         return REDUCT_FALSE;
     }
 
-    return reduct_atom_is_equal(&item->atom, str, REDUCT_STRLEN(str));
+    return reduct_atom_is_equal(&item->atom, str, strlen(str));
 }
