@@ -113,14 +113,9 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
 {
     REDUCT_ASSERT(reduct != REDUCT_NULL);
 
-    reduct_input_t* input = reduct->input;
-    while (input != REDUCT_NULL)
+    for (reduct_size_t i = 0; i < reduct->retainedCount; i++)
     {
-        if (REDUCT_HANDLE_IS_ITEM(&input->ast))
-        {
-            reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(&input->ast));
-        }
-        input = input->prev;
+        reduct_gc_mark(reduct, reduct->retained[i]);
     }
 
     for (reduct_uint32_t i = 0; i < reduct->constantCount; i++)
@@ -209,4 +204,39 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
         reduct->block = REDUCT_NULL;
     }
     reduct->prevBlockCount = reduct->blockCount;
+}
+
+REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
+{
+    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    REDUCT_ASSERT(item != REDUCT_NULL);
+
+    if (reduct->retainedCount >= reduct->retainedCapacity)
+    {
+        reduct_size_t newCapacity = reduct->retainedCapacity == 0 ? REDUCT_GC_RETAINED_INITAL : reduct->retainedCapacity * REDUCT_GC_RETAINED_GROWTH;
+        reduct_item_t** newRetained = (reduct_item_t**)REDUCT_REALLOC(reduct->retained, newCapacity * sizeof(reduct_item_t*));
+        if (newRetained == REDUCT_NULL)
+        {
+            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+        }
+        reduct->retained = newRetained;
+        reduct->retainedCapacity = newCapacity;
+    }
+
+    reduct->retained[reduct->retainedCount++] = item;
+}
+
+REDUCT_API void reduct_gc_release(reduct_t* reduct, reduct_item_t* item)
+{
+    REDUCT_ASSERT(reduct != REDUCT_NULL);
+    REDUCT_ASSERT(item != REDUCT_NULL);
+
+    for (reduct_size_t i = 0; i < reduct->retainedCount; i++)
+    {
+        if (reduct->retained[i] == item)
+        {
+            reduct->retained[i] = reduct->retained[--reduct->retainedCount];
+            return;
+        }
+    }
 }

@@ -137,6 +137,14 @@ REDUCT_API void reduct_free(reduct_t* reduct)
         reduct->libCapacity = 0;
     }
 
+    if (reduct->retained != REDUCT_NULL)
+    {
+        REDUCT_FREE(reduct->retained);
+        reduct->retained = REDUCT_NULL;
+        reduct->retainedCount = 0;
+        reduct->retainedCapacity = 0;
+    }
+
     REDUCT_FREE(reduct);
 }
 

@@ -588,6 +588,38 @@ struct reduct;
                                 : REDUCT_FALSE)))
 
 /**
+ * @brief Retain a handle, preventing its referenced item from being collected by the garbage collector.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _handle Pointer to the handle.
+ */                      
+#define REDUCT_HANDLE_RETAIN(_reduct, _handle) \
+    do \
+    { \
+        reduct_handle_t* _h = (_handle); \
+        if (REDUCT_HANDLE_IS_ITEM(_h)) \
+        { \
+            reduct_gc_retain((_reduct), REDUCT_HANDLE_TO_ITEM(_h)); \
+        } \
+    } while (0)
+
+/**
+ * @brief Release a handle, allowing its referenced item to be collected by the garbage collector.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _handle Pointer to the handle.
+ */
+#define REDUCT_HANDLE_RELEASE(_reduct, _handle) \
+    do \
+    { \
+        reduct_handle_t* _h = (_handle); \
+        if (REDUCT_HANDLE_IS_ITEM(_h)) \
+        { \
+            reduct_gc_release((_reduct), REDUCT_HANDLE_TO_ITEM(_h)); \
+        } \
+    } while (0)
+
+/**
  * @brief Ensure that a handle is an item handle.
  *
  * If the handle is an integer or float, it will be upgraded to an item handle by looking up a corresponding atom.

@@ -84,6 +84,9 @@ typedef struct reduct
     reduct_handle_t* regs;
     reduct_size_t regCount;
     reduct_size_t regCapacity;
+    reduct_item_t** retained;
+    reduct_size_t retainedCount;
+    reduct_size_t retainedCapacity;
     reduct_size_t prevBlockCount;
     reduct_size_t blockCount;
     reduct_item_block_t* block;
