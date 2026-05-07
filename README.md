@@ -181,10 +181,10 @@ Included are three examples of a basic program written in common Lisp, C and Red
 #### Lisp
 
 ```lisp
-(let ((x 10)
-      (y 20))
-  (let ((z (+ x y)))
-    (* z 2)))
+(let* ((x 10)
+         (y 20))
+         (z (+ x y)))
+  (* z 2))
 ```
 
 #### C
