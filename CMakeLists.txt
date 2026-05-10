@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(reduct VERSION 3.0.0 LANGUAGES C)
+project(reduct VERSION 3.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -50,6 +50,7 @@ set(REDUCT_SOURCES
     src/list.c
     src/native.c
     src/parse.c
+    src/schema.c
     src/standard.c
     src/stringify.c
 )

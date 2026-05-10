@@ -72,7 +72,7 @@ REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t 
     return list;
 }
 
-REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, size_t count, ...)
+REDUCT_API reduct_list_t* reduct_list_new_alist(struct reduct* reduct, size_t count, ...)
 {
     assert(reduct != NULL);
 
@@ -86,7 +86,7 @@ REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, size_t co
         reduct_handle_t val = va_arg(args, reduct_handle_t);
 
         reduct_list_t* pair = reduct_list_new(reduct);
-        reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_string(reduct, key)));
+        reduct_list_push(reduct, pair, REDUCT_HANDLE_STRING(reduct, key));
         reduct_list_push(reduct, pair, val);
         reduct_list_push(reduct, list, REDUCT_HANDLE_FROM_LIST(pair));
     }
@@ -352,30 +352,12 @@ REDUCT_API reduct_list_t* reduct_list_new_from_handles(reduct_t* reduct, size_t 
     return list;
 }
 
-REDUCT_API reduct_bool_t reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out)
-{
-    if (iter->leaf != NULL)
-    {
-        iter->index++;
-    }
-
-    if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
-    {
-        return REDUCT_FALSE;
-    }
-
-    if ((iter->index & REDUCT_LIST_MASK) == 0 || iter->leaf == NULL)
-    {
-        iter->leaf = reduct_list_find_leaf(iter->list, iter->index, iter->tailOffset);
-    }
-
-    *out = iter->leaf->handles[iter->index & REDUCT_LIST_MASK];
-
-    return REDUCT_TRUE;
-}
-
 REDUCT_API reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_item_t* listItem, reduct_handle_t* key)
 {
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(key), "key must be an atom");
+    
+    reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
+
     reduct_handle_t entryH;
     REDUCT_LIST_FOR_EACH(&entryH, &listItem->list)
     {
@@ -384,19 +366,27 @@ REDUCT_API reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_item_
             continue;
         }
 
-        reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
+        reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(&entryH);
         if (REDUCT_UNLIKELY(entry->length < 1))
         {
             continue;
         }
 
-        reduct_handle_t entryKey = reduct_list_first(reduct, &entry->list);
-        if (reduct_handle_compare_likely_atom(reduct, &entryKey, key))
+        reduct_handle_t entryKey = reduct_list_first(reduct, entry);
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(&entryKey)))
         {
-            return entryH;
+            continue;
         }
+
+        reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(&entryKey));
+        if (internedKey != entryKeyInterned)
+        {
+            continue;
+        }
+        return entryH;
     }
-    return REDUCT_HANDLE_NONE;
+
+    return reduct_handle_nil(reduct);
 }
 
 REDUCT_API reduct_bool_t reduct_list_get_entry(reduct_t* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,

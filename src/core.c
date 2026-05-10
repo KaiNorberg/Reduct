@@ -81,6 +81,21 @@ REDUCT_API void reduct_free(reduct_t* reduct)
         return;
     }
 
+    if (reduct->libs != NULL)
+    {
+        for (size_t i = 0; i < reduct->libCount; i++)
+        {
+            if (reduct->libs[i] != NULL)
+            {
+                REDUCT_LIB_CLOSE(reduct->libs[i]);
+            }
+        }
+        free(reduct->libs);
+        reduct->libs = NULL;
+        reduct->libCount = 0;
+        reduct->libCapacity = 0;
+    }
+
     for (size_t i = 0; i < reduct->scratchCapacity; i++)
     {
         if (reduct->scratch[i].buffer != NULL)
@@ -135,10 +150,7 @@ REDUCT_API void reduct_free(reduct_t* reduct)
         {
             free((void*)input->buffer);
         }
-        if (input != &reduct->firstInput)
-        {
-            free(input);
-        }
+        free(input);
         input = next;
     }
 
@@ -156,21 +168,6 @@ REDUCT_API void reduct_free(reduct_t* reduct)
         reduct->regs = NULL;
         reduct->regCount = 0;
         reduct->regCapacity = 0;
-    }
-
-    if (reduct->libs != NULL)
-    {
-        for (size_t i = 0; i < reduct->libCapacity; i++)
-        {
-            if (reduct->libs[i] != NULL)
-            {
-                REDUCT_LIB_CLOSE(reduct->libs[i]);
-            }
-        }
-        free(reduct->libs);
-        reduct->libs = NULL;
-        reduct->libCount = 0;
-        reduct->libCapacity = 0;
     }
 
     if (reduct->importPaths != NULL)
@@ -191,6 +188,21 @@ REDUCT_API void reduct_free(reduct_t* reduct)
         reduct->retained = NULL;
         reduct->retainedCount = 0;
         reduct->retainedCapacity = 0;
+    }
+
+    if (reduct->schemas != NULL)
+    {
+        for (size_t i = 0; i < reduct->schemaCount; i++)
+        {
+            if (reduct->schemas[i] != NULL)
+            {
+                free(reduct->schemas[i]);
+            }
+        }
+        free(reduct->schemas);
+        reduct->schemas = NULL;
+        reduct->schemaCapacity = 0;
+        reduct->schemaCount = 0;
     }
 
     free(reduct);
@@ -228,18 +240,10 @@ REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer
     assert(buffer != NULL);
     assert(path != NULL);
 
-    reduct_input_t* input;
-    if (reduct->input == NULL)
+    reduct_input_t* input = malloc(sizeof(reduct_input_t));
+    if (input == NULL)
     {
-        input = &reduct->firstInput;
-    }
-    else
-    {
-        input = malloc(sizeof(reduct_input_t));
-        if (input == NULL)
-        {
-            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
-        }
+        REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
     input->prev = reduct->input;
     input->buffer = buffer;

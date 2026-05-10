@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define REDUCT_ATOM_TOMBSTONE ((reduct_atom_t*)(uintptr_t)1)
 
@@ -162,7 +163,6 @@ static inline void reduct_atom_map_update(reduct_t* reduct, reduct_atom_t* atom,
     reduct->atomMap[newIndex] = atom;
     atom->index = (uint32_t)newIndex;
     atom->hash = hash;
-
 }
 
 REDUCT_API reduct_bool_t reduct_atom_is_equal(reduct_atom_t* atom, const char* str,
@@ -443,21 +443,21 @@ static inline void reduct_atom_normalize_escape(reduct_atom_t* atom)
     atom->length = j;
 }
 
-REDUCT_API void reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
+REDUCT_API reduct_bool_t reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
 {
     assert(reduct != NULL);
     assert(atom != NULL);
 
     if (atom->index != REDUCT_ATOM_INDEX_NONE)
     {
-        return;
+        return true;
     }
 
     atom->hash = reduct_hash(atom->string, atom->length);
-    size_t index = reduct_atom_map_find_or_alloc(reduct, atom->hash, atom->string, atom->length, REDUCT_ATOM_LOOKUP_NONE);
+    size_t index = reduct_atom_map_find_or_alloc(reduct, atom->hash, atom->string, atom->length, reduct_atom_get_lookup_flags(atom));
     if (reduct_atom_map_is_alive(reduct->atomMap[index]))
     {
-        REDUCT_ERROR_INTERNAL(reduct, "atom already interned");
+        return false;
     }
 
     reduct->atomMap[atom->index] = REDUCT_ATOM_TOMBSTONE;
@@ -465,6 +465,7 @@ REDUCT_API void reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
 
     reduct->atomMap[index] = atom;
     atom->index = (uint32_t)index;
+    return true;
 }
 
 REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, size_t len,
@@ -498,6 +499,19 @@ REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, 
     }
 
     return atom;
+}
+
+REDUCT_API reduct_atom_lookup_flags_t reduct_atom_get_lookup_flags(reduct_atom_t* atom)
+{
+    assert(atom != NULL);
+
+    reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
+    reduct_atom_lookup_flags_t flags = REDUCT_ATOM_LOOKUP_NONE;
+    if (item->flags & REDUCT_ITEM_FLAG_QUOTED)
+    {
+        flags |= REDUCT_ATOM_LOOKUP_QUOTED;
+    }
+    return flags;
 }
 
 #define REDUCT_ATOM_MAX_NUMBER_LENGTH 70

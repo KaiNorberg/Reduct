@@ -484,7 +484,7 @@ reduct_handle_t my_native(reduct_t* reduct, reduct_size_t argc, reduct_handle_t*
 
 reduct_handle_t reduct_module_init(reduct_t* reduct)
 {
-    return REDUCT_HANDLE_PAIRS(reduct, 1,
+    return REDUCT_HANDLE_ALIST(reduct, 1,
         "my-native", REDUCT_HANDLE_NATIVE(reduct, my_native)
     );
 }
@@ -576,6 +576,34 @@ reduct_native_register(reduct, natives, sizeof(natives) / sizeof(reduct_native_t
 ```
 
 All Reduct standard library functions are available in C, for example, `reduct_is_atom()`, `reduct_assoc()`, etc.
+
+### C Schema
+
+A "Schema" system is provided within Reduct to easily allow Association Lists to be parsed into C structures.
+
+For example:
+
+```c
+typedef struct {
+    char name[32];
+    int age;
+    float height;
+} person_t;
+
+reduct_schema_id_t personSchema = reduct_schema_new(reduct, 3, 
+    REDUCT_SCHEMA_FIELD("name", person_t, name, STRING),
+    REDUCT_SCHEMA_FIELD("age", person_t, age, INT),
+    REDUCT_SCHEMA_FIELD("height", person_t, height, FLOAT)
+);
+
+// ...
+
+reduct_handle_t myList = ...;
+
+person_t person;
+reduct_schema_apply(reduct, personSchema, &myList, &person);
+printf("Name: %s, Age: %d\n", person.name, person.age);
+```
 
 ### Documentation
 

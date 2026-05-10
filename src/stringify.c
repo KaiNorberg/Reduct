@@ -1,8 +1,7 @@
 #include "reduct/item.h"
 #include "reduct/stringify.h"
 
-static inline size_t reduct_stringify_internal(reduct_t* reduct, reduct_handle_t* handle, char* buffer,
-    size_t size)
+REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, char* buffer, size_t size)
 {
     assert(reduct != NULL);
     assert(buffer != NULL || size == 0);
@@ -47,6 +46,12 @@ static inline size_t reduct_stringify_internal(reduct_t* reduct, reduct_handle_t
             {
                 return snprintf(buffer, size, "%g", (double)reduct_atom_get_float(atom));
             }
+            else if (reduct_atom_is_native(reduct, atom))
+            {
+                const char* anonymous = "anonymous";
+
+                return snprintf(buffer, size, "<native: %.*s>", atom->length != 0 ? (int)atom->length : (int)strlen(anonymous), atom->length != 0 ? atom->string : anonymous);
+            }
 
             return snprintf(buffer, size, "%.*s", (int)atom->length, atom->string);
         }
@@ -81,35 +86,11 @@ static inline size_t reduct_stringify_internal(reduct_t* reduct, reduct_handle_t
         return written;
     }
     case REDUCT_ITEM_TYPE_FUNCTION:
-        return snprintf(buffer, size, "<function at %p>", (void*)item);
+        return snprintf(buffer, size, "<function: %p>", (void*)item);
     case REDUCT_ITEM_TYPE_CLOSURE:
-        return snprintf(buffer, size, "<closure at %p>", (void*)item);
+        return snprintf(buffer, size, "<closure: %p>", (void*)item);
     default:
         return snprintf(buffer, size, "<unknown>");
     }
     return 0;
-}
-
-REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, char* buffer, size_t size)
-{
-    if (REDUCT_HANDLE_IS_ATOM(handle))
-    {
-        const char* str;
-        size_t len;
-        reduct_handle_atom_string(reduct, handle, &str, &len);
-        if (buffer != NULL && size > 0 && len != 0)
-        {
-            if (REDUCT_HANDLE_TO_ITEM(handle)->flags & REDUCT_ITEM_FLAG_QUOTED)
-            {
-                return snprintf(buffer, size, "\"%.*s\"", (int)len, str);
-            }
-
-            size_t copyLen = (len < size) ? len : size - 1;
-            memcpy(buffer, str, copyLen);
-            buffer[copyLen] = '\0';
-        }
-        return len;
-    }
-
-    return reduct_stringify_internal(reduct, handle, buffer, size);
 }

@@ -84,11 +84,30 @@ static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t*
         return REDUCT_PARSE_PRECEDENCE_NONE;
     }
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&handle);
-    if (item->type != REDUCT_ITEM_TYPE_ATOM)
+    reduct_atom_t* atom = NULL;
+
+    if (item->type == REDUCT_ITEM_TYPE_ATOM)
+    {
+        atom = &item->atom;
+    }
+    else if (!unary && item->type == REDUCT_ITEM_TYPE_LIST && item->length >= 3)
+    {
+        reduct_list_t* list = &item->list;
+        reduct_handle_t head = reduct_list_first(ctx->reduct, list);
+        if (REDUCT_HANDLE_IS_ATOM(&head) && reduct_atom_is_equal(REDUCT_HANDLE_TO_ATOM(&head), "get-in", 6))
+        {
+            reduct_handle_t last = reduct_list_nth(ctx->reduct, list, list->length - 1);
+            if (REDUCT_HANDLE_IS_ATOM(&last))
+            {
+                atom = REDUCT_HANDLE_TO_ATOM(&last);
+            }
+        }
+    }
+
+    if (atom == NULL)
     {
         return REDUCT_PARSE_PRECEDENCE_NONE;
     }
-    reduct_atom_t* atom = &item->atom;
 
     if (atom->length == 0)
     {
@@ -343,7 +362,7 @@ static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t*
     wrapperItem->inputId = getInListItem->inputId;
     wrapperItem->position = getInListItem->position;
 
-    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_STRING(ctx->reduct, "get-in"));
+    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_SYMBOL(ctx->reduct, "get-in"));
     reduct_list_push(ctx->reduct, wrapper, *getInTarget);
     if ((*getInList)->length == 2)
     {

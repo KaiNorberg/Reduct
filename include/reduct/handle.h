@@ -325,7 +325,7 @@ struct reduct;
  * @param _count The number of pairs.
  * @param ... Each pair should be provided as a `(const char*, reduct_handle_t)`.
  */
-#define REDUCT_HANDLE_PAIRS(_reduct, _count, ...) REDUCT_HANDLE_FROM_LIST(reduct_list_new_pairs(_reduct, _count, __VA_ARGS__))
+#define REDUCT_HANDLE_ALIST(_reduct, _count, ...) REDUCT_HANDLE_FROM_LIST(reduct_list_new_alist(_reduct, _count, __VA_ARGS__))
 
 /**
  * @brief Create an atom handle with a reserved size.
@@ -341,7 +341,8 @@ struct reduct;
  * @param _reduct Pointer to the Reduct structure.
  * @param _str The null-terminated string.
  */
-#define REDUCT_HANDLE_STRING(_reduct, _str) REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_string(_reduct, _str))
+#define REDUCT_HANDLE_STRING(_reduct, _str) REDUCT_HANDLE_FROM_ATOM(reduct_atom_lookup(_reduct, _str, strlen(_str), REDUCT_ATOM_LOOKUP_QUOTED))
+
 
 /**
  * @brief Create an interned atom handle from a string.
@@ -349,7 +350,7 @@ struct reduct;
  * @param _reduct Pointer to the Reduct structure.
  * @param _str The null-terminated string.
  */
-#define REDUCT_HANDLE_SYM(_reduct, _str) \
+#define REDUCT_HANDLE_SYMBOL(_reduct, _str) \
     REDUCT_HANDLE_FROM_ATOM(reduct_atom_lookup(_reduct, _str, strlen(_str), REDUCT_ATOM_LOOKUP_NONE))
 
 /**
@@ -708,34 +709,6 @@ REDUCT_API reduct_bool_t reduct_handle_is_equal(struct reduct* reduct, reduct_ha
  * @return A negative value if a < b, zero if a == b, and a positive value if a > b.
  */
 REDUCT_API int64_t reduct_handle_compare(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b);
-
-/**
- * @brief Compare two handles that are most likely atoms.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param a The first handle.
- * @param b The second handle.
- * @return `REDUCT_TRUE` if the handles are equal, `REDUCT_FALSE` otherwise.
- */
-static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_handle_compare_likely_atom(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b)
-{
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_ATOM(a) && REDUCT_HANDLE_IS_ATOM(b)))
-    {
-        if (reduct_atom_is_equal_atom(REDUCT_HANDLE_TO_ATOM(a), REDUCT_HANDLE_TO_ATOM(b)))
-        {
-            return REDUCT_TRUE;
-        }
-    } 
-    else 
-    {
-        if (reduct_handle_compare(reduct, a, b) == 0)
-        {
-            return REDUCT_TRUE;
-        }
-    }
-
-    return REDUCT_FALSE;
-}
 
 /**
  * @brief Get the constant nil handle.

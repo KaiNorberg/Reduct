@@ -8,6 +8,7 @@
 #include "reduct/eval.h"
 #include "reduct/native.h"
 #include "reduct/defs.h"
+#include "reduct/schema.h"
 
 struct reduct_item;
 
@@ -25,6 +26,9 @@ struct reduct_item;
 
 #define REDUCT_IMPORT_PATHS_INITIAL 4 ///< Initial size of the import path array.
 #define REDUCT_IMPORT_PATHS_GROWTH 2 ///< Growth factor of the import path array.
+
+#define REDUCT_SCHEMA_INITIAL 4 ///< Initial size of the schema array.
+#define REDUCT_SCHEMA_GROWTH 2  ///< Growth factor of the schema array.
 
 #define REDUCT_CONSTANTS_MAX 8 ///< Maximum amount of predefined constants.
 
@@ -103,7 +107,7 @@ typedef struct reduct
     size_t atomMapTombstones;
     size_t atomMapCapacity;
     size_t atomMapMask;
-    struct reduct_atom** atomMap;
+    reduct_atom_t** atomMap;
     size_t nativeMapSize;
     size_t nativeMapCapacity;
     size_t nativeMapMask;
@@ -112,7 +116,6 @@ typedef struct reduct
     size_t scratchCapacity;
     reduct_scratch_t scratch[REDUCT_SCRATCH_MAX];
     reduct_input_t* input;
-    reduct_input_t firstInput;
     reduct_item_t* trueItem;
     reduct_item_t* falseItem;
     reduct_item_t* nilItem;
@@ -128,6 +131,9 @@ typedef struct reduct
     char** importPaths;
     size_t importPathCount;
     size_t importPathCapacity;
+    reduct_schema_internal_t** schemas;
+    size_t schemaCount;
+    size_t schemaCapacity;
     int argc;
     char** argv;  
 } reduct_t;

@@ -71,14 +71,14 @@ REDUCT_API reduct_list_t* reduct_list_new(struct reduct* reduct);
 REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t count, reduct_handle_t* handles);
 
 /**
- * @brief Create a new list of pairs (key-value) from a variable number of pairs.
+ * @brief Create a new association list (list storing key-value pairs) from a variable number of pairs.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param count The number of pairs.
  * @param ... Each pair should be provided as a `(const char*, reduct_handle_t)`.
- * @return A pointer to the newly created list of pairs.
+ * @return A pointer to the newly created association list.
  */
-REDUCT_API reduct_list_t* reduct_list_new_pairs(struct reduct* reduct, size_t count, ...);
+REDUCT_API reduct_list_t* reduct_list_new_alist(struct reduct* reduct, size_t count, ...);
 
 /**
  * @brief Create a new list with an updated value at the specified index.
@@ -183,6 +183,16 @@ REDUCT_API void reduct_list_push_list(struct reduct* reduct, reduct_list_t* list
 REDUCT_API reduct_list_t* reduct_list_new_from_handles(struct reduct* reduct, size_t count, reduct_handle_t* handles);
 
 /**
+ * @brief Find the leaf node containing the element at the specified index.
+ * 
+ * @param list Pointer to the list. 
+ * @param index The index of the element.
+ * @param tailOffset The pre-calculated offset of the tail node.
+ * @return A pointer to the leaf node.
+ */
+REDUCT_API reduct_list_node_t* reduct_list_find_leaf(reduct_list_t* list, size_t index, size_t tailOffset);
+
+/**
  * @brief List iterator structure.
  * @struct reduct_list_iter_t
  */
@@ -221,9 +231,28 @@ typedef struct reduct_list_iter
  *
  * @param iter Pointer to the iterator.
  * @param out Pointer to store the retrieved handle.
- * @return REDUCT_TRUE if an element was retrieved, REDUCT_FALSE if the end was reached.
+ * @return `REDUCT_TRUE` if an element was retrieved, `REDUCT_FALSE` if the end was reached.
  */
-REDUCT_API reduct_bool_t reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out);
+static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out)
+{
+    if (iter->leaf != NULL)
+    {
+        iter->index++;
+    }
+
+    if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
+    {
+        return REDUCT_FALSE;
+    }
+
+    if ((iter->index & REDUCT_LIST_MASK) == 0 || iter->leaf == NULL)
+    {
+        iter->leaf = reduct_list_find_leaf(iter->list, iter->index, iter->tailOffset);
+    }
+
+    *out = iter->leaf->handles[iter->index & REDUCT_LIST_MASK];
+    return REDUCT_TRUE;
+}
 
 /**
  * @brief Macro for iterating over all elements in a list.

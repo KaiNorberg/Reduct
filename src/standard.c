@@ -1161,42 +1161,55 @@ REDUCT_API reduct_handle_t reduct_get_in(reduct_t* reduct, reduct_handle_t* list
 
     reduct_handle_t current = *list;
     reduct_handle_t pathH = *path;
+    reduct_handle_t nilH = reduct_handle_nil(reduct);
 
     if (REDUCT_LIKELY(!REDUCT_HANDLE_IS_LIST(&pathH)))
     {
         reduct_item_t* item = reduct_handle_as_item(reduct, &current);
         if (REDUCT_UNLIKELY(item->type != REDUCT_ITEM_TYPE_LIST))
         {
-            return (defaultVal != NULL) ? *defaultVal : reduct_handle_nil(reduct);
+            goto not_found;
         }
 
         reduct_handle_t entryH = reduct_list_find_entry(reduct, item, &pathH);
-        if (REDUCT_UNLIKELY(entryH == REDUCT_HANDLE_NONE))
+        if (REDUCT_UNLIKELY(entryH == nilH))
         {
-            return (defaultVal != NULL) ? *defaultVal : reduct_handle_nil(reduct);
+            goto not_found;
         }
 
         reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
-        if (REDUCT_UNLIKELY(entry->length < 2))
-        {
-            return (defaultVal != NULL) ? *defaultVal : reduct_handle_nil(reduct);
-        }
-
-        return reduct_list_second(reduct, &entry->list);
+        return (entry->length >= 2) ? reduct_list_second(reduct, &entry->list) : nilH;
     }
 
     reduct_item_t* pathItem = REDUCT_HANDLE_TO_ITEM(&pathH);
     reduct_handle_t key;
     REDUCT_LIST_FOR_EACH(&key, &pathItem->list)
     {
-        current = reduct_get_in(reduct, &current, &key, NULL);
-        if (current == reduct_handle_nil(reduct))
+        reduct_item_t* item = reduct_handle_as_item(reduct, &current);
+        if (REDUCT_UNLIKELY(item->type != REDUCT_ITEM_TYPE_LIST))
         {
-            return (defaultVal != NULL) ? *defaultVal : reduct_handle_nil(reduct);
+            goto not_found;
         }
+
+        reduct_handle_t entryH = reduct_list_find_entry(reduct, item, &key);
+        if (REDUCT_UNLIKELY(entryH == nilH))
+        {
+            goto not_found;
+        }
+
+        reduct_item_t* entry = REDUCT_HANDLE_TO_ITEM(&entryH);
+        if (REDUCT_UNLIKELY(entry->length < 2))
+        {
+            goto not_found;
+        }
+
+        current = reduct_list_second(reduct, &entry->list);
     }
 
     return current;
+
+not_found:
+    return (defaultVal != NULL) ? *defaultVal : nilH;
 }
 
 static reduct_handle_t reduct_assoc_key(reduct_t* reduct, reduct_handle_t* handle, reduct_handle_t* key,
@@ -2116,7 +2129,7 @@ load_shared_lib:
         if (reduct->libs == NULL)
         {
             reduct->libCapacity = REDUCT_LIBS_INITIAL;
-            reduct->libs = (reduct_lib_t*)malloc(reduct->libCapacity * sizeof(reduct_lib_t));
+            reduct->libs = (reduct_lib_t*)calloc(reduct->libCapacity, sizeof(reduct_lib_t));
             if (reduct->libs == NULL)
             {
                 REDUCT_ERROR_INTERNAL(reduct, "out of memory");
@@ -2264,14 +2277,22 @@ REDUCT_API reduct_handle_t reduct_print(reduct_t* reduct, size_t argc, reduct_ha
             double val = REDUCT_HANDLE_TO_FLOAT(&argv[i]);
             fprintf(stdout, "%f", val);
         }
-        else
+        else if (REDUCT_HANDLE_IS_ATOM(&argv[i]) && REDUCT_HANDLE_TO_ITEM(&argv[i])->flags & REDUCT_ITEM_FLAG_QUOTED)
         {
             const char* str;
             size_t len;
             reduct_handle_atom_string(reduct, &argv[i], &str, &len);
             fwrite(str, 1, len, stdout);
         }
-
+        else
+        {
+            size_t len = reduct_stringify(reduct, &argv[i], NULL, 0);
+            REDUCT_SCRATCH(reduct, buffer, char, len + 1);
+            reduct_stringify(reduct, &argv[i], buffer, len + 1);
+            fwrite(buffer, 1, len, stdout);
+            REDUCT_SCRATCH_FREE(reduct, buffer);
+        }
+        
         if (i < argc - 1)
         {
             fwrite(" ", 1, 1, stdout);

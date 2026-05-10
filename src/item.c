@@ -72,6 +72,13 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
             reduct->atomMapTombstones++;
             reduct->atomMapSize--;
         }
+        if (atom->flags & REDUCT_ATOM_FLAG_SCHEMA)
+        {
+            if (atom->schema != NULL)
+            {
+                free(atom->schema);
+            }
+        }
         break;
     }
     case REDUCT_ITEM_TYPE_ATOM_STACK:

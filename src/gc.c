@@ -211,6 +211,14 @@ REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
     assert(reduct != NULL);
     assert(item != NULL);
 
+    for (size_t i = 0; i < reduct->retainedCount; i++)
+    {
+        if (reduct->retained[i] == item)
+        {
+            return;
+        }
+    }
+
     if (reduct->retainedCount >= reduct->retainedCapacity)
     {
         size_t newCapacity = reduct->retainedCapacity == 0 ? REDUCT_GC_RETAINED_INITAL : reduct->retainedCapacity * REDUCT_GC_RETAINED_GROWTH;

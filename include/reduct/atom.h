@@ -3,6 +3,7 @@
 
 #include "reduct/defs.h"
 #include "reduct/intrinsic.h"
+#include "reduct/schema.h"
 #include "reduct/native.h"
 
 #include <string.h>
@@ -59,7 +60,7 @@ typedef enum
     REDUCT_ATOM_LOOKUP_QUOTED = 1 << 0 ///< Atom should be explicitly quoted.
 } reduct_atom_lookup_flags_t;
 
-typedef uint8_t reduct_atom_flags_t;
+typedef uint16_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NONE 0                ///< No flags.
 #define REDUCT_ATOM_FLAG_INTEGER (1 << 0)   ///< Atom is known to be integer shaped.
 #define REDUCT_ATOM_FLAG_FLOAT (1 << 1) ///< Atom is known to be float shaped.
@@ -69,6 +70,7 @@ typedef uint8_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NATIVE_CHECKED (1 << 5) ///< Atom has been checked for a native function.
 #define REDUCT_ATOM_FLAG_LARGE (1 << 6) ///< Atom has an allocated buffer within a stack.
 #define REDUCT_ATOM_FLAG_OVERFLOW (1 << 7) ///< Atom has been parsed into an integer that is to large to fit into a `reduct_handle_t`.
+#define REDUCT_ATOM_FLAG_SCHEMA (1 << 8) ///< Atom is a schema field.
 
 #define REDUCT_ATOM_STACK_MIN 1024 ///< The minimum size of an atom stack.
 #define REDUCT_ATOM_STACK_GROWTH 2 ///< The factor by which we increase the minimum size until the needed capacity is reached.
@@ -98,7 +100,7 @@ typedef struct reduct_atom
     uint32_t hash;   ///< The hash of the string.
     uint32_t index; ///< The index within the atom map.
     reduct_atom_flags_t flags; ///< Atom flags.
-    uint8_t _padding[3];
+    uint8_t _padding[2];
     char* string; ///< Pointer to the data.
     union
     {
@@ -106,6 +108,16 @@ typedef struct reduct_atom
         struct reduct_atom_stack* stack; ///< The stack that this atoms string was allocated from, atom must have `REDUCT_ATOM_FLAG_LARGE`.
     };
     union {
+        struct 
+        {
+            /**
+             * An array of indexes to which this atom is a key.
+             * 
+             * The array is indexed by the schema id and stores the index of the field within the schema.
+             */
+            reduct_schema_index_t* schema;
+            uint32_t schemaCount;
+        };
         int64_t integerValue; ///< Pre-computed integer value, atom must have `REDUCT_ATOM_FLAG_INTEGER`.
         double floatValue;   ///< Pre-computed float value, atom must have `REDUCT_ATOM_FLAG_FLOAT`.
         struct
@@ -129,26 +141,6 @@ typedef struct reduct_atom
  */
 REDUCT_API reduct_bool_t reduct_atom_is_equal(reduct_atom_t* atom, const char* str,
     size_t len);
-
-/**
- * @brief Check if two atoms are equal.
- *
- * @param a Pointer to the first atom.
- * @param b Pointer to the second atom.
- * @return `REDUCT_TRUE` if the atoms are equal, `REDUCT_FALSE` otherwise.
- */
-static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_atom_is_equal_atom(reduct_atom_t* a, reduct_atom_t* b)
-{
-    if (a == b)
-    {
-        return REDUCT_TRUE;
-    }
-    if (a->length != b->length)
-    {
-        return REDUCT_FALSE;
-    }
-    return memcmp(a->string, b->string, a->length) == 0;
-}
 
 /**
  * @brief Create an atom with a reserved size.
@@ -201,8 +193,9 @@ REDUCT_API reduct_atom_t* reduct_atom_new_native(struct reduct* reduct, reduct_n
  *
  * @param reduct Pointer to the Reduct structure.
  * @param atom Pointer to the atom to intern.
+ * @return `true` if the atom is already interned or it was successfully added, `false` if an identical atom is already interned.
  */
-REDUCT_API void reduct_atom_intern(struct reduct* reduct, reduct_atom_t* atom);
+REDUCT_API reduct_bool_t reduct_atom_intern(struct reduct* reduct, reduct_atom_t* atom);
 
 /**
  * @brief Lookup an atom in the Reduct structure.
@@ -217,6 +210,42 @@ REDUCT_API void reduct_atom_intern(struct reduct* reduct, reduct_atom_t* atom);
  */
 REDUCT_API reduct_atom_t* reduct_atom_lookup(struct reduct* reduct, const char* str, size_t len,
     reduct_atom_lookup_flags_t flags);
+
+/**
+ * @brief Retrieve the lookup flags required to lookup this specific atom.
+ * 
+ * Really just used to check if an atom is quoted or not.
+ * 
+ * @param atom The atom to check.
+ * @return The lookup flags.
+ */
+REDUCT_API reduct_atom_lookup_flags_t reduct_atom_get_lookup_flags(reduct_atom_t* atom);
+
+/**
+ * @brief Ensure an atom is interned.
+ *
+ * If the atom is already interned, it returns the existing atom.
+ * If an identical atom is already interned, the already interned atom is returned.
+ * Otherwise, it interns the atom and returns it.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param atom Pointer to the atom to ensure is interned.
+ * @return A pointer to the interned atom.
+ */
+static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_atom_ensure_interned(struct reduct* reduct, reduct_atom_t* atom)
+{
+    if (REDUCT_LIKELY(atom->index != REDUCT_ATOM_INDEX_NONE))
+    {
+        return atom;
+    }
+
+    if (REDUCT_LIKELY(reduct_atom_intern(reduct, atom)))
+    {
+        return atom;
+    }
+
+    return reduct_atom_lookup(reduct, atom->string, atom->length, reduct_atom_get_lookup_flags(atom));
+}
 
 /**
  * @brief Cache if an atom is a number.
