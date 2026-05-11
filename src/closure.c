@@ -22,32 +22,29 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
 
     for (uint16_t i = 0; i < function->constantCount; i++)
     {
-        if (function->constants[i].type != REDUCT_CONST_SLOT_ITEM)
+        if (function->constants[i].type != REDUCT_CONST_SLOT_TYPE_HANDLE)
         {
             closure->constants[i] = REDUCT_HANDLE_NONE;
             continue;
         }
 
-        reduct_item_t* item = function->constants[i].item;
-        if (item->type != REDUCT_ITEM_TYPE_ATOM)
+        reduct_handle_t handle = function->constants[i].handle;
+        if (REDUCT_HANDLE_IS_ATOM(&handle))
         {
-            closure->constants[i] = REDUCT_HANDLE_FROM_ITEM(item);
-            continue;
+            reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(&handle);
+            if (reduct_atom_is_int(atom))
+            {
+                closure->constants[i] = REDUCT_HANDLE_FROM_INT(reduct_atom_get_int(atom));
+                continue;
+            }
+            else if (reduct_atom_is_float(atom))
+            {
+                closure->constants[i] = REDUCT_HANDLE_FROM_FLOAT(reduct_atom_get_float(atom));
+                continue;
+            }
         }
 
-        reduct_atom_t* atom = &item->atom;
-        if (reduct_atom_is_int(atom))
-        {
-            closure->constants[i] = REDUCT_HANDLE_FROM_INT(atom->integerValue);
-        }
-        else if (reduct_atom_is_float(atom))
-        {
-            closure->constants[i] = REDUCT_HANDLE_FROM_FLOAT(atom->floatValue);
-        }
-        else
-        {
-            closure->constants[i] = REDUCT_HANDLE_FROM_ITEM(item);
-        }
+        closure->constants[i] = function->constants[i].handle;
     }
 
     return closure;

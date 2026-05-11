@@ -2,19 +2,19 @@
 #define REDUCT_CORE_H 1
 
 #include "reduct/atom.h"
+#include "reduct/defs.h"
 #include "reduct/error.h"
+#include "reduct/eval.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
-#include "reduct/eval.h"
 #include "reduct/native.h"
-#include "reduct/defs.h"
 #include "reduct/schema.h"
 
 struct reduct_item;
 
-#include <stdlib.h>
-#include <setjmp.h>
 #include <assert.h>
+#include <setjmp.h>
+#include <stdlib.h>
 
 /**
  * @file core.h
@@ -25,7 +25,7 @@ struct reduct_item;
  */
 
 #define REDUCT_IMPORT_PATHS_INITIAL 4 ///< Initial size of the import path array.
-#define REDUCT_IMPORT_PATHS_GROWTH 2 ///< Growth factor of the import path array.
+#define REDUCT_IMPORT_PATHS_GROWTH 2  ///< Growth factor of the import path array.
 
 #define REDUCT_SCHEMA_INITIAL 4 ///< Initial size of the schema array.
 #define REDUCT_SCHEMA_GROWTH 2  ///< Growth factor of the schema array.
@@ -57,16 +57,6 @@ typedef struct reduct_input
 } reduct_input_t;
 
 /**
- * @brief Constant structure.
- * @struct reduct_constant_t
- */
-typedef struct reduct_constant
-{
-    struct reduct_atom* name;
-    struct reduct_item* item;
-} reduct_constant_t;
-
-/**
  * @brief Scratch buffer structure.
  * @struct reduct_scratch_t
  */
@@ -77,10 +67,10 @@ typedef struct reduct_scratch
 } reduct_scratch_t;
 
 #define REDUCT_SCRATCH_INITIAL 128 ///< Initial scratch buffer size.
-#define REDUCT_SCRATCH_MAX 16 ///< The maximum number of scratch buffers.
+#define REDUCT_SCRATCH_MAX 16      ///< The maximum number of scratch buffers.
 
 #define REDUCT_LIBS_INITIAL 4 ///< Initial size of the library array.
-#define REDUCT_LIBS_GROWTH 2 ///< Growth factor of the library array.
+#define REDUCT_LIBS_GROWTH 2  ///< Growth factor of the library array.
 
 /**
  * @brief State structure.
@@ -116,13 +106,6 @@ typedef struct reduct
     size_t scratchCapacity;
     reduct_scratch_t scratch[REDUCT_SCRATCH_MAX];
     reduct_input_t* input;
-    reduct_item_t* trueItem;
-    reduct_item_t* falseItem;
-    reduct_item_t* nilItem;
-    reduct_item_t* piItem;
-    reduct_item_t* eItem;
-    uint32_t constantCount;
-    reduct_constant_t constants[REDUCT_CONSTANTS_MAX];
     reduct_error_t* error;
     reduct_input_id_t newInputId;
     reduct_lib_t* libs;
@@ -135,7 +118,7 @@ typedef struct reduct
     size_t schemaCount;
     size_t schemaCapacity;
     int argc;
-    char** argv;  
+    char** argv;
 } reduct_t;
 
 /**
@@ -173,15 +156,6 @@ REDUCT_API void reduct_args_set(reduct_t* reduct, int argc, char** argv);
 REDUCT_API void reduct_add_import_path(reduct_t* reduct, const char* path);
 
 /**
- * @brief Register a constant in a Reduct structure.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param name The name of the constant.
- * @param item The item associated with the constant.
- */
-REDUCT_API void reduct_constant_register(reduct_t* reduct, const char* name, struct reduct_item* item);
-
-/**
  * @brief Create a new input structure and push it onto the input stack.
  *
  * @param reduct Pointer to the Reduct structure.
@@ -191,8 +165,8 @@ REDUCT_API void reduct_constant_register(reduct_t* reduct, const char* name, str
  * @param flags Input flags.
  * @return A pointer to the newly created input structure.
  */
-REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer, size_t length,
-    const char* path, reduct_input_flags_t flags);
+REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer, size_t length, const char* path,
+    reduct_input_flags_t flags);
 
 /**
  * @brief Lookup an input structure by its ID.

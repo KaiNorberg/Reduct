@@ -1,25 +1,21 @@
-#include "reduct/item.h"
-#include "reduct/defs.h"
 #include "reduct/atom.h"
 #include "reduct/char.h"
 #include "reduct/core.h"
+#include "reduct/defs.h"
+#include "reduct/item.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdbool.h>
 
 #define REDUCT_ATOM_TOMBSTONE ((reduct_atom_t*)(uintptr_t)1)
 
-static inline reduct_bool_t reduct_atom_map_is_alive(reduct_atom_t* slot)
+static inline bool reduct_atom_map_is_alive(reduct_atom_t* slot)
 {
     return slot != NULL && slot != REDUCT_ATOM_TOMBSTONE;
 }
 
-static inline size_t reduct_atom_map_find(
-    reduct_t* reduct,
-    uint32_t hash,
-    const char* str,
-    size_t len,
+static inline size_t reduct_atom_map_find(reduct_t* reduct, uint32_t hash, const char* str, size_t len,
     reduct_atom_lookup_flags_t flags)
 {
     assert(reduct != NULL);
@@ -28,7 +24,7 @@ static inline size_t reduct_atom_map_find(
     assert((reduct->atomMapCapacity & (reduct->atomMapCapacity - 1)) == 0);
     assert(reduct->atomMapSize <= reduct->atomMapCapacity);
 
-    reduct_bool_t wantQuoted = (flags & REDUCT_ATOM_LOOKUP_QUOTED) != 0;
+    bool wantQuoted = (flags & REDUCT_ATOM_LOOKUP_QUOTED) != 0;
 
     size_t index = hash & reduct->atomMapMask;
     size_t step = 1;
@@ -48,8 +44,7 @@ static inline size_t reduct_atom_map_find(
         }
         else
         {
-            reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
-            reduct_bool_t isQuoted = (item->flags & REDUCT_ITEM_FLAG_QUOTED) != 0;
+            bool isQuoted = (atom->flags & REDUCT_ATOM_FLAG_QUOTED) != 0;
 
             if (atom->hash == hash && isQuoted == wantQuoted && reduct_atom_is_equal(atom, str, len))
             {
@@ -69,11 +64,7 @@ static inline size_t reduct_atom_map_find(
     return index;
 }
 
-static inline size_t reduct_atom_map_find_or_alloc(
-    reduct_t* reduct,
-    uint32_t hash,
-    const char* str,
-    size_t len,
+static inline size_t reduct_atom_map_find_or_alloc(reduct_t* reduct, uint32_t hash, const char* str, size_t len,
     reduct_atom_lookup_flags_t flags)
 {
     assert(reduct != NULL);
@@ -165,16 +156,15 @@ static inline void reduct_atom_map_update(reduct_t* reduct, reduct_atom_t* atom,
     atom->hash = hash;
 }
 
-REDUCT_API reduct_bool_t reduct_atom_is_equal(reduct_atom_t* atom, const char* str,
-    size_t len)
+REDUCT_API bool reduct_atom_is_equal(reduct_atom_t* atom, const char* str, size_t len)
 {
     if (atom->length != len)
     {
-        return REDUCT_FALSE;
+        return false;
     }
     if (atom->hash != reduct_hash(str, len))
     {
-        return REDUCT_FALSE;
+        return false;
     }
 
     return memcmp(atom->string, str, len) == 0;
@@ -271,10 +261,7 @@ REDUCT_API reduct_atom_t* reduct_atom_new_string(struct reduct* reduct, const ch
     assert(reduct != NULL);
     assert(str != NULL);
 
-    size_t len = strlen(str);
-    reduct_atom_t* atom = reduct_atom_new(reduct, len);
-    memcpy(atom->string, str, len);
-    return atom;
+    return reduct_atom_new_copy(reduct, str, strlen(str));
 }
 
 REDUCT_API reduct_atom_t* reduct_atom_new_int(reduct_t* reduct, int64_t value)
@@ -284,17 +271,17 @@ REDUCT_API reduct_atom_t* reduct_atom_new_int(reduct_t* reduct, int64_t value)
     char buf[32];
     size_t len = 0;
 
-    unsigned long long uval;
-    reduct_bool_t isNegative;
+    uint64_t uval;
+    bool isNegative;
     if (value < 0)
     {
-        isNegative = REDUCT_TRUE;
-        uval = (unsigned long long)(-value);
+        isNegative = true;
+        uval = (uint64_t)0 - (uint64_t)value;
     }
     else
     {
-        isNegative = REDUCT_FALSE;
-        uval = (unsigned long long)value;
+        isNegative = false;
+        uval = (uint64_t)value;
     }
 
     if (uval == 0)
@@ -443,7 +430,7 @@ static inline void reduct_atom_normalize_escape(reduct_atom_t* atom)
     atom->length = j;
 }
 
-REDUCT_API reduct_bool_t reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
+REDUCT_API bool reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
 {
     assert(reduct != NULL);
     assert(atom != NULL);
@@ -454,14 +441,12 @@ REDUCT_API reduct_bool_t reduct_atom_intern(reduct_t* reduct, reduct_atom_t* ato
     }
 
     atom->hash = reduct_hash(atom->string, atom->length);
-    size_t index = reduct_atom_map_find_or_alloc(reduct, atom->hash, atom->string, atom->length, reduct_atom_get_lookup_flags(atom));
+    size_t index = reduct_atom_map_find_or_alloc(reduct, atom->hash, atom->string, atom->length,
+        reduct_atom_get_lookup_flags(atom));
     if (reduct_atom_map_is_alive(reduct->atomMap[index]))
     {
         return false;
     }
-
-    reduct->atomMap[atom->index] = REDUCT_ATOM_TOMBSTONE;
-    reduct->atomMapTombstones++;
 
     reduct->atomMap[index] = atom;
     atom->index = (uint32_t)index;
@@ -490,8 +475,7 @@ REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, 
 
     if (flags & REDUCT_ATOM_LOOKUP_QUOTED)
     {
-        reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
-        item->flags |= REDUCT_ITEM_FLAG_QUOTED;
+        atom->flags |= REDUCT_ATOM_FLAG_QUOTED;
 
         reduct_atom_normalize_escape(atom);
         uint32_t hash = reduct_hash(atom->string, atom->length);
@@ -505,9 +489,8 @@ REDUCT_API reduct_atom_lookup_flags_t reduct_atom_get_lookup_flags(reduct_atom_t
 {
     assert(atom != NULL);
 
-    reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
     reduct_atom_lookup_flags_t flags = REDUCT_ATOM_LOOKUP_NONE;
-    if (item->flags & REDUCT_ITEM_FLAG_QUOTED)
+    if (atom->flags & REDUCT_ATOM_FLAG_QUOTED)
     {
         flags |= REDUCT_ATOM_LOOKUP_QUOTED;
     }
@@ -531,12 +514,12 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         return;
     }
 
-    reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
-    if (item->flags & REDUCT_ITEM_FLAG_QUOTED)
+    if (atom->flags & REDUCT_ATOM_FLAG_QUOTED)
     {
         return;
     }
 
+    reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
     const char* p = atom->string;
     const char* end = p + atom->length;
     const char* start = p;
@@ -594,9 +577,9 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         }
     }
 
-    reduct_bool_t hasDigits = REDUCT_FALSE;
-    reduct_bool_t sectionHasDigits = REDUCT_FALSE;
-    reduct_bool_t valid = REDUCT_TRUE;
+    bool hasDigits = false;
+    bool sectionHasDigits = false;
+    bool valid = true;
 
     if (base != 10)
     {
@@ -607,7 +590,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
             {
                 if (!sectionHasDigits)
                 {
-                    valid = REDUCT_FALSE;
+                    valid = false;
                     break;
                 }
                 p++;
@@ -624,12 +607,12 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
             if (d >= 0 && d < base)
             {
                 intValue = intValue * base + d;
-                hasDigits = REDUCT_TRUE;
-                sectionHasDigits = REDUCT_TRUE;
+                hasDigits = true;
+                sectionHasDigits = true;
             }
             else
             {
-                valid = REDUCT_FALSE;
+                valid = false;
                 break;
             }
             p++;
@@ -653,20 +636,20 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         return;
     }
 
-    reduct_bool_t isFloat = REDUCT_FALSE;
+    bool isFloat = false;
     uint64_t intValue = 0;
     double floatValue = 0.0;
     double fractionDiv = 10.0;
-    reduct_bool_t inFraction = REDUCT_FALSE;
-    reduct_bool_t inExponent = REDUCT_FALSE;
+    bool inFraction = false;
+    bool inExponent = false;
     int64_t expSign = 1;
     int64_t expValue = 0;
     int64_t exponentDigits = 0;
 
     if (*p == '.')
     {
-        isFloat = REDUCT_TRUE;
-        inFraction = REDUCT_TRUE;
+        isFloat = true;
+        inFraction = true;
         p++;
     }
 
@@ -676,7 +659,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         {
             if (!sectionHasDigits)
             {
-                valid = REDUCT_FALSE;
+                valid = false;
                 break;
             }
             p++;
@@ -686,8 +669,8 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         unsigned char c = (unsigned char)*p;
         if (REDUCT_CHAR_IS_DIGIT(c))
         {
-            hasDigits = REDUCT_TRUE;
-            sectionHasDigits = REDUCT_TRUE;
+            hasDigits = true;
+            sectionHasDigits = true;
             if (inExponent)
             {
                 expValue = expValue * 10 + reductCharTable[c].integer;
@@ -708,23 +691,23 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         {
             if (*(p - 1) == '_')
             {
-                valid = REDUCT_FALSE;
+                valid = false;
                 break;
             }
-            isFloat = REDUCT_TRUE;
-            inFraction = REDUCT_TRUE;
-            sectionHasDigits = REDUCT_FALSE;
+            isFloat = true;
+            inFraction = true;
+            sectionHasDigits = false;
         }
         else if (REDUCT_CHAR_TO_LOWER(c) == 'e' && !inExponent && hasDigits)
         {
             if (*(p - 1) == '_')
             {
-                valid = REDUCT_FALSE;
+                valid = false;
                 break;
             }
-            isFloat = REDUCT_TRUE;
-            inExponent = REDUCT_TRUE;
-            sectionHasDigits = REDUCT_FALSE;
+            isFloat = true;
+            inExponent = true;
+            sectionHasDigits = false;
             p++;
             if (p < end && (*p == '+' || *p == '-'))
             {
@@ -738,7 +721,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         }
         else
         {
-            valid = REDUCT_FALSE;
+            valid = false;
             break;
         }
         p++;
@@ -746,7 +729,7 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
 
     if (inExponent && exponentDigits == 0)
     {
-        valid = REDUCT_FALSE;
+        valid = false;
     }
 
     if (valid && hasDigits && p == end && *(end - 1) != '_')
@@ -834,8 +817,7 @@ REDUCT_API void reduct_atom_check_native(reduct_t* reduct, reduct_atom_t* atom)
     }
 }
 
-REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_t* atom, size_t start,
-    size_t len)
+REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_t* atom, size_t start, size_t len)
 {
     assert(reduct != NULL);
     assert(atom != NULL);
@@ -890,7 +872,8 @@ REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_ato
     if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->stack != NULL)
     {
         reduct_atom_stack_t* stack = atom->stack;
-        if (stack->data + stack->count == atom->string + atom->length && stack->count + len - atom->length <= stack->capacity)
+        if (stack->data + stack->count == atom->string + atom->length &&
+            stack->count + len - atom->length <= stack->capacity)
         {
             stack->count += len - atom->length;
 
@@ -903,11 +886,11 @@ REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_ato
             superAtom->index = REDUCT_ATOM_INDEX_NONE;
             superAtom->flags = REDUCT_ATOM_FLAG_LARGE;
             superAtom->string = atom->string;
-            superAtom->stack = atom->stack;            
+            superAtom->stack = atom->stack;
             return superAtom;
         }
     }
-    
+
     reduct_atom_t* superAtom = reduct_atom_new(reduct, len);
     memcpy(superAtom->string, atom->string, atom->length);
     return superAtom;

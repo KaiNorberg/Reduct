@@ -6,10 +6,10 @@
 struct reduct;
 struct reduct_item;
 
-#include <stdlib.h>
-#include <setjmp.h>
 #include <assert.h>
+#include <setjmp.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /**
  * @file error.h
@@ -19,8 +19,8 @@ struct reduct_item;
  * @{
  */
 
-#define REDUCT_ERROR_MAX_LEN 512             ///< Maximum length of an error string.
-#define REDUCT_ERROR_BACKTRACE_MAX 16       ///< Maximum number of backtrace frames.
+#define REDUCT_ERROR_MAX_LEN 512      ///< Maximum length of an error string.
+#define REDUCT_ERROR_BACKTRACE_MAX 16 ///< Maximum number of backtrace frames.
 
 /**
  * @brief Error type enumeration.
@@ -43,8 +43,8 @@ typedef enum reduct_error_type
  */
 typedef struct reduct_error_frame
 {
-    reduct_input_id_t inputId;  ///< The input ID of the source file.
-    uint32_t position;   ///< The position in the input buffer.
+    reduct_input_id_t inputId; ///< The input ID of the source file.
+    uint32_t position;         ///< The position in the input buffer.
 } reduct_error_frame_t;
 
 /**
@@ -53,17 +53,17 @@ typedef struct reduct_error_frame
  */
 typedef struct
 {
-    const char* input;          ///< The input buffer.
+    const char* input;   ///< The input buffer.
     size_t inputLength;  ///< The total length of the input buffer.
-    const char* path;           ///< THe path to the file that caused the error.
+    const char* path;    ///< The path to the file that caused the error.
     size_t regionLength; ///< The length of the region that caused the error.
     size_t index;        ///< The index of the region in the input buffer that caused the error.
     jmp_buf jmp;
     reduct_error_type_t type; ///< The type of the error.
     char message[REDUCT_ERROR_MAX_LEN];
-    struct reduct* reduct;                                       ///< The owning Reduct structure.
-    reduct_error_frame_t frames[REDUCT_ERROR_BACKTRACE_MAX];     ///< Backtrace frames for the error.
-    uint8_t frameCount;                                   ///< The number of backtrace frames.
+    struct reduct* reduct;                                   ///< The owning Reduct structure.
+    reduct_error_frame_t frames[REDUCT_ERROR_BACKTRACE_MAX]; ///< Backtrace frames for the error.
+    uint8_t frameCount;                                      ///< The number of backtrace frames.
 } reduct_error_t;
 
 /**
@@ -117,8 +117,8 @@ REDUCT_API void reduct_error_set(reduct_error_t* error, const char* path, const 
  * @param regionLength Pointer to the region length variable.
  * @param position Pointer to the position variable.
  */
-REDUCT_API void reduct_error_get_item_params(struct reduct* reduct, struct reduct_item* item, const char** path, const char** input,
-    size_t* inputLength, size_t* regionLength, size_t* position);
+REDUCT_API void reduct_error_get_item_params(struct reduct* reduct, struct reduct_item* item, const char** path,
+    const char** input, size_t* inputLength, size_t* regionLength, size_t* position);
 
 /**
  * @brief Throw a runtime error utilizing the evaluation state to determine the context.
@@ -153,10 +153,11 @@ REDUCT_API REDUCT_NORETURN void reduct_error_throw_runtime(struct reduct* reduct
         size_t __input_length; \
         size_t __region_length; \
         size_t __position; \
-        reduct_error_get_item_params((_reduct), (_item), &__path, &__input, &__input_length, &__region_length, &__position); \
+        reduct_error_get_item_params((_reduct), (_item), &__path, &__input, &__input_length, &__region_length, \
+            &__position); \
         reduct_error_set((_error), __path, __input, __input_length, __region_length, __position, \
             REDUCT_ERROR_TYPE_##_type, __VA_ARGS__); \
-        longjmp((_error)->jmp, REDUCT_TRUE); \
+        longjmp((_error)->jmp, true); \
     } while (0)
 
 /**
@@ -172,22 +173,58 @@ REDUCT_API REDUCT_NORETURN void reduct_error_throw_runtime(struct reduct* reduct
     { \
         reduct_error_set((_error), (_input)->path, (_input)->buffer, (_input)->end - (_input)->buffer, 1, \
             (size_t)((_ptr) - (_input)->buffer), REDUCT_ERROR_TYPE_SYNTAX, __VA_ARGS__); \
-        longjmp((_error)->jmp, REDUCT_TRUE); \
+        longjmp((_error)->jmp, true); \
     } while (0)
 
 /**
  * @brief Throw a compile error using the jump buffer in the error structure.
  *
  * @param _compiler The compiler instance.
- * @param _item Pointer to the item that caused the error.
+ * @param _handle Pointer to the handle that caused the error.
  * @param ... The error message format string and any optional arguments.
  */
-#define REDUCT_ERROR_COMPILE(_compiler, _item, ...) \
-    REDUCT_ERROR_THROW((_compiler->reduct), (_compiler)->reduct->error, \
-        (((_item) != NULL && (_item)->inputId != REDUCT_INPUT_ID_NONE) \
-                ? (_item) \
-                : ((_compiler)->lastItem != NULL ? (_compiler)->lastItem : (_item))), \
-        COMPILE, __VA_ARGS__)
+#define REDUCT_ERROR_COMPILE(_compiler, _handle, ...) \
+    do \
+    { \
+        struct reduct_item* __item = REDUCT_HANDLE_TO_ITEM(_handle); \
+        REDUCT_ERROR_THROW((_compiler)->reduct, (_compiler)->reduct->error, \
+            (((__item) != NULL && (__item)->inputId != REDUCT_INPUT_ID_NONE) \
+                    ? (__item) \
+                    : ((_compiler)->lastItem != NULL ? (_compiler)->lastItem : (__item))), \
+            COMPILE, __VA_ARGS__); \
+    } while (0)
+
+/**
+ * @brief Throw a compile error using the jump buffer in the error structure using the last item process by the
+ * compiler.
+ *
+ * @param _compiler The compiler instance.
+ * @param ... The error message format string and any optional arguments.
+ */
+#define REDUCT_ERROR_COMPILE_LAST(_compiler, ...) \
+    do \
+    { \
+        reduct_handle_t __handle = REDUCT_HANDLE_FROM_ITEM((_compiler)->lastItem); \
+        REDUCT_ERROR_COMPILE((_compiler), &__handle, __VA_ARGS__); \
+    } while (0)
+
+/**
+ * @brief Throw a compile error if the expression is false.
+ *
+ * @param _compiler The compiler instance.
+ * @param _handle Pointer to the handle that caused the error.
+ * @param _expr The expression to check.
+ * @param ... The error message format string and any optional arguments.
+ */
+#define REDUCT_ERROR_COMPILE_ASSERT(_compiler, _expr, ...) \
+    do \
+    { \
+        if (REDUCT_UNLIKELY(!(_expr))) \
+        { \
+            reduct_handle_t __handle = REDUCT_HANDLE_FROM_ITEM((_compiler)->lastItem); \
+            REDUCT_ERROR_COMPILE((_compiler), &__handle, __VA_ARGS__); \
+        } \
+    } while (0)
 
 /**
  * @brief Throw a runtime error using the jump buffer in the error structure.
@@ -219,7 +256,7 @@ REDUCT_API REDUCT_NORETURN void reduct_error_throw_runtime(struct reduct* reduct
  * @param _reduct Pointer to the Reduct structure.
  * @param ... The error message format string and any optional arguments.
  */
-#define REDUCT_ERROR_INTERNAL(_reduct, ...) REDUCT_ERROR_THROW(reduct, (_reduct)->error, NULL, INTERNAL, __VA_ARGS__)
+#define REDUCT_ERROR_INTERNAL(_reduct, ...) REDUCT_ERROR_THROW(_reduct, (_reduct)->error, NULL, INTERNAL, __VA_ARGS__)
 
 /** @} */
 

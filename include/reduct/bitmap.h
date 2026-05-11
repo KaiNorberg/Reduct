@@ -30,7 +30,8 @@ typedef uint64_t reduct_bitmap_t; ///< A single word in a bitmap.
  * @param _bitmap The bitmap array.
  * @param _bit The bit index to set.
  */
-#define REDUCT_BITMAP_SET(_bitmap, _bit) ((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] |= (1ULL << ((_bit) % REDUCT_BITMAP_WIDTH)))
+#define REDUCT_BITMAP_SET(_bitmap, _bit) \
+    ((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] |= (1ULL << ((_bit) % REDUCT_BITMAP_WIDTH)))
 
 /**
  * @brief Clear a bit in a bitmap.
@@ -38,7 +39,8 @@ typedef uint64_t reduct_bitmap_t; ///< A single word in a bitmap.
  * @param _bitmap The bitmap array.
  * @param _bit The bit index to clear.
  */
-#define REDUCT_BITMAP_CLEAR(_bitmap, _bit) ((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] &= ~(1ULL << ((_bit) % REDUCT_BITMAP_WIDTH)))
+#define REDUCT_BITMAP_CLEAR(_bitmap, _bit) \
+    ((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] &= ~(1ULL << ((_bit) % REDUCT_BITMAP_WIDTH)))
 
 /**
  * @brief Check if a bit is set in a bitmap.
@@ -47,7 +49,8 @@ typedef uint64_t reduct_bitmap_t; ///< A single word in a bitmap.
  * @param _bit The bit index to check.
  * @return Non-zero if the bit is set, zero otherwise.
  */
-#define REDUCT_BITMAP_TEST(_bitmap, _bit) (((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] & (1ULL << ((_bit) % REDUCT_BITMAP_WIDTH))) != 0)
+#define REDUCT_BITMAP_TEST(_bitmap, _bit) \
+    (((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] & (1ULL << ((_bit) % REDUCT_BITMAP_WIDTH))) != 0)
 
 /**
  * @brief Find the first clear bit in a bitmap.

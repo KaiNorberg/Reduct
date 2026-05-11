@@ -8,6 +8,7 @@ struct reduct;
 struct reduct_compiler;
 struct reduct_item;
 struct reduct_expr;
+struct reduct_list;
 
 /**
  * @file intrinsic.h
@@ -37,7 +38,7 @@ REDUCT_API void reduct_intrinsic_register_all(struct reduct* reduct);
  * @param startIdx The index to start compiling from.
  * @param out The output expression.
  */
-REDUCT_API void reduct_intrinsic_block_generic(struct reduct_compiler* compiler, struct reduct_item* list,
+REDUCT_API void reduct_intrinsic_block_generic(struct reduct_compiler* compiler, struct reduct_list* list,
     uint32_t startIdx, struct reduct_expr* out);
 
 /**
@@ -48,6 +49,7 @@ REDUCT_API void reduct_intrinsic_block_generic(struct reduct_compiler* compiler,
  * @param startIdx The index to start compiling from.
  * @param out The output expression.
  */
-REDUCT_API void reduct_intrinsic_list_generic(struct reduct_compiler* compiler, struct reduct_item* list, uint32_t startIdx, struct reduct_expr* out);
+REDUCT_API void reduct_intrinsic_list_generic(struct reduct_compiler* compiler, struct reduct_list* list,
+    uint32_t startIdx, struct reduct_expr* out);
 
 #endif

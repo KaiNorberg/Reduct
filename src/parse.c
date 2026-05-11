@@ -1,3 +1,4 @@
+#include "reduct/parse.h"
 #include "reduct/atom.h"
 #include "reduct/char.h"
 #include "reduct/core.h"
@@ -5,7 +6,6 @@
 #include "reduct/gc.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
-#include "reduct/parse.h"
 
 typedef struct
 {
@@ -67,17 +67,18 @@ typedef enum
     REDUCT_PARSE_PRECEDENCE_MAX,
 } reduct_parse_precedence_t;
 
-static reduct_bool_t reduct_parse_compare_suffix(reduct_atom_t* atom, const char* suffix)
+static bool reduct_parse_compare_suffix(reduct_atom_t* atom, const char* suffix)
 {
     size_t suffixLen = strlen(suffix);
     if (atom->length < suffixLen)
     {
-        return REDUCT_FALSE;
+        return false;
     }
     return memcmp(atom->string + atom->length - suffixLen, suffix, suffixLen) == 0;
 }
 
-static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t* ctx, reduct_handle_t handle, reduct_bool_t unary)
+static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t* ctx, reduct_handle_t handle,
+    bool unary)
 {
     if (!REDUCT_HANDLE_IS_ITEM(&handle))
     {
@@ -195,7 +196,8 @@ static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t*
     }
 
     const char* ptr = ctx->input->buffer + REDUCT_CONTAINER_OF(atom, reduct_item_t, atom)->position;
-    REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ptr, "unexpected operator '%.*s'", (int)atom->length, atom->string);
+    REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ptr, "unexpected operator '%.*s'", (int)atom->length,
+        atom->string);
 }
 
 static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t* ctx, reduct_list_t* list, size_t* pos,
@@ -203,12 +205,12 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
 {
     if (*pos >= list->length)
     {
-        return reduct_handle_nil(ctx->reduct);
+        return REDUCT_HANDLE_NIL(ctx->reduct);
     }
 
     reduct_handle_t first = reduct_list_nth(ctx->reduct, list, *pos);
     reduct_handle_t left;
-    reduct_parse_precedence_t unaryPrecedence = reduct_parse_get_precedence(ctx, first, REDUCT_TRUE);
+    reduct_parse_precedence_t unaryPrecedence = reduct_parse_get_precedence(ctx, first, true);
 
     if (unaryPrecedence > REDUCT_PARSE_PRECEDENCE_NONE)
     {
@@ -228,7 +230,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
     while (*pos < list->length)
     {
         reduct_handle_t op = reduct_list_nth(ctx->reduct, list, *pos);
-        reduct_parse_precedence_t prec = reduct_parse_get_precedence(ctx, op, REDUCT_FALSE);
+        reduct_parse_precedence_t prec = reduct_parse_get_precedence(ctx, op, false);
         if (prec == REDUCT_PARSE_PRECEDENCE_NONE || prec < minPrecedence)
         {
             break;
@@ -238,8 +240,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
         if (*pos >= list->length)
         {
             reduct_item_t* opItem = REDUCT_HANDLE_TO_ITEM(&op);
-            REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input,
-                ctx->input->buffer + opItem->position,
+            REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->input->buffer + opItem->position,
                 "infix operator '%.*s' missing right operand", (int)opItem->atom.length, opItem->atom.string);
         }
 
@@ -350,10 +351,9 @@ static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t*
 
     reduct_item_t* getInListItem = REDUCT_CONTAINER_OF(*getInList, reduct_item_t, list);
 
-    if (*getInTarget == REDUCT_HANDLE_NONE)
+    if (REDUCT_HANDLE_IS_NONE(getInTarget))
     {
-        REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input,
-            ctx->input->buffer + getInListItem->position,
+        REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->input->buffer + getInListItem->position,
             "get-in: missing target");
     }
 
@@ -362,7 +362,7 @@ static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t*
     wrapperItem->inputId = getInListItem->inputId;
     wrapperItem->position = getInListItem->position;
 
-    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_SYMBOL(ctx->reduct, "get-in"));
+    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "get-in"));
     reduct_list_push(ctx->reduct, wrapper, *getInTarget);
     if ((*getInList)->length == 2)
     {
@@ -382,7 +382,7 @@ static void reduct_parse_dot_atom(reduct_parse_ctx_t* ctx, reduct_list_t** getIn
     reduct_atom_t* atom)
 {
     reduct_item_t* atomItem = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
-    reduct_bool_t isFirst = (*getInList == NULL);
+    bool isFirst = (*getInList == NULL);
 
     if (isFirst)
     {
@@ -397,8 +397,7 @@ static void reduct_parse_dot_atom(reduct_parse_ctx_t* ctx, reduct_list_t** getIn
 
     const char* dotStart = atom->string;
     const char* dotEnd;
-    while ((dotEnd = memchr(dotStart, '.', (size_t)(atom->string + atom->length - dotStart))) !=
-        NULL)
+    while ((dotEnd = memchr(dotStart, '.', (size_t)(atom->string + atom->length - dotStart))) != NULL)
     {
         size_t partLen = (size_t)(dotEnd - dotStart);
         if (partLen > 0)
@@ -412,7 +411,7 @@ static void reduct_parse_dot_atom(reduct_parse_ctx_t* ctx, reduct_list_t** getIn
             if (isFirst)
             {
                 *getInTarget = REDUCT_HANDLE_FROM_ATOM(part);
-                isFirst = REDUCT_FALSE;
+                isFirst = false;
             }
             else
             {
@@ -466,7 +465,8 @@ static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char exp
                 break;
             }
 
-            REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->ptr, "unexpected end of file, missing '%c'", expectedClose);
+            REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->ptr, "unexpected end of file, missing '%c'",
+                expectedClose);
         }
 
         if (*ctx->ptr == expectedClose)
@@ -543,7 +543,26 @@ REDUCT_API reduct_handle_t reduct_parse_input(reduct_t* reduct, reduct_input_t* 
     }
 
     reduct_list_t* list = reduct_parse_list(&ctx, '\0', 0);
-    return REDUCT_HANDLE_FROM_LIST(list);
+
+    if (list->length == 0)
+    {
+        return REDUCT_HANDLE_NIL(reduct);
+    }
+
+    if (list->length == 1)
+    {
+        return reduct_list_first(reduct, list);
+    }
+
+    reduct_list_t* wrapper = reduct_list_new(reduct);
+    reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
+    wrapperItem->inputId = input->id;
+    wrapperItem->position = 0;
+
+    reduct_list_push(reduct, wrapper, REDUCT_HANDLE_CREATE_SYMBOL(reduct, "do"));
+    reduct_list_push_list(reduct, wrapper, list);
+
+    return REDUCT_HANDLE_FROM_LIST(wrapper);
 }
 
 REDUCT_API reduct_handle_t reduct_parse(reduct_t* reduct, const char* str, size_t len, const char* path)

@@ -22,7 +22,6 @@ struct reduct_closure;
 #define REDUCT_EVAL_FRAMES_GROWTH_FACTOR 2 ///< The growth factor of the frames array.
 #define REDUCT_EVAL_FRAMES_MAX 65536       ///< The maximum size of the frames array.
 
-
 /**
  * @brief Evaluation frame structure.
  * @struct reduct_eval_frame_t
@@ -31,8 +30,8 @@ typedef struct reduct_eval_frame
 {
     struct reduct_closure* closure; ///< The closure being evaluated.
     reduct_inst_t* ip;              ///< The current instruction pointer.
-    uint32_t base;           ///< The base register, where the functions registers start.
-    uint32_t prevRegCount;   ///< The previous register count to restore upon return.
+    uint32_t base;                  ///< The base register, where the functions registers start.
+    uint32_t prevRegCount;          ///< The previous register count to restore upon return.
 } reduct_eval_frame_t;
 
 /**

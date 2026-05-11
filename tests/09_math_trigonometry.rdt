@@ -45,7 +45,10 @@
     
     (assert! (number? (sinh 0)) "sinh should return a number")
     (assert! (number? (cosh 0)) "cosh should return a number")
+    (assert! (number? (tanh 0)) "tanh should return a number")
     (assert! (number? (asinh 0)) "asinh should return a number")
+    (assert! (number? (acosh 1)) "acosh should return a number")
+    (assert! (number? (atanh 0)) "atanh should return a number")
 
     (assert! (number? (rand 1 10)) "rand should return a number")
     

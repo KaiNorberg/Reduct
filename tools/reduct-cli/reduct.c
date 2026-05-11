@@ -117,7 +117,7 @@ int main(int argc, char **argv)
         ast = reduct_parse_file(reduct, filename);
     }
 
-    if (ast == REDUCT_HANDLE_NONE)
+    if (REDUCT_HANDLE_IS_NONE(&ast))
     {
         fprintf(stderr, "error: nothing to evaluate\n");
         result = 1;

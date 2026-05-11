@@ -1,5 +1,5 @@
-#include "reduct/atom.h"
 #include "reduct/core.h"
+#include "reduct/atom.h"
 #include "reduct/eval.h"
 #include "reduct/gc.h"
 #include "reduct/item.h"
@@ -13,22 +13,6 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
     }
     reduct->error = error;
     error->reduct = reduct;
-
-    reduct->trueItem = REDUCT_CONTAINER_OF(reduct_atom_new_int(reduct, 1), reduct_item_t, atom);
-    reduct->falseItem = REDUCT_CONTAINER_OF(reduct_atom_new_int(reduct, 0), reduct_item_t, atom);
-    reduct->nilItem = REDUCT_CONTAINER_OF(reduct_list_new(reduct), reduct_item_t, list);
-    reduct->piItem = REDUCT_CONTAINER_OF(reduct_atom_new_float(reduct, REDUCT_PI), reduct_item_t, atom);
-    reduct->eItem = REDUCT_CONTAINER_OF(reduct_atom_new_float(reduct, REDUCT_E), reduct_item_t, atom);
-
-    reduct->falseItem->flags |= REDUCT_ITEM_FLAG_FALSY;
-    reduct->nilItem->flags |= REDUCT_ITEM_FLAG_FALSY;
-    reduct->trueItem->flags &= ~REDUCT_ITEM_FLAG_FALSY;
-
-    reduct_constant_register(reduct, "true", reduct->trueItem);
-    reduct_constant_register(reduct, "false", reduct->falseItem);
-    reduct_constant_register(reduct, "nil", reduct->nilItem);
-    reduct_constant_register(reduct, "pi", reduct->piItem);
-    reduct_constant_register(reduct, "e", reduct->eItem);
 
     reduct_intrinsic_register_all(reduct);
 
@@ -214,27 +198,8 @@ REDUCT_API void reduct_args_set(reduct_t* reduct, int argc, char** argv)
     reduct->argv = argv;
 }
 
-REDUCT_API void reduct_constant_register(reduct_t* reduct, const char* name, reduct_item_t* item)
-{
-    assert(reduct != NULL);
-    assert(name != NULL);
-    assert(item != NULL);
-
-    if (reduct->constantCount >= REDUCT_CONSTANTS_MAX)
-    {
-        REDUCT_ERROR_INTERNAL(reduct, "too many constants, limit is %u", REDUCT_CONSTANTS_MAX);
-    }
-
-    size_t len = strlen(name);
-    reduct_atom_t* atom = reduct_atom_lookup(reduct, name, len, REDUCT_ATOM_LOOKUP_NONE);
-
-    reduct->constants[reduct->constantCount].name = atom;
-    reduct->constants[reduct->constantCount].item = item;
-    reduct->constantCount++;
-}
-
-REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer, size_t length,
-    const char* path, reduct_input_flags_t flags)
+REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer, size_t length, const char* path,
+    reduct_input_flags_t flags)
 {
     assert(reduct != NULL);
     assert(buffer != NULL);

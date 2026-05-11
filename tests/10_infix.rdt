@@ -7,4 +7,6 @@
     (assert! (== {1 abc+ 2 abc* 3} 7) "infix notation should support custom functions and respect precedence")
     (assert! (== {10 / 2 + 5} 10) "infix notation should handle division and addition")
     (assert! {2 + 3 * 4 == 14} "infix notation should handle comparison operators with lower precedence")
+    (assert! {1 + 2 == 3 and 4 * 5 == 20} "infix notation should handle logical 'and' with lower precedence than comparison")
+    (assert! {false or 1 + 1 == 2} "infix notation should handle logical 'or' as the lowest precedence")
 )

@@ -128,7 +128,7 @@ static inline REDUCT_ALWAYS_INLINE uint32_t reduct_eval_bundle_args(reduct_t* re
             "expected at least %u arguments, got %u", arity - 1, argc);
 
         uint32_t fixed = arity - 1;
-        argv[fixed] = REDUCT_HANDLE_HANDLES(reduct, argc - fixed, &argv[fixed]);
+        argv[fixed] = REDUCT_HANDLE_CREATE_HANDLES(reduct, argc - fixed, &argv[fixed]);
         return arity;
     }
     REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == arity, NULL, "expected %u arguments, got %u", arity, argc);
@@ -229,17 +229,10 @@ LABEL_C_OP(_label, { \
     } \
     else \
     { \
-        amount = reduct_get_int(reduct, &valC); \
+        amount = reduct_handle_as_int(reduct, &valC); \
     } \
     REDUCT_ERROR_RUNTIME_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_INT_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, amount); \
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&base[b]))) \
-    { \
-        base[a] = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(&base[b]) _op amount); \
-    } \
-    else \
-    { \
-        base[a] = REDUCT_HANDLE_FROM_INT(reduct_get_int(reduct, &base[b]) _op amount); \
-    } \
+    base[a] = REDUCT_HANDLE_FROM_INT(reduct_handle_as_int(reduct, &base[b]) _op amount); \
     DISPATCH(); \
 })
 
@@ -295,7 +288,7 @@ label_list:
 {
     DECODE_A();
     DECODE_B();
-    base[a] = REDUCT_HANDLE_HANDLES(reduct, b, &base[a]);
+    base[a] = REDUCT_HANDLE_CREATE_HANDLES(reduct, b, &base[a]);
     DISPATCH();
 }
 label_jmp:
@@ -309,8 +302,7 @@ label_jmpf:
     DECODE_A();
     DECODE_SBX();
     reduct_handle_t val = base[a];
-    if (REDUCT_LIKELY(val == REDUCT_HANDLE_FALSE()) ||
-        REDUCT_UNLIKELY(val != REDUCT_HANDLE_TRUE() && !REDUCT_HANDLE_IS_TRUTHY(&val)))
+    if (!REDUCT_HANDLE_IS_TRUTHY(&val))
     {
         ip += sbx;
     }
@@ -321,8 +313,7 @@ label_jmpt:
     DECODE_A();
     DECODE_SBX();
     reduct_handle_t val = base[a];
-    if (REDUCT_LIKELY(val == REDUCT_HANDLE_TRUE()) ||
-        REDUCT_UNLIKELY(val != REDUCT_HANDLE_FALSE() && REDUCT_HANDLE_IS_TRUTHY(&val)))
+    if (REDUCT_HANDLE_IS_TRUTHY(&val))
     {
         ip += sbx;
     }
@@ -419,8 +410,8 @@ LABEL_C_OP(label_ret, {
 })
 OP_COMPARE(label_eq, ==)
 OP_COMPARE(label_neq, !=)
-OP_EQUALITY(label_seq, reduct_handle_is_equal, REDUCT_TRUE)
-OP_EQUALITY(label_sneq, reduct_handle_is_equal, REDUCT_FALSE)
+OP_EQUALITY(label_seq, reduct_handle_is_equal, true)
+OP_EQUALITY(label_sneq, reduct_handle_is_equal, false)
 OP_COMPARE(label_lt, <)
 OP_COMPARE(label_le, <=)
 OP_COMPARE(label_gt, >)
@@ -452,7 +443,7 @@ LABEL_C_OP(label_bnot, {
     }
     else
     {
-        val = reduct_get_int(reduct, &valC);
+        val = reduct_handle_as_int(reduct, &valC);
     }
     base[a] = REDUCT_HANDLE_FROM_INT(~val);
     DISPATCH();
@@ -548,7 +539,7 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
 
         if (REDUCT_UNLIKELY(target + needed > reduct->regCapacity))
         {
-            reduct_bool_t argvInRegs = (argv >= reduct->regs && argv < reduct->regs + reduct->regCapacity);
+            bool argvInRegs = (argv != NULL && argv >= reduct->regs && argv < reduct->regs + reduct->regCapacity);
             uint32_t argvOffset = argvInRegs ? (uint32_t)(argv - reduct->regs) : 0;
             reduct_eval_ensure_regs(reduct, target + needed);
 
@@ -558,7 +549,10 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
             }
         }
 
-        memcpy(reduct->regs + target, argv, argc * sizeof(reduct_handle_t));
+        if (argc > 0)
+        {
+            memcpy(reduct->regs + target, argv, argc * sizeof(reduct_handle_t));
+        }
         reduct_eval_bundle_args(reduct, func, (uint32_t)argc, &reduct->regs[target]);
 
         uint32_t initialFrameCount = reduct->frameCount;

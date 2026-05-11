@@ -1,10 +1,13 @@
 #ifndef REDUCT_LIST_H
 #define REDUCT_LIST_H 1
 
+#include "reduct/defs.h"
+
+#include <stdbool.h>
+#include <stddef.h>
+
 struct reduct;
 struct reduct_item;
-
-#include "reduct/defs.h"
 
 /**
  * @file list.h
@@ -46,8 +49,8 @@ typedef struct reduct_list_node
  */
 typedef struct reduct_list
 {
-    uint32_t length;   ///< Total number of elements.
-    uint32_t shift;    ///< The amount to shift the index to compute access paths.
+    uint32_t length;          ///< Total number of elements.
+    uint32_t shift;           ///< The amount to shift the index to compute access paths.
     reduct_list_node_t* root; ///< Pointer to the trie root node.
     reduct_list_node_t tail;  ///< The tail node, stored inline.
 } reduct_list_t;
@@ -111,8 +114,7 @@ REDUCT_API reduct_list_t* reduct_list_dissoc(struct reduct* reduct, reduct_list_
  * @param end The ending index (exclusive).
  * @return A pointer to the newly created list slice.
  */
-REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t* list, size_t start,
-    size_t end);
+REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t* list, size_t start, size_t end);
 
 /**
  * @brief Create a new list by appending an element to an existing list.
@@ -184,8 +186,8 @@ REDUCT_API reduct_list_t* reduct_list_new_from_handles(struct reduct* reduct, si
 
 /**
  * @brief Find the leaf node containing the element at the specified index.
- * 
- * @param list Pointer to the list. 
+ *
+ * @param list Pointer to the list.
  * @param index The index of the element.
  * @param tailOffset The pre-calculated offset of the tail node.
  * @return A pointer to the leaf node.
@@ -206,7 +208,7 @@ typedef struct reduct_list_iter
 
 /**
  * @brief Calculate the offset of the tail node.
- * 
+ *
  * @param _list Pointer to the list.
  */
 #define REDUCT_LIST_TAIL_OFFSET(_list) (((_list)->length > 0) ? (((_list)->length - 1) & ~REDUCT_LIST_MASK) : 0)
@@ -231,9 +233,9 @@ typedef struct reduct_list_iter
  *
  * @param iter Pointer to the iterator.
  * @param out Pointer to store the retrieved handle.
- * @return `REDUCT_TRUE` if an element was retrieved, `REDUCT_FALSE` if the end was reached.
+ * @return `true` if an element was retrieved, `false` if the end was reached.
  */
-static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out)
+static inline REDUCT_ALWAYS_INLINE bool reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out)
 {
     if (iter->leaf != NULL)
     {
@@ -242,7 +244,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_list_iter_next(reduct_li
 
     if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
     {
-        return REDUCT_FALSE;
+        return false;
     }
 
     if ((iter->index & REDUCT_LIST_MASK) == 0 || iter->leaf == NULL)
@@ -251,7 +253,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_bool_t reduct_list_iter_next(reduct_li
     }
 
     *out = iter->leaf->handles[iter->index & REDUCT_LIST_MASK];
-    return REDUCT_TRUE;
+    return true;
 }
 
 /**
@@ -309,11 +311,23 @@ static inline REDUCT_ALWAYS_INLINE reduct_handle_t reduct_list_second(struct red
  * @brief Find an entry in a association list by its key.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param listItem Pointer to the list item.
+ * @param list Pointer to the list.
  * @param key Pointer to the key handle.
  * @return The handle of the entry list, or `REDUCT_HANDLE_NONE` if not found.
  */
-REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, struct reduct_item* listItem, reduct_handle_t* key);
+REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, reduct_list_t* list, reduct_handle_t* key);
+
+/**
+ * @brief Find the index of an entry in an association list by its key.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param list Pointer to the list.
+ * @param key Pointer to the key handle.
+ * @param outIndex Pointer to store the index of the entry if found.
+ * @return `true` if the entry was found, `false` otherwise.
+ */
+REDUCT_API bool reduct_list_find_entry_index(struct reduct* reduct, reduct_list_t* list, reduct_handle_t* key,
+    size_t* outIndex);
 
 /**
  * @brief Get the key and value from an entry in a association list.
@@ -322,9 +336,11 @@ REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, struct 
  * @param entryH Pointer to the entry handle, must be a list.
  * @param outKey Pointer to store the key handle, can be `NULL`.
  * @param outVal Pointer to store the value handle, can be `NULL`.
- * @return `REDUCT_TRUE` if the entry is valid and handles were retrieved, `REDUCT_FALSE` otherwise.
+ * @return `true` if the entry is valid and handles were retrieved, `false` otherwise.
  */
-REDUCT_API reduct_bool_t reduct_list_get_entry(struct reduct* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,
+REDUCT_API bool reduct_list_get_entry(struct reduct* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,
     reduct_handle_t* outVal);
+
+/** @} */
 
 #endif

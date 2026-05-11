@@ -1,13 +1,13 @@
-#include "reduct/reduct.h"
 #include "reduct/error.h"
 #include "reduct/eval.h"
 #include "reduct/item.h"
+#include "reduct/reduct.h"
 
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <setjmp.h>
 
 static inline const char* reduct_error_type_str(reduct_error_type_t type)
 {
@@ -36,7 +36,7 @@ static inline size_t reduct_error_get_region_length(const char* ptr, const char*
     if (*ptr == '(')
     {
         size_t depth = 0;
-        reduct_bool_t inString = REDUCT_FALSE;
+        bool inString = false;
         const char* current = ptr;
         while (current < end)
         {
@@ -100,8 +100,7 @@ static inline size_t reduct_error_get_region_length(const char* ptr, const char*
     }
 }
 
-static inline void reduct_error_get_row_column_raw(const char* input, size_t position, size_t* row,
-    size_t* column)
+static inline void reduct_error_get_row_column_raw(const char* input, size_t position, size_t* row, size_t* column)
 {
     *row = 1;
     *column = 1;
@@ -125,8 +124,8 @@ static inline void reduct_error_get_row_column_raw(const char* input, size_t pos
     }
 }
 
-static inline void reduct_error_print_source_line(FILE* file, const char* input, size_t inputLength,
-    size_t row, size_t column, size_t regionLength, size_t index)
+static inline void reduct_error_print_source_line(FILE* file, const char* input, size_t inputLength, size_t row,
+    size_t column, size_t regionLength, size_t index)
 {
     const char* lineStart = input + index;
     while (lineStart > input && *(lineStart - 1) != '\n')
@@ -162,8 +161,8 @@ static inline void reduct_error_print_source_line(FILE* file, const char* input,
     fwrite("\n", 1, 1, file);
 }
 
-static inline void reduct_error_print_context(FILE* file, const char* input, size_t inputLength,
-    size_t row, size_t column, size_t regionLength, size_t index)
+static inline void reduct_error_print_context(FILE* file, const char* input, size_t inputLength, size_t row,
+    size_t column, size_t regionLength, size_t index)
 {
     if (row > 1)
     {
@@ -320,8 +319,8 @@ REDUCT_API void reduct_error_set(reduct_error_t* error, const char* path, const 
     }
 }
 
-REDUCT_API void reduct_error_get_item_params(reduct_t* reduct, reduct_item_t* item, const char** path, const char** input,
-    size_t* inputLength, size_t* regionLength, size_t* position)
+REDUCT_API void reduct_error_get_item_params(reduct_t* reduct, reduct_item_t* item, const char** path,
+    const char** input, size_t* inputLength, size_t* regionLength, size_t* position)
 {
     if (item != NULL && item->inputId != REDUCT_INPUT_ID_NONE)
     {
@@ -409,11 +408,9 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
 
             reduct_function_t* btFunc = btFrame->closure->function;
             reduct_item_t* btFuncItem = REDUCT_CONTAINER_OF(btFunc, reduct_item_t, function);
-            size_t btInstIndex =
-                btFrame->ip > btFunc->insts ? (size_t)(btFrame->ip - btFunc->insts - 1) : 0;
-            uint32_t btPos = (btInstIndex < btFunc->instCount && btFunc->positions != NULL)
-                ? btFunc->positions[btInstIndex]
-                : 0;
+            size_t btInstIndex = btFrame->ip > btFunc->insts ? (size_t)(btFrame->ip - btFunc->insts - 1) : 0;
+            uint32_t btPos =
+                (btInstIndex < btFunc->instCount && btFunc->positions != NULL) ? btFunc->positions[btInstIndex] : 0;
 
             reduct->error->frames[reduct->error->frameCount].inputId = btFuncItem->inputId;
             reduct->error->frames[reduct->error->frameCount].position = btPos;
@@ -421,5 +418,5 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
         }
     }
 
-    longjmp(reduct->error->jmp, REDUCT_TRUE);
+    longjmp(reduct->error->jmp, true);
 }

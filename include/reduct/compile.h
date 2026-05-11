@@ -1,6 +1,7 @@
 #ifndef REDUCT_COMPILE_H
 #define REDUCT_COMPILE_H 1
 
+#include "reduct/bitmap.h"
 #include "reduct/core.h"
 #include "reduct/defs.h"
 #include "reduct/function.h"
@@ -8,7 +9,6 @@
 #include "reduct/inst.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
-#include "reduct/bitmap.h"
 
 /**
  * @file compile.h
@@ -29,7 +29,7 @@ typedef struct reduct_expr
 {
     reduct_mode_t mode; ///< Expression mode.
     union {
-        uint16_t value;   ///< Raw union value
+        uint16_t value;          ///< Raw union value
         reduct_reg_t reg;        ///< Register index
         reduct_const_t constant; ///< Constant index
     };
@@ -51,13 +51,13 @@ typedef struct reduct_local
  */
 typedef struct reduct_compiler
 {
-    struct reduct_compiler* enclosing;                  ///< The enclosing compiler context, or `NULL`.
-    reduct_t* reduct;                                   ///< Pointer to the Reduct structure.
-    reduct_function_t* function;                        ///< The function being compiled.
-    uint16_t localCount;                         ///< The amount of local variables.
+    struct reduct_compiler* enclosing;                                 ///< The enclosing compiler context, or `NULL`.
+    reduct_t* reduct;                                                  ///< Pointer to the Reduct structure.
+    reduct_function_t* function;                                       ///< The function being compiled.
+    uint16_t localCount;                                               ///< The amount of local variables.
     reduct_bitmap_t regAlloc[REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX)]; ///< Bitmask of allocated registers.
     reduct_bitmap_t regLocal[REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX)]; ///< Bitmask of registers used by locals.
-    reduct_local_t locals[REDUCT_REGISTER_MAX];         ///< The local variables.
+    reduct_local_t locals[REDUCT_REGISTER_MAX];                        ///< The local variables.
     reduct_item_t* lastItem; ///< The last item processed by the compiler, used for error reporting.
 } reduct_compiler_t;
 
@@ -205,9 +205,19 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @param _compiler The compiler context.
  * @param _item The item to look up.
  */
-#define REDUCT_EXPR_CONST_ITEM(_compiler, _item) \
+#define REDUCT_EXPR_ITEM(_compiler, _item) \
     REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
-        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_ITEM, .item = (_item)}))
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_FROM_ITEM(_item)}))
+
+/**
+ * @brief Create a `REDUCT_MODE_CONST` mode expression for a specific handle.
+ *
+ * @param _compiler The compiler context.
+ * @param _handle The handle to look up.
+ */
+#define REDUCT_EXPR_HANDLE(_compiler, _handle) \
+    REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = *(_handle)}))
 
 /**
  * @brief Create a `REDUCT_MODE_CONST` mode expression for a specific atom.
@@ -215,10 +225,9 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @param _compiler The compiler context.
  * @param _atom The atom to look up.
  */
-#define REDUCT_EXPR_CONST_ATOM(_compiler, _atom) \
+#define REDUCT_EXPR_ATOM(_compiler, _atom) \
     REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
-        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_ITEM, \
-            .item = REDUCT_CONTAINER_OF(_atom, reduct_item_t, atom)}))
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_FROM_ATOM(_atom)}))
 
 /**
  * @brief Create a `REDUCT_MODE_TARGET` mode expression.
@@ -234,7 +243,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  */
 #define REDUCT_EXPR_TRUE(_compiler) \
     REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
-        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_ITEM, .item = (_compiler)->reduct->trueItem}))
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_TRUE()}))
 
 /**
  * @brief Create a `REDUCT_MODE_CONST` mode expression for the false constant.
@@ -243,7 +252,25 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  */
 #define REDUCT_EXPR_FALSE(_compiler) \
     REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
-        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_ITEM, .item = (_compiler)->reduct->falseItem}))
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_FALSE()}))
+
+/**
+ * @brief Create a `REDUCT_MODE_CONST` mode expression for the PI constant.
+ *
+ * @param _compiler The compiler context.
+ */
+#define REDUCT_EXPR_PI(_compiler) \
+    REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_PI()}))
+
+/**
+ * @brief Create a `REDUCT_MODE_CONST` mode expression for the E constant.
+ *
+ * @param _compiler The compiler context.
+ */
+#define REDUCT_EXPR_E(_compiler) \
+    REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_E()}))
 
 /**
  * @brief Create a `REDUCT_MODE_CONST` mode expression for the nil constant.
@@ -252,7 +279,8 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  */
 #define REDUCT_EXPR_NIL(_compiler) \
     REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
-        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_ITEM, .item = (_compiler)->reduct->nilItem}))
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, \
+            .handle = REDUCT_HANDLE_NIL((_compiler)->reduct)}))
 
 /**
  * @brief Create a `REDUCT_MODE_CONST` mode expression for an integer.
@@ -260,8 +288,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @param _compiler The compiler context.
  * @param _val The integer value.
  */
-#define REDUCT_EXPR_INT(_compiler, _val) \
-    REDUCT_EXPR_CONST_ATOM(_compiler, reduct_atom_new_int((_compiler)->reduct, (_val)))
+#define REDUCT_EXPR_INT(_compiler, _val) REDUCT_EXPR_ATOM(_compiler, reduct_atom_new_int((_compiler)->reduct, (_val)))
 
 /**
  * @brief Get the target register index from an expression, or -1 if no target is specified.
@@ -276,16 +303,16 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @param _val The float value.
  */
 #define REDUCT_EXPR_FLOAT(_compiler, _val) \
-    REDUCT_EXPR_CONST_ATOM(_compiler, reduct_atom_new_float((_compiler)->reduct, (_val)))
+    REDUCT_EXPR_ATOM(_compiler, reduct_atom_new_float((_compiler)->reduct, (_val)))
 
 /**
- * @brief Compiles a single Reduct item into an expression descriptor.
+ * @brief Compiles a single Reduct handle into an expression descriptor.
  *
  * @param compiler The compiler context.
- * @param item The item to compile.
- * @param Output pointer for the compiled expression.
+ * @param handle The handle to compile.
+ * @param out Output pointer for the compiled expression.
  */
-REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_item_t* item, reduct_expr_t* out);
+REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_handle_t* handle, reduct_expr_t* out);
 
 /**
  * @brief Free resources associated with an expression descriptor.
@@ -328,7 +355,7 @@ static inline reduct_reg_t reduct_expr_get_reg(reduct_compiler_t* compiler, redu
  */
 static inline reduct_reg_t reduct_reg_get_base(reduct_compiler_t* compiler)
 {
-    for (int32_t i = REDUCT_REGISTER_MAX - 1; i >= 0; i--)
+    for (reduct_reg_t i = REDUCT_REGISTER_MAX; i-- > 0;)
     {
         if (REDUCT_REG_IS_ALLOCATED(compiler, i))
         {
@@ -455,7 +482,8 @@ static inline void reduct_compile_move(reduct_compiler_t* compiler, reduct_reg_t
     assert(expr->mode != REDUCT_MODE_REG || expr->reg < REDUCT_REGISTER_MAX);
 
     reduct_compile_inst(compiler,
-        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_MOV | (reduct_opcode_t)expr->mode), target, 0, expr->value));
+        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_MOV | (reduct_opcode_t)expr->mode), target, 0,
+            expr->value));
 }
 
 /**
@@ -494,8 +522,7 @@ static inline void reduct_compile_jump_patch(reduct_compiler_t* compiler, size_t
  * @param jumps Array of jump instruction indices.
  * @param count Number of jumps in the array.
  */
-static inline void reduct_compile_jump_patch_list(reduct_compiler_t* compiler, size_t* jumps,
-    size_t count)
+static inline void reduct_compile_jump_patch_list(reduct_compiler_t* compiler, size_t* jumps, size_t count)
 {
     for (size_t i = 0; i < count; i++)
     {
@@ -515,6 +542,7 @@ static inline reduct_reg_t reduct_compile_move_or_alloc(reduct_compiler_t* compi
     assert(compiler != NULL);
     assert(expr != NULL);
     assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+
     if (expr->mode == REDUCT_MODE_REG)
     {
         return expr->reg;
@@ -552,11 +580,11 @@ static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_exp
                 continue;
             }
 
-            reduct_bool_t isTail = REDUCT_FALSE;
+            bool isTail = false;
 
             size_t curr = i + 1;
             reduct_reg_t currentReg = REDUCT_INST_GET_A(inst);
-            reduct_bool_t valid = REDUCT_TRUE;
+            bool valid = true;
 
             while (curr < retInstPos)
             {
@@ -575,21 +603,21 @@ static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_exp
                     int32_t offset = REDUCT_INST_GET_SBX(nextInst);
                     if (offset < 0)
                     {
-                        valid = REDUCT_FALSE;
+                        valid = false;
                         break;
                     }
                     curr = curr + 1 + offset;
                 }
                 else
                 {
-                    valid = REDUCT_FALSE;
+                    valid = false;
                     break;
                 }
             }
 
             if (valid && currentReg == retReg && curr == retInstPos)
             {
-                isTail = REDUCT_TRUE;
+                isTail = true;
             }
 
             if (isTail)
@@ -662,7 +690,10 @@ static inline void reduct_compile_capture(reduct_compiler_t* compiler, reduct_re
     assert(expr != NULL);
     assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
     reduct_compile_inst(compiler,
-        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_CAPTURE | (reduct_opcode_t)expr->mode), closureReg, slot, expr->value));
+        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_CAPTURE | (reduct_opcode_t)expr->mode), closureReg, slot,
+            expr->value));
 }
+
+/** @} */
 
 #endif

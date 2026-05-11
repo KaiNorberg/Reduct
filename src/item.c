@@ -1,10 +1,10 @@
+#include "reduct/item.h"
 #include "reduct/atom.h"
-#include "reduct/defs.h"
 #include "reduct/closure.h"
 #include "reduct/core.h"
+#include "reduct/defs.h"
 #include "reduct/function.h"
 #include "reduct/gc.h"
-#include "reduct/item.h"
 
 static inline void reduct_item_init(reduct_item_t* item)
 {
@@ -58,7 +58,6 @@ REDUCT_API reduct_item_t* reduct_item_new(reduct_t* reduct)
     return item;
 }
 
-
 REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
 {
     switch (item->type)
@@ -82,7 +81,7 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         break;
     }
     case REDUCT_ITEM_TYPE_ATOM_STACK:
-    {   
+    {
         reduct_atom_stack_t* stack = &item->atomStack;
         if (stack->next != NULL)
         {

@@ -1,5 +1,7 @@
-#include "reduct/item.h"
 #include "reduct/stringify.h"
+#include "reduct/handle.h"
+#include "reduct/item.h"
+#include "reduct/list.h"
 
 REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, char* buffer, size_t size)
 {
@@ -11,7 +13,7 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, ch
         return snprintf(buffer, size, "<null>");
     }
 
-    if (*handle == REDUCT_HANDLE_NONE)
+    if (REDUCT_HANDLE_IS_NONE(handle))
     {
         return snprintf(buffer, size, "<none>");
     }
@@ -36,7 +38,7 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, ch
     case REDUCT_ITEM_TYPE_ATOM:
     {
         reduct_atom_t* atom = &item->atom;
-        if (!(item->flags & REDUCT_ITEM_FLAG_QUOTED))
+        if (!(atom->flags & REDUCT_ATOM_FLAG_QUOTED))
         {
             if (reduct_atom_is_int(atom))
             {
@@ -50,7 +52,9 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, ch
             {
                 const char* anonymous = "anonymous";
 
-                return snprintf(buffer, size, "<native: %.*s>", atom->length != 0 ? (int)atom->length : (int)strlen(anonymous), atom->length != 0 ? atom->string : anonymous);
+                return snprintf(buffer, size, "<native: %.*s>",
+                    atom->length != 0 ? (int)atom->length : (int)strlen(anonymous),
+                    atom->length != 0 ? atom->string : anonymous);
             }
 
             return snprintf(buffer, size, "%.*s", (int)atom->length, atom->string);
@@ -73,14 +77,12 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, ch
 
             if (_iter.index + 1 < item->length)
             {
-                res = snprintf(size > written ? buffer + written : NULL,
-                    size > written ? size - written : 0, " ");
+                res = snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, " ");
                 written += res;
             }
         }
 
-        res =
-            snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, ")");
+        res = snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, ")");
         written += res;
 
         return written;

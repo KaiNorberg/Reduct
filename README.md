@@ -484,8 +484,8 @@ reduct_handle_t my_native(reduct_t* reduct, reduct_size_t argc, reduct_handle_t*
 
 reduct_handle_t reduct_module_init(reduct_t* reduct)
 {
-    return REDUCT_HANDLE_ALIST(reduct, 1,
-        "my-native", REDUCT_HANDLE_NATIVE(reduct, my_native)
+    return REDUCT_HANDLE_CREATE_ALIST(reduct, 1,
+        "my-native", REDUCT_HANDLE_CREATE_NATIVE(reduct, my_native)
     );
 }
 ```
@@ -564,7 +564,7 @@ To register a native function, use the `reduct_native_register` function:
 reduct_handle_t my_native(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
 {
     // ...
-    return reduct_handle_nil(reduct);
+    return REDUCT_HANDLE_NIL(reduct);
 }
 
 // ...

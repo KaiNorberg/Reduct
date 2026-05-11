@@ -1,8 +1,8 @@
 #ifndef REDUCT_FUNCTION_H
 #define REDUCT_FUNCTION_H 1
 
-#include "reduct/inst.h"
 #include "reduct/defs.h"
+#include "reduct/inst.h"
 
 struct reduct;
 struct reduct_item;
@@ -33,9 +33,9 @@ struct reduct_atom;
  */
 typedef enum
 {
-    REDUCT_CONST_SLOT_NONE,    ///< No constant slot.
-    REDUCT_CONST_SLOT_ITEM,    ///< A constant slot containing an item.
-    REDUCT_CONST_SLOT_CAPTURE, ///< A constant slot containing a variable name to be captured.
+    REDUCT_CONST_SLOT_TYPE_NONE,    ///< No constant slot.
+    REDUCT_CONST_SLOT_TYPE_HANDLE,  ///< A constant slot containing an item.
+    REDUCT_CONST_SLOT_TYPE_CAPTURE, ///< A constant slot containing a variable name to be captured.
 } reduct_const_slot_type_t;
 
 /**
@@ -47,17 +47,39 @@ typedef struct reduct_const_slot
     reduct_const_slot_type_t type; ///< The type of the constant slot.
     union {
         uint64_t raw;
-        struct reduct_item* item;    ///< The item contained in the constant slot.
+        reduct_handle_t handle;      ///< The handle contained in the constant slot.
         struct reduct_atom* capture; ///< The name of the variable to be captured.
     };
 } reduct_const_slot_t;
 
 /**
+ * @brief Create a constant slot containing a handle.
+ *
+ * @param _handle The handle to be stored in the constant slot.
+ */
+#define REDUCT_CONST_SLOT_HANDLE(_handle) \
+    ((reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = (_handle)})
+
+/**
  * @brief Create a constant slot containing an item.
  *
- * @param _item The item to wrap in a slot.
+ * @param _item The item to be stored in the constant slot.
  */
-#define REDUCT_CONST_SLOT_ITEM(_item) ((reduct_const_slot_t){.type = REDUCT_CONST_SLOT_ITEM, .item = (_item)})
+#define REDUCT_CONST_SLOT_ITEM(_item) REDUCT_CONST_SLOT_HANDLE(REDUCT_HANDLE_FROM_ITEM(_item))
+
+/**
+ * @brief Create a constant slot containing an atom.
+ *
+ * @param _atom The atom to be stored in the constant slot.
+ */
+#define REDUCT_CONST_SLOT_ATOM(_atom) REDUCT_CONST_SLOT_HANDLE(REDUCT_HANDLE_FROM_ATOM(_atom))
+
+/**
+ * @brief Create a constant slot containing a function.
+ *
+ * @param _func The function to be stored in the constant slot.
+ */
+#define REDUCT_CONST_SLOT_FUNCTION(_func) REDUCT_CONST_SLOT_HANDLE(REDUCT_HANDLE_FROM_FUNCTION(_func))
 
 /**
  * @brief Create a constant slot containing a variable name to be captured.
@@ -65,7 +87,7 @@ typedef struct reduct_const_slot
  * @param _capture The name of the variable to be captured.
  */
 #define REDUCT_CONST_SLOT_CAPTURE(_capture) \
-    ((reduct_const_slot_t){.type = REDUCT_CONST_SLOT_CAPTURE, .capture = (_capture)})
+    ((reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_CAPTURE, .capture = (_capture)})
 
 /**
  * @brief Constant index type.
@@ -77,7 +99,7 @@ typedef uint16_t reduct_const_t;
  * @brief Function flags.
  * @typedef reduct_function_flags_t
  */
-typedef enum reduct_function_flags 
+typedef enum reduct_function_flags
 {
     REDUCT_FUNCTION_FLAG_NONE = 0,
     REDUCT_FUNCTION_FLAG_VARIADIC = 1 << 0, ///< Function accepts variadic arguments.
@@ -89,16 +111,16 @@ typedef enum reduct_function_flags
  */
 typedef struct reduct_function
 {
-    uint32_t instCount;        ///< Number of instructions.
-    uint32_t instCapacity;     ///< Capacity of the instruction array.
-    reduct_inst_t* insts;             ///< An array of instructions.
-    uint32_t* positions;       ///< An array of source positions parallel to the instructions.
-    reduct_const_slot_t* constants;   ///< The array of constant slots forming the constant template.
-    uint16_t constantCount;    ///< Number of constants.
-    uint16_t constantCapacity; ///< Capacity of the constant array.
-    uint16_t registerCount;    ///< The number of registers the function uses.
-    uint8_t arity;             ///< The number of arguments the function expects.
-    reduct_function_flags_t flags;    ///< The function flags.
+    uint32_t instCount;             ///< Number of instructions.
+    uint32_t instCapacity;          ///< Capacity of the instruction array.
+    reduct_inst_t* insts;           ///< An array of instructions.
+    uint32_t* positions;            ///< An array of source positions parallel to the instructions.
+    reduct_const_slot_t* constants; ///< The array of constant slots forming the constant template.
+    uint16_t constantCount;         ///< Number of constants.
+    uint16_t constantCapacity;      ///< Capacity of the constant array.
+    uint16_t registerCount;         ///< The number of registers the function uses.
+    uint8_t arity;                  ///< The number of arguments the function expects.
+    reduct_function_flags_t flags;  ///< The function flags.
 } reduct_function_t;
 
 /**

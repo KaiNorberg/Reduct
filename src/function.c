@@ -1,5 +1,5 @@
-#include "reduct/core.h"
 #include "reduct/function.h"
+#include "reduct/core.h"
 #include "reduct/gc.h"
 #include "reduct/handle.h"
 #include "reduct/item.h"
@@ -56,8 +56,7 @@ REDUCT_API void reduct_function_grow(reduct_t* reduct, reduct_function_t* func)
 
     size_t newCapacity = func->instCapacity == 0 ? 16 : func->instCapacity * 2;
     reduct_inst_t* newInsts = (reduct_inst_t*)realloc(func->insts, newCapacity * sizeof(reduct_inst_t));
-    uint32_t* newPositions =
-        (uint32_t*)realloc(func->positions, newCapacity * sizeof(uint32_t));
+    uint32_t* newPositions = (uint32_t*)realloc(func->positions, newCapacity * sizeof(uint32_t));
 
     if (newInsts == NULL || newPositions == NULL)
     {

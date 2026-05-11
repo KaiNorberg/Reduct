@@ -7,7 +7,7 @@ reduct_handle_t my_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 
 reduct_handle_t reduct_module_init(reduct_t* reduct)
 {
-    return REDUCT_HANDLE_ALIST(reduct, 1,
-        "my-native", REDUCT_HANDLE_NATIVE(reduct, my_native)
+    return REDUCT_HANDLE_CREATE_ALIST(reduct, 1,
+        "my-native", REDUCT_HANDLE_CREATE_NATIVE(reduct, my_native)
     );
 }

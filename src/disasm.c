@@ -1,5 +1,7 @@
-#include "reduct/compile.h"
 #include "reduct/disasm.h"
+#include "reduct/atom.h"
+#include "reduct/compile.h"
+#include "reduct/item.h"
 
 static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function, FILE* out)
 {
@@ -23,7 +25,7 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
     {
         reduct_inst_t inst = function->insts[i];
         reduct_opcode_t op = REDUCT_INST_GET_OP_BASE(inst);
-        reduct_bool_t isConst = (REDUCT_INST_GET_OP(inst) & REDUCT_MODE_CONST) != 0;
+        bool isConst = (REDUCT_INST_GET_OP(inst) & REDUCT_MODE_CONST) != 0;
         uint32_t a = REDUCT_INST_GET_A(inst);
         uint32_t b = REDUCT_INST_GET_B(inst);
         uint32_t c = REDUCT_INST_GET_C(inst);
@@ -157,10 +159,10 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
             break;
         }
 
-        reduct_bool_t hasInlineConst = REDUCT_FALSE;
+        bool hasInlineConst = false;
         if (op == REDUCT_OPCODE_CLOSURE || isConst)
         {
-            hasInlineConst = REDUCT_TRUE;
+            hasInlineConst = true;
         }
 
         if (op == REDUCT_OPCODE_JMP || op == REDUCT_OPCODE_JMPF || op == REDUCT_OPCODE_JMPT)
@@ -172,27 +174,44 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
         {
             reduct_const_slot_t* slot = &function->constants[c];
             fprintf(out, " ; ");
-            if (slot->type == REDUCT_CONST_SLOT_ITEM)
+            if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE)
             {
-                reduct_item_t* item = slot->item;
-                if (item->type == REDUCT_ITEM_TYPE_ATOM)
+                reduct_handle_t handle = slot->handle;
+                if (REDUCT_HANDLE_IS_INT(&handle))
                 {
-                    fprintf(out, "\"%.*s\"\n", (int)item->atom.length, item->atom.string);
+                    fprintf(out, "%lld\n", (long long)REDUCT_HANDLE_TO_INT(&handle));
                 }
-                else if (item->type == REDUCT_ITEM_TYPE_LIST)
+                else if (REDUCT_HANDLE_IS_FLOAT(&handle))
                 {
-                    fprintf(out, "(list of %u handles)\n", (unsigned int)item->list.length);
+                    fprintf(out, "%f\n", REDUCT_HANDLE_TO_FLOAT(&handle));
                 }
-                else if (item->type == REDUCT_ITEM_TYPE_FUNCTION)
+                else if (REDUCT_HANDLE_IS_ATOM(&handle))
                 {
-                    fprintf(out, "(function %p)\n", (void*)&item->function);
+                    reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(&handle);
+                    if (atom->flags & REDUCT_ATOM_FLAG_QUOTED)
+                    {
+                        fprintf(out, "\"%.*s\"\n", (int)atom->length, atom->string);
+                    }
+                    else
+                    {
+                        fprintf(out, "%.*s\n", (int)atom->length, atom->string);
+                    }
+                }
+                else if (REDUCT_HANDLE_IS_LIST(&handle))
+                {
+                    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&handle);
+                    fprintf(out, "(list of %u items)\n", (unsigned int)item->length);
+                }
+                else if (REDUCT_HANDLE_IS_FUNCTION(&handle))
+                {
+                    fprintf(out, "(function %p)\n", (void*)REDUCT_HANDLE_TO_FUNCTION(&handle));
                 }
                 else
                 {
-                    fprintf(out, "(unknown item)\n");
+                    fprintf(out, "(handle)\n");
                 }
             }
-            else if (slot->type == REDUCT_CONST_SLOT_CAPTURE)
+            else if (slot->type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
             {
                 fprintf(out, "(capture %.*s)\n", (int)slot->capture->length, slot->capture->string);
             }
@@ -213,30 +232,48 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
         for (uint16_t i = 0; i < function->constantCount; ++i)
         {
             reduct_const_slot_t* slot = &function->constants[i];
-            if (slot->type == REDUCT_CONST_SLOT_ITEM)
+            if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE)
             {
-                reduct_item_t* item = slot->item;
-                if (item->type == REDUCT_ITEM_TYPE_ATOM)
+                reduct_handle_t handle = slot->handle;
+                fprintf(out, "[K%03u] ", (unsigned int)i);
+                if (REDUCT_HANDLE_IS_INT(&handle))
                 {
-                    fprintf(out, "[K%03u] \"%.*s\"\n", (unsigned int)i, (int)item->atom.length, item->atom.string);
+                    fprintf(out, "%lld\n", (long long)REDUCT_HANDLE_TO_INT(&handle));
                 }
-                else if (item->type == REDUCT_ITEM_TYPE_LIST)
+                else if (REDUCT_HANDLE_IS_FLOAT(&handle))
                 {
-                    fprintf(out, "[K%03u] (list of %u handles)\n", (unsigned int)i,
-                        (unsigned int)item->list.length);
+                    fprintf(out, "%f\n", REDUCT_HANDLE_TO_FLOAT(&handle));
                 }
-                else if (item->type == REDUCT_ITEM_TYPE_FUNCTION)
+                else if (REDUCT_HANDLE_IS_ATOM(&handle))
                 {
-                    fprintf(out, "[K%03u] (function %p)\n", (unsigned int)i, (void*)&item->function);
+                    reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(&handle);
+                    if (atom->flags & REDUCT_ATOM_FLAG_QUOTED)
+                    {
+                        fprintf(out, "\"%.*s\"\n", (int)atom->length, atom->string);
+                    }
+                    else
+                    {
+                        fprintf(out, "%.*s\n", (int)atom->length, atom->string);
+                    }
+                }
+                else if (REDUCT_HANDLE_IS_LIST(&handle))
+                {
+                    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&handle);
+                    fprintf(out, "(list of %u items)\n", (unsigned int)item->length);
+                }
+                else if (REDUCT_HANDLE_IS_FUNCTION(&handle))
+                {
+                    fprintf(out, "(function %p)\n", (void*)REDUCT_HANDLE_TO_FUNCTION(&handle));
                 }
                 else
                 {
-                    fprintf(out, "[K%03u] (unknown type)\n", (unsigned int)i);
+                    fprintf(out, "(handle)\n");
                 }
             }
-            else if (slot->type == REDUCT_CONST_SLOT_CAPTURE)
+            else if (slot->type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
             {
-                fprintf(out, "[K%03u] (capture %.*s)\n", (unsigned int)i, (int)slot->capture->length, slot->capture->string);
+                fprintf(out, "[K%03u] (capture %.*s)\n", (unsigned int)i, (int)slot->capture->length,
+                    slot->capture->string);
             }
             else
             {
@@ -250,12 +287,12 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
     for (uint16_t i = 0; i < function->constantCount; ++i)
     {
         reduct_const_slot_t* slot = &function->constants[i];
-        if (slot->type == REDUCT_CONST_SLOT_ITEM)
+        if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE)
         {
-            reduct_item_t* item = slot->item;
-            if (item->type == REDUCT_ITEM_TYPE_FUNCTION)
+            reduct_handle_t handle = slot->handle;
+            if (REDUCT_HANDLE_IS_FUNCTION(&handle))
             {
-                reduct_disasm_internal(reduct, &item->function, out);
+                reduct_disasm_internal(reduct, REDUCT_HANDLE_TO_FUNCTION(&handle), out);
             }
         }
     }

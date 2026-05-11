@@ -1,25 +1,25 @@
 #ifndef REDUCT_DEFS_H
 #define REDUCT_DEFS_H 1
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 struct reduct;
 struct reduct_list;
 
 #if defined(_WIN32) || defined(__CYGWIN__)
-    #ifdef REDUCT_BUILD_LIB
-        #define REDUCT_API __declspec(dllexport)
-    #elif defined(REDUCT_USE_LIB)
-        #define REDUCT_API __declspec(dllimport)
-    #else
-        #define REDUCT_API
-    #endif
+#ifdef REDUCT_BUILD_LIB
+#define REDUCT_API __declspec(dllexport)
+#elif defined(REDUCT_USE_LIB)
+#define REDUCT_API __declspec(dllimport)
+#else
+#define REDUCT_API
+#endif
 #else
 #if __GNUC__ >= 4
-    #define REDUCT_API __attribute__ ((visibility ("default")))
+#define REDUCT_API __attribute__((visibility("default")))
 #else
-    #define REDUCT_API
+#define REDUCT_API
 #endif
 #endif
 
@@ -61,18 +61,6 @@ typedef void* reduct_lib_t;
 #define REDUCT_MAX(_a, _b) ((_a) > (_b) ? (_a) : (_b))
 
 #define REDUCT_UNUSED(_x) ((void)(_x))
-
-/**
- * @brief Boolean type.
- * @enum reduct_bool_t
- *
- * Equivalent to bool.
- */
-typedef enum
-{
-    REDUCT_TRUE = 1,
-    REDUCT_FALSE = 0
-} reduct_bool_t;
 
 /**
  * @brief PI constant.
@@ -123,7 +111,10 @@ typedef enum
 /**
  * @brief Handle type.
  */
-typedef uint64_t reduct_handle_t;
+typedef struct
+{
+    uint64_t _value;
+} reduct_handle_t;
 
 /**
  * @brief Module initialization function type.
@@ -134,16 +125,16 @@ typedef reduct_handle_t (*reduct_module_init_fn)(struct reduct* reduct);
 
 /**
  * @brief Identifies a `reduct_input_t` within a Reduct structure.
- * 
+ *
  * Avoid the need to store a `reduct_input_t*` within a `reduct_item_t` saving space.
- * 
+ *
  */
 typedef uint16_t reduct_input_id_t;
 
 /**
  * @brief Invalid handle value.
  */
-#define REDUCT_INPUT_ID_NONE ((reduct_input_id_t)-1)
+#define REDUCT_INPUT_ID_NONE ((reduct_input_id_t) - 1)
 
 #define REDUCT_ALIGNMENT 64 ///< The memory alignment for items.
 

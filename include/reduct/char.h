@@ -73,7 +73,7 @@ extern reduct_char_info_t reductCharTable[256];
  * @brief Check if a character is whitespace.
  *
  * @param _c The character to check.
- * @return REDUCT_TRUE if the character is whitespace, REDUCT_FALSE otherwise.
+ * @return true if the character is whitespace, false otherwise.
  */
 #define REDUCT_CHAR_IS_WHITESPACE(_c) (REDUCT_CHAR_FLAGS(_c) & REDUCT_CHAR_WHITESPACE)
 
@@ -81,7 +81,7 @@ extern reduct_char_info_t reductCharTable[256];
  * @brief Check if a character is a letter.
  *
  * @param _c The character to check.
- * @return REDUCT_TRUE if the character is a letter, REDUCT_FALSE otherwise.
+ * @return true if the character is a letter, false otherwise.
  */
 #define REDUCT_CHAR_IS_LETTER(_c) (REDUCT_CHAR_FLAGS(_c) & REDUCT_CHAR_LETTER)
 
@@ -89,7 +89,7 @@ extern reduct_char_info_t reductCharTable[256];
  * @brief Check if a character is a decimal digit.
  *
  * @param _c The character to check.
- * @return REDUCT_TRUE if the character is a decimal digit, REDUCT_FALSE otherwise.
+ * @return true if the character is a decimal digit, false otherwise.
  */
 #define REDUCT_CHAR_IS_DIGIT(_c) (REDUCT_CHAR_FLAGS(_c) & REDUCT_CHAR_DIGIT)
 
@@ -97,7 +97,7 @@ extern reduct_char_info_t reductCharTable[256];
  * @brief Check if a character is a symbol.
  *
  * @param _c The character to check.
- * @return REDUCT_TRUE if the character is a symbol, REDUCT_FALSE otherwise.
+ * @return true if the character is a symbol, false otherwise.
  */
 #define REDUCT_CHAR_IS_SYMBOL(_c) (REDUCT_CHAR_FLAGS(_c) & REDUCT_CHAR_SYMBOL)
 
@@ -105,7 +105,7 @@ extern reduct_char_info_t reductCharTable[256];
  * @brief Check if a character is a hexidecimal digit.
  *
  * @param _c The character to check.
- * @return REDUCT_TRUE if the character is a hexidecimal digit, REDUCT_FALSE otherwise.
+ * @return true if the character is a hexidecimal digit, false otherwise.
  */
 #define REDUCT_CHAR_IS_HEX_DIGIT(_c) (REDUCT_CHAR_FLAGS(_c) & REDUCT_CHAR_HEX_DIGIT)
 

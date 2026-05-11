@@ -12,7 +12,7 @@
  * @brief Item management.
  * @defgroup item Item
  *
- * An item is a generic container for all data types and heap alloacted structures within Reduct.
+ * An item is a generic container for all data types and heap allocated structures within Reduct.
  *
  * To optimize memory cacheing and reduce fragmentation, all items are 64 bytes and aligned to cache lines.
  *
@@ -23,22 +23,21 @@
  * @brief Item type enumeration.
  */
 typedef uint8_t reduct_item_type_t;
-#define REDUCT_ITEM_TYPE_NONE 0      ///< No type.
-#define REDUCT_ITEM_TYPE_ATOM 1      ///< An atom.
+#define REDUCT_ITEM_TYPE_NONE 0       ///< No type.
+#define REDUCT_ITEM_TYPE_ATOM 1       ///< An atom.
 #define REDUCT_ITEM_TYPE_ATOM_STACK 2 ///< An atom stack.
-#define REDUCT_ITEM_TYPE_LIST 3      ///< A list.
-#define REDUCT_ITEM_TYPE_LIST_NODE 4 ///< A list node.
-#define REDUCT_ITEM_TYPE_FUNCTION 5  ///< A function.
-#define REDUCT_ITEM_TYPE_CLOSURE 6   ///< A closure.
+#define REDUCT_ITEM_TYPE_LIST 3       ///< A list.
+#define REDUCT_ITEM_TYPE_LIST_NODE 4  ///< A list node.
+#define REDUCT_ITEM_TYPE_FUNCTION 5   ///< A function.
+#define REDUCT_ITEM_TYPE_CLOSURE 6    ///< A closure.
 
 /**
  * @brief Item flags enumeration.
  */
 typedef uint8_t reduct_item_flags_t;
-#define REDUCT_ITEM_FLAG_NONE 0                ///< No flags.
-#define REDUCT_ITEM_FLAG_FALSY (1 << 0)        ///< Item is falsy.
-#define REDUCT_ITEM_FLAG_QUOTED (1 << 1)       ///< Item is quoted.
-#define REDUCT_ITEM_FLAG_GC_MARK (1 << 2)      ///< Item is marked by GC.
+#define REDUCT_ITEM_FLAG_NONE 0           ///< No flags.
+#define REDUCT_ITEM_FLAG_FALSY (1 << 0)   ///< Item is falsy.
+#define REDUCT_ITEM_FLAG_GC_MARK (1 << 1) ///< Item is marked by GC.
 
 #define REDUCT_ITEM_PAYLOAD_MAX 56 ///< The maximum size of the item payload.
 
@@ -52,20 +51,19 @@ typedef uint8_t reduct_item_flags_t;
  */
 typedef struct reduct_item
 {
-    uint32_t position;    ///< The position in the input buffer where the item was parsed.
-    reduct_item_flags_t flags;   ///< Flags for the item.
-    reduct_item_type_t type;     ///< The type of the item.
-    reduct_input_id_t inputId;   ///< The input ID of the item.
+    uint32_t position;         ///< The position in the input buffer where the item was parsed.
+    reduct_item_flags_t flags; ///< Flags for the item.
+    reduct_item_type_t type;   ///< The type of the item.
+    reduct_input_id_t inputId; ///< The input ID of the item.
     union {
-        uint32_t
-            length;         ///< Common length for the item. (Stored in the union due to padding rules.)
-        reduct_atom_t atom; ///< An atom.
+        uint32_t length;               ///< Common length for the item. (Stored in the union due to padding rules.)
+        reduct_atom_t atom;            ///< An atom.
         reduct_atom_stack_t atomStack; ///< An atom stack.
-        reduct_list_t list; ///< A list.
-        reduct_list_node_t node;    ///< A list node.
-        reduct_function_t function; ///< A function.
-        reduct_closure_t closure;   ///< A closure.
-        struct reduct_item* free;   ///< The next free item in the free list.
+        reduct_list_t list;            ///< A list.
+        reduct_list_node_t node;       ///< A list node.
+        reduct_function_t function;    ///< A function.
+        reduct_closure_t closure;      ///< A closure.
+        struct reduct_item* free;      ///< The next free item in the free list.
         uint8_t _raw[REDUCT_ITEM_PAYLOAD_MAX];
     };
 } reduct_item_t;
@@ -85,7 +83,7 @@ _Static_assert(sizeof(reduct_item_t) == REDUCT_ALIGNMENT, "reduct_item_t must be
 typedef struct reduct_item_block
 {
     void* allocated; ///< The actual pointer returned by the memory allocation.
-    struct reduct_item_block* next;    
+    struct reduct_item_block* next;
     uint8_t _padding[REDUCT_ALIGNMENT - sizeof(void*) - sizeof(struct reduct_item_block*)];
     reduct_item_t items[REDUCT_ITEM_BLOCK_MAX];
     uint8_t _alignmentPadding[REDUCT_ALIGNMENT]; ///< Padding space for aligning blocks, should never be accessed.

@@ -1,10 +1,10 @@
+#include "reduct/handle.h"
+#include "reduct/atom.h"
 #include "reduct/char.h"
 #include "reduct/core.h"
 #include "reduct/defs.h"
-#include "reduct/atom.h"
 #include "reduct/eval.h"
 #include "reduct/gc.h"
-#include "reduct/handle.h"
 #include "reduct/item.h"
 #include "reduct/stringify.h"
 
@@ -87,15 +87,15 @@ REDUCT_API void reduct_handle_promote(struct reduct* reduct, reduct_handle_t* a,
     }
 }
 
-REDUCT_API reduct_bool_t reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t* a, reduct_handle_t* b)
+REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t* a, reduct_handle_t* b)
 {
     assert(reduct != NULL);
     assert(a != NULL);
     assert(b != NULL);
 
-    if (*a == *b)
+    if (a->_value == b->_value)
     {
-        return REDUCT_TRUE;
+        return true;
     }
 
     if (REDUCT_HANDLE_IS_NUMBER_SHAPED(a) && REDUCT_HANDLE_IS_NUMBER_SHAPED(b))
@@ -117,17 +117,20 @@ REDUCT_API reduct_bool_t reduct_handle_is_equal(reduct_t* reduct, reduct_handle_
 
     if (itemA == itemB)
     {
-        return REDUCT_TRUE;
+        return true;
     }
 
     if (itemA->type != itemB->type)
     {
-        return REDUCT_FALSE;
+        return false;
     }
 
-    if (itemA->flags != itemB->flags)
+    if (itemA->type == REDUCT_ITEM_TYPE_ATOM)
     {
-        return REDUCT_FALSE;
+        reduct_atom_t* atomA = &itemA->atom;
+        reduct_atom_t* atomB = &itemB->atom;
+        return (atomA->flags & REDUCT_ATOM_FLAG_QUOTED) == (atomB->flags & REDUCT_ATOM_FLAG_QUOTED) &&
+            atomA->length == atomB->length && memcmp(atomA->string, atomB->string, atomA->length) == 0;
     }
 
     if (itemA->type == REDUCT_ITEM_TYPE_LIST)
@@ -137,7 +140,7 @@ REDUCT_API reduct_bool_t reduct_handle_is_equal(reduct_t* reduct, reduct_handle_
 
         if (listA->length != listB->length)
         {
-            return REDUCT_FALSE;
+            return false;
         }
 
         reduct_list_iter_t iterA = REDUCT_LIST_ITER(listA);
@@ -148,20 +151,20 @@ REDUCT_API reduct_bool_t reduct_handle_is_equal(reduct_t* reduct, reduct_handle_
         {
             if (!reduct_handle_is_equal(reduct, &itemA, &itemB))
             {
-                return REDUCT_FALSE;
+                return false;
             }
         }
 
-        return REDUCT_TRUE;
+        return true;
     }
 
-    return REDUCT_FALSE;
+    return false;
 }
 
 typedef struct
 {
     int group;
-    reduct_bool_t isFloat;
+    bool isFloat;
     union {
         int64_t i;
         double f;
@@ -177,7 +180,7 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
     if (REDUCT_HANDLE_IS_INT(handle))
     {
         out->group = 0;
-        out->isFloat = REDUCT_FALSE;
+        out->isFloat = false;
         out->num.i = REDUCT_HANDLE_TO_INT(handle);
         out->item = NULL;
         return;
@@ -186,7 +189,7 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
     if (REDUCT_HANDLE_IS_FLOAT(handle))
     {
         out->group = 0;
-        out->isFloat = REDUCT_TRUE;
+        out->isFloat = true;
         out->num.f = REDUCT_HANDLE_TO_FLOAT(handle);
         out->item = NULL;
         return;
@@ -208,7 +211,7 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
     if (out->item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_float(&out->item->atom))
     {
         out->group = 0;
-        out->isFloat = REDUCT_TRUE;
+        out->isFloat = true;
         out->num.f = reduct_atom_get_float(&out->item->atom);
         return;
     }
@@ -216,7 +219,7 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
     if (out->item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_int(&out->item->atom))
     {
         out->group = 0;
-        out->isFloat = REDUCT_FALSE;
+        out->isFloat = false;
         out->num.i = reduct_atom_get_int(&out->item->atom);
         return;
     }
@@ -230,7 +233,7 @@ REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t* a, r
     assert(a != NULL);
     assert(b != NULL);
 
-    if (a == b || *a == *b)
+    if (a == b || a->_value == b->_value)
     {
         return 0;
     }
@@ -307,27 +310,6 @@ REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t* a, r
     return (int64_t)lenA - (int64_t)lenB;
 }
 
-REDUCT_API reduct_handle_t reduct_handle_nil(reduct_t* reduct)
-{
-    assert(reduct != NULL);
-
-    return REDUCT_HANDLE_FROM_ITEM(reduct->nilItem);
-}
-
-REDUCT_API reduct_handle_t reduct_handle_pi(reduct_t* reduct)
-{
-    assert(reduct != NULL);
-
-    return REDUCT_HANDLE_FROM_ITEM(reduct->piItem);
-}
-
-REDUCT_API reduct_handle_t reduct_handle_e(reduct_t* reduct)
-{
-    assert(reduct != NULL);
-
-    return REDUCT_HANDLE_FROM_ITEM(reduct->eItem);
-}
-
 REDUCT_API void reduct_handle_atom_string(reduct_t* reduct, reduct_handle_t* handle, const char** outStr,
     size_t* outLen)
 {
@@ -351,7 +333,7 @@ REDUCT_API void reduct_handle_push(reduct_t* reduct, reduct_handle_t* list, redu
         REDUCT_ERROR_RUNTIME(reduct, "push: expected list, got %s", REDUCT_HANDLE_GET_TYPE_STR(list));
     }
 
-    reduct_list_push(reduct, &REDUCT_HANDLE_TO_ITEM(list)->list, val);
+    reduct_list_push(reduct, REDUCT_HANDLE_TO_LIST(list), val);
 }
 
 REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t* handle, size_t index)
@@ -363,8 +345,8 @@ REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t* h
 
     if (REDUCT_UNLIKELY(index >= item->length))
     {
-        REDUCT_ERROR_RUNTIME(reduct, "index %zu out of bounds for %s of length %u", index,
-            reduct_item_type_str(item), item->length);
+        REDUCT_ERROR_RUNTIME(reduct, "index %zu out of bounds for %s of length %u", index, reduct_item_type_str(item),
+            item->length);
     }
 
     switch (item->type)
@@ -389,7 +371,7 @@ REDUCT_API size_t reduct_handle_len(reduct_t* reduct, reduct_handle_t* handle)
     return reduct_handle_as_item(reduct, handle)->length;
 }
 
-REDUCT_API reduct_bool_t reduct_handle_is_str(reduct_t* reduct, reduct_handle_t* handle, const char* str)
+REDUCT_API bool reduct_handle_is_str(reduct_t* reduct, reduct_handle_t* handle, const char* str)
 {
     REDUCT_UNUSED(reduct);
 
@@ -397,15 +379,15 @@ REDUCT_API reduct_bool_t reduct_handle_is_str(reduct_t* reduct, reduct_handle_t*
     assert(handle != NULL);
     assert(str != NULL);
 
-    if (!REDUCT_HANDLE_IS_ATOM(handle))
+    if (!REDUCT_HANDLE_IS_ATOM_LIKE(handle))
     {
-        return REDUCT_FALSE;
+        return false;
     }
 
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(handle);
+    reduct_item_t* item = reduct_handle_as_item(reduct, handle);
     if (item->type != REDUCT_ITEM_TYPE_ATOM)
     {
-        return REDUCT_FALSE;
+        return false;
     }
 
     return reduct_atom_is_equal(&item->atom, str, strlen(str));

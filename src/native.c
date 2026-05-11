@@ -1,9 +1,9 @@
+#include "reduct/native.h"
 #include "reduct/atom.h"
 #include "reduct/core.h"
 #include "reduct/intrinsic.h"
-#include "reduct/native.h"
 
-static inline reduct_bool_t reduct_native_map_grow(reduct_t* reduct)
+static inline bool reduct_native_map_grow(reduct_t* reduct)
 {
     size_t oldCapacity = reduct->nativeMapCapacity;
     reduct_native_entry_t* oldMap = reduct->nativeMap;
@@ -40,11 +40,11 @@ static inline reduct_bool_t reduct_native_map_grow(reduct_t* reduct)
     {
         free(oldMap);
     }
-    return REDUCT_TRUE;
+    return true;
 }
 
-static inline reduct_native_entry_t* reduct_native_map_insert(reduct_t* reduct, uint32_t hash,
-    const char* name, size_t len)
+static inline reduct_native_entry_t* reduct_native_map_insert(reduct_t* reduct, uint32_t hash, const char* name,
+    size_t len)
 {
     if (reduct->nativeMap == NULL)
     {
@@ -86,8 +86,7 @@ static inline reduct_native_entry_t* reduct_native_map_insert(reduct_t* reduct, 
     return entry;
 }
 
-REDUCT_API reduct_native_entry_t* reduct_native_map_find(reduct_t* reduct, uint32_t hash,
-    const char* str, size_t len)
+REDUCT_API reduct_native_entry_t* reduct_native_map_find(reduct_t* reduct, uint32_t hash, const char* str, size_t len)
 {
     if (reduct->nativeMap == NULL)
     {

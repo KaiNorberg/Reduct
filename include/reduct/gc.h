@@ -16,13 +16,14 @@
  */
 
 #define REDUCT_GC_RETAINED_INITAL 16 ///< Initial capacity for the retained items array.
-#define REDUCT_GC_RETAINED_GROWTH 2 ///< Growth factor for the retained items array.
+#define REDUCT_GC_RETAINED_GROWTH 2  ///< Growth factor for the retained items array.
 
 /**
  * @brief Run the garbage collector.
  *
- * @note Usually the garbage collector will only be ran in between the evaluation of two instructions. As such, when evaluation is not taking place, or when evaluating an instruction, there is no need to retain specific items.
- * 
+ * @note Usually the garbage collector will only be ran in between the evaluation of two instructions. As such, when
+ * evaluation is not taking place, or when evaluating an instruction, there is no need to retain specific items.
+ *
  * @param reduct The Reduct structure.
  */
 REDUCT_API void reduct_gc(reduct_t* reduct);
@@ -36,7 +37,8 @@ static inline REDUCT_ALWAYS_INLINE void reduct_gc_if_needed(reduct_t* reduct)
 {
     assert(reduct != NULL);
 
-    if (REDUCT_UNLIKELY(reduct->blockCount * REDUCT_ITEM_BLOCK_MAX * 3 > reduct->freeCount * 4 && reduct->blockCount > reduct->prevBlockCount))
+    if (REDUCT_UNLIKELY(reduct->blockCount * REDUCT_ITEM_BLOCK_MAX * 3 > reduct->freeCount * 4 &&
+            reduct->blockCount > reduct->prevBlockCount))
     {
         reduct_gc(reduct);
     }

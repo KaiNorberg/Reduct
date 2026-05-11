@@ -1,7 +1,7 @@
+#include "reduct/gc.h"
 #include "reduct/atom.h"
 #include "reduct/core.h"
 #include "reduct/eval.h"
-#include "reduct/gc.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
 
@@ -85,11 +85,14 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
     {
         for (uint16_t i = 0; i < item->function.constantCount; i++)
         {
-            if (item->function.constants[i].type == REDUCT_CONST_SLOT_ITEM)
+            if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_HANDLE)
             {
-                reduct_gc_mark(reduct, item->function.constants[i].item);
+                if (REDUCT_HANDLE_IS_ITEM(&item->function.constants[i].handle))
+                {
+                    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(&item->function.constants[i].handle));
+                }
             }
-            else if (item->function.constants[i].type == REDUCT_CONST_SLOT_CAPTURE)
+            else if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
             {
                 reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(item->function.constants[i].capture, reduct_item_t, atom));
             }
@@ -116,12 +119,6 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
     for (size_t i = 0; i < reduct->retainedCount; i++)
     {
         reduct_gc_mark(reduct, reduct->retained[i]);
-    }
-
-    for (uint32_t i = 0; i < reduct->constantCount; i++)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(reduct->constants[i].name, reduct_item_t, atom));
-        reduct_gc_mark(reduct, reduct->constants[i].item);
     }
 
     if (reduct != NULL)
@@ -221,7 +218,8 @@ REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
 
     if (reduct->retainedCount >= reduct->retainedCapacity)
     {
-        size_t newCapacity = reduct->retainedCapacity == 0 ? REDUCT_GC_RETAINED_INITAL : reduct->retainedCapacity * REDUCT_GC_RETAINED_GROWTH;
+        size_t newCapacity = reduct->retainedCapacity == 0 ? REDUCT_GC_RETAINED_INITAL
+                                                           : reduct->retainedCapacity * REDUCT_GC_RETAINED_GROWTH;
         reduct_item_t** newRetained = (reduct_item_t**)realloc(reduct->retained, newCapacity * sizeof(reduct_item_t*));
         if (newRetained == NULL)
         {

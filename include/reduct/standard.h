@@ -112,7 +112,8 @@ REDUCT_API reduct_handle_t reduct_get_int(struct reduct* reduct, reduct_handle_t
 REDUCT_API reduct_handle_t reduct_get_float(struct reduct* reduct, reduct_handle_t* handle);
 
 REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t* handle);
-REDUCT_API reduct_handle_t reduct_import(struct reduct* reduct, reduct_handle_t* path, reduct_handle_t* compiler, reduct_handle_t* compilerArgs);
+REDUCT_API reduct_handle_t reduct_import(struct reduct* reduct, reduct_handle_t* path, reduct_handle_t* compiler,
+    reduct_handle_t* compilerArgs);
 REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle_t* path);
 REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t* path, reduct_handle_t* content);
 REDUCT_API reduct_handle_t reduct_read_char(struct reduct* reduct);

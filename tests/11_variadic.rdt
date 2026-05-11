@@ -3,6 +3,7 @@
         (reduce numbers 0 +)
     ))
 
+    (println! (sum))
     (assert! (== (sum 1 2 3) 6) "variadic lambda should work with multiple arguments")
     (assert! (== (sum) 0) "variadic lambda with no arguments should work")
     (assert! (== (sum 10) 10) "variadic lambda with one argument should work")
