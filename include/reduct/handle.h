@@ -484,7 +484,8 @@ struct reduct;
  * @return The result of the comparison.
  */
 #define REDUCT_HANDLE_COMPARE_FAST(_reduct, _a, _b, _op) \
-    (REDUCT_LIKELY(((((_a)->_value ^ REDUCT_HANDLE_TAG_INT) | ((_b)->_value ^ REDUCT_HANDLE_TAG_INT)) & REDUCT_HANDLE_MASK_TAG) == 0) \
+    (REDUCT_LIKELY(((((_a)->_value ^ REDUCT_HANDLE_TAG_INT) | ((_b)->_value ^ REDUCT_HANDLE_TAG_INT)) & \
+                       REDUCT_HANDLE_MASK_TAG) == 0) \
             ? (REDUCT_HANDLE_TO_INT(_a) _op REDUCT_HANDLE_TO_INT(_b)) \
             : (((_a)->_value >= REDUCT_HANDLE_OFFSET_FLOAT && (_b)->_value >= REDUCT_HANDLE_OFFSET_FLOAT) \
                       ? (REDUCT_HANDLE_TO_FLOAT(_a) _op REDUCT_HANDLE_TO_FLOAT(_b)) \

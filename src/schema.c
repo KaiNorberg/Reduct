@@ -96,8 +96,157 @@ REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t co
     return id;
 }
 
-REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t* listH,
-    void* out)
+static void reduct_schema_apply_primitive(struct reduct* reduct, reduct_schema_type_t type, size_t size, void* target,
+    reduct_handle_t* valH)
+{
+    switch (type)
+    {
+    case REDUCT_SCHEMA_TYPE_UINT:
+    {
+        switch (size)
+        {
+        case 1:
+            *(uint8_t*)target = (uint8_t)reduct_handle_as_int(reduct, valH);
+            break;
+        case 2:
+            *(uint16_t*)target = (uint16_t)reduct_handle_as_int(reduct, valH);
+            break;
+        case 4:
+            *(uint32_t*)target = (uint32_t)reduct_handle_as_int(reduct, valH);
+            break;
+        case 8:
+            *(uint64_t*)target = (uint64_t)reduct_handle_as_int(reduct, valH);
+            break;
+        }
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_INT:
+    {
+        switch (size)
+        {
+        case 1:
+            *(int8_t*)target = (int8_t)reduct_handle_as_int(reduct, valH);
+            break;
+        case 2:
+            *(int16_t*)target = (int16_t)reduct_handle_as_int(reduct, valH);
+            break;
+        case 4:
+            *(int32_t*)target = (int32_t)reduct_handle_as_int(reduct, valH);
+            break;
+        case 8:
+            *(int64_t*)target = (int64_t)reduct_handle_as_int(reduct, valH);
+            break;
+        }
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_FLOAT:
+    {
+        switch (size)
+        {
+        case 4:
+            *(float*)target = (float)reduct_handle_as_float(reduct, valH);
+            break;
+        case 8:
+            *(double*)target = (double)reduct_handle_as_float(reduct, valH);
+            break;
+        }
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_BOOL:
+    {
+        *(bool*)target = REDUCT_HANDLE_IS_TRUTHY(valH);
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_STRING:
+    {
+        if (!REDUCT_HANDLE_IS_ATOM(valH))
+            return;
+        const char* string;
+        size_t stringLen;
+        reduct_handle_atom_string(reduct, valH, &string, &stringLen);
+        size_t copyLen = (stringLen < size - 1) ? stringLen : size - 1;
+        memcpy(target, string, copyLen);
+        ((char*)target)[copyLen] = '\0';
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_HANDLE:
+    {
+        *(reduct_handle_t*)target = *valH;
+    }
+    break;
+    default:
+        break;
+    }
+}
+
+static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduct_schema_type_t type, size_t size,
+    const void* val)
+{
+    switch (type)
+    {
+    case REDUCT_SCHEMA_TYPE_UINT:
+    {
+        switch (size)
+        {
+        case 1:
+            return REDUCT_HANDLE_FROM_INT(*(uint8_t*)val);
+        case 2:
+            return REDUCT_HANDLE_FROM_INT(*(uint16_t*)val);
+        case 4:
+            return REDUCT_HANDLE_FROM_INT(*(uint32_t*)val);
+        case 8:
+            return REDUCT_HANDLE_FROM_INT(*(uint64_t*)val);
+        }
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_INT:
+    {
+        switch (size)
+        {
+        case 1:
+            return REDUCT_HANDLE_FROM_INT(*(int8_t*)val);
+        case 2:
+            return REDUCT_HANDLE_FROM_INT(*(int16_t*)val);
+        case 4:
+            return REDUCT_HANDLE_FROM_INT(*(int32_t*)val);
+        case 8:
+            return REDUCT_HANDLE_FROM_INT(*(int64_t*)val);
+        }
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_FLOAT:
+    {
+        switch (size)
+        {
+        case 4:
+            return REDUCT_HANDLE_FROM_FLOAT((double)*(float*)val);
+        case 8:
+            return REDUCT_HANDLE_FROM_FLOAT(*(double*)val);
+        }
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_BOOL:
+    {
+        return *(bool*)val ? REDUCT_HANDLE_FROM_INT(1) : REDUCT_HANDLE_FROM_INT(0);
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_STRING:
+    {
+        return REDUCT_HANDLE_CREATE_STRING(reduct, (char*)val);
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_HANDLE:
+    {
+        return *(reduct_handle_t*)val;
+    }
+    break;
+    default:
+        break;
+    }
+    return REDUCT_HANDLE_NIL(reduct);
+}
+
+REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t* listH, void* out)
 {
     assert(reduct != NULL);
     assert(listH != NULL);
@@ -150,90 +299,29 @@ REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
         const reduct_schema_t* field = &schema->fields[fieldIdx];
         void* target = (char*)out + field->offset;
 
-        switch (field->type)
+        if (field->type == REDUCT_SCHEMA_TYPE_ARRAY)
         {
-        case REDUCT_SCHEMA_TYPE_UINT:
-        {
-            switch (field->size)
-            {
-            case 1:
-                *(uint8_t*)target = (uint8_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            case 2:
-                *(uint16_t*)target = (uint16_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            case 4:
-                *(uint32_t*)target = (uint32_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            case 8:
-                *(uint64_t*)target = (uint64_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            }
-        }
-        break;
-        case REDUCT_SCHEMA_TYPE_INT:
-        {
-            switch (field->size)
-            {
-            case 1:
-                *(int8_t*)target = (int8_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            case 2:
-                *(int16_t*)target = (int16_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            case 4:
-                *(int32_t*)target = (int32_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            case 8:
-                *(int64_t*)target = (int64_t)reduct_handle_as_int(reduct, &valH);
-                break;
-            }
-        }
-        break;
-        case REDUCT_SCHEMA_TYPE_FLOAT:
-        {
-            switch (field->size)
-            {
-            case 4:
-                *(float*)target = (float)reduct_handle_as_float(reduct, &valH);
-                break;
-            case 8:
-                *(double*)target = (double)reduct_handle_as_float(reduct, &valH);
-                break;
-            }
-        }
-        break;
-        case REDUCT_SCHEMA_TYPE_BOOL:
-        {
-            *(bool*)target = REDUCT_HANDLE_IS_TRUTHY(&valH);
-        }
-        break;
-        case REDUCT_SCHEMA_TYPE_STRING:
-        {
-            if (!REDUCT_HANDLE_IS_ATOM(&valH))
+            if (!REDUCT_HANDLE_IS_LIST(&valH))
             {
                 continue;
             }
-
-            const char* string;
-            size_t stringLen;
-            reduct_handle_atom_string(reduct, &valH, &string, &stringLen);
-
-            size_t copyLen = (stringLen < field->size - 1) ? stringLen : field->size - 1;
-            memcpy(target, string, copyLen);
-            ((char*)target)[copyLen] = '\0';
+            reduct_list_t* subList = REDUCT_HANDLE_TO_LIST(&valH);
+            reduct_handle_t itemH;
+            REDUCT_LIST_FOR_EACH(&itemH, subList)
+            {
+                if (_iter.index * field->elementSize >= field->size)
+                {
+                    break;
+                }
+                reduct_schema_apply_primitive(reduct, field->subtype, field->elementSize,
+                    (char*)target + _iter.index * field->elementSize, &itemH);
+            }
         }
-        break;
-        case REDUCT_SCHEMA_TYPE_HANDLE:
+        else
         {
-            *(reduct_handle_t*)target = valH;
-        }
-        break;
-        default:
-            break;
+            reduct_schema_apply_primitive(reduct, field->type, field->size, target, &valH);
         }
     }
-
     return true;
 }
 
@@ -263,79 +351,27 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
         reduct_list_t* pair = reduct_list_new(reduct);
         reduct_list_push(reduct, pair, REDUCT_HANDLE_CREATE_STRING(reduct, field->key));
 
-        switch (field->type)
+        if (field->type == REDUCT_SCHEMA_TYPE_ARRAY)
         {
-        case REDUCT_SCHEMA_TYPE_UINT:
-        {
-            switch (field->size)
+            reduct_list_t* subList = reduct_list_new(reduct);
+            size_t count = field->size / field->elementSize;
+            for (size_t j = 0; j < count; j++)
             {
-            case 1:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(uint8_t*)val));
-                break;
-            case 2:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(uint16_t*)val));
-                break;
-            case 4:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(uint32_t*)val));
-                break;
-            case 8:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(uint64_t*)val));
-                break;
-            default:
-                REDUCT_ERROR_RUNTIME(reduct, "invalid schema field size");
+                reduct_list_push(reduct, subList,
+                    reduct_schema_serialize_primitive(reduct, field->subtype, field->elementSize,
+                        (char*)val + j * field->elementSize));
             }
+            reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_LIST(subList));
         }
-        break;
-        case REDUCT_SCHEMA_TYPE_INT:
+        else
         {
-            switch (field->size)
+            reduct_handle_t valH = reduct_schema_serialize_primitive(reduct, field->type, field->size, val);
+            if (REDUCT_HANDLE_IS_NIL(&valH))
             {
-            case 1:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(int8_t*)val));
-                break;
-            case 2:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(int16_t*)val));
-                break;
-            case 4:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(int32_t*)val));
-                break;
-            case 8:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_INT(*(int64_t*)val));
-                break;
-            default:
-                REDUCT_ERROR_RUNTIME(reduct, "invalid schema field size");
+                REDUCT_ERROR_RUNTIME(reduct, "invalid schema field type");
             }
+            reduct_list_push(reduct, pair, valH);
         }
-        break;
-        case REDUCT_SCHEMA_TYPE_FLOAT:
-        {
-            switch (field->size)
-            {
-            case 4:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_FLOAT((double)*(float*)val));
-                break;
-            case 8:
-                reduct_list_push(reduct, pair, REDUCT_HANDLE_FROM_FLOAT(*(double*)val));
-                break;
-            default:
-                REDUCT_ERROR_RUNTIME(reduct, "invalid schema field size");
-            }
-        }
-        break;
-        case REDUCT_SCHEMA_TYPE_STRING:
-        {
-            reduct_list_push(reduct, pair, REDUCT_HANDLE_CREATE_STRING(reduct, (char*)val));
-        }
-        break;
-        case REDUCT_SCHEMA_TYPE_HANDLE:
-        {
-            reduct_list_push(reduct, pair, *(reduct_handle_t*)val);
-        }
-        break;
-        default:
-            REDUCT_ERROR_RUNTIME(reduct, "invalid schema field type");
-        }
-
         reduct_list_push(reduct, list, REDUCT_HANDLE_FROM_LIST(pair));
     }
 

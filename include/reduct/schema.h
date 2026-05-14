@@ -29,7 +29,8 @@ typedef enum reduct_schema_type
     REDUCT_SCHEMA_TYPE_FLOAT,  ///< Float or double.
     REDUCT_SCHEMA_TYPE_BOOL,   ///< A `bool`.
     REDUCT_SCHEMA_TYPE_STRING, ///< An array of characters.
-    REDUCT_SCHEMA_TYPE_HANDLE  ///< A `reduct_handle_t`.
+    REDUCT_SCHEMA_TYPE_HANDLE, ///< A `reduct_handle_t`.
+    REDUCT_SCHEMA_TYPE_ARRAY,  ///< A fixed-size array of primitives.
 } reduct_schema_type_t;
 
 /**
@@ -42,6 +43,8 @@ typedef struct reduct_schema
     size_t offset;
     size_t size;
     reduct_schema_type_t type;
+    reduct_schema_type_t subtype;
+    size_t elementSize;
 } reduct_schema_t;
 
 /**
@@ -81,8 +84,7 @@ REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t co
  * @param out Pointer to the destination C structure.
  * @return `true` if the schema was applied successfully, `false` otherwise.
  */
-REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t* listH,
-    void* out);
+REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t* listH, void* out);
 
 /**
  * @brief Transform a C structure into an association list using a schema.
@@ -104,9 +106,23 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(struct reduct* reduct, reduct
  * automatically.
  */
 #define REDUCT_SCHEMA_FIELD(_key, _struct, _member, _type) \
+    (reduct_schema_t){(_key), offsetof(_struct, _member), sizeof(((_struct*)0)->_member), REDUCT_SCHEMA_TYPE_##_type, \
+        0, 0}
+
+/**
+ * @brief Helper macro to define an array schema field.
+ *
+ * @param _key The key string.
+ * @param _struct The C structure type.
+ * @param _member The array member name.
+ * @param _type The `reduct_schema_type_t` of the field, only the suffix is required, `REDUCT_SCHEMA_TYPE_` is added
+ * automatically.
+ */
+#define REDUCT_SCHEMA_FIELD_ARRAY(_key, _struct, _member, _subtype) \
     (reduct_schema_t) \
     { \
-        (_key), offsetof(_struct, _member), sizeof(((_struct*)0)->_member), REDUCT_SCHEMA_TYPE_##_type \
+        (_key), offsetof(_struct, _member), sizeof(((_struct*)0)->_member), REDUCT_SCHEMA_TYPE_ARRAY, \
+            REDUCT_SCHEMA_TYPE_##_subtype, sizeof(((_struct*)0)->_member[0]) \
     }
 
 /** @} */

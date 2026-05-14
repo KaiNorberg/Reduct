@@ -236,8 +236,7 @@ void reduct_intrinsic_def(reduct_compiler_t* compiler, reduct_list_t* list, redu
     *out = valExpr;
 }
 
-static inline bool reduct_expr_get_handle(reduct_compiler_t* compiler, reduct_expr_t* expr,
-    reduct_handle_t* out)
+static inline bool reduct_expr_get_handle(reduct_compiler_t* compiler, reduct_expr_t* expr, reduct_handle_t* out)
 {
     assert(compiler != NULL);
     assert(expr != NULL);
@@ -256,8 +255,7 @@ static inline bool reduct_expr_get_handle(reduct_compiler_t* compiler, reduct_ex
     return false;
 }
 
-static inline bool reduct_expr_is_known_truthy(reduct_compiler_t* compiler, reduct_expr_t* expr,
-    bool* isTruthy)
+static inline bool reduct_expr_is_known_truthy(reduct_compiler_t* compiler, reduct_expr_t* expr, bool* isTruthy)
 {
     assert(compiler != NULL);
     assert(expr != NULL);
@@ -775,8 +773,8 @@ static inline bool reduct_fold_binary_calc(reduct_opcode_t op, double lf, double
     }
 }
 
-static bool reduct_fold_binary_expr(reduct_compiler_t* compiler, reduct_opcode_t opBase,
-    reduct_expr_t* leftExpr, reduct_expr_t* rightExpr, reduct_expr_t* outExpr)
+static bool reduct_fold_binary_expr(reduct_compiler_t* compiler, reduct_opcode_t opBase, reduct_expr_t* leftExpr,
+    reduct_expr_t* rightExpr, reduct_expr_t* outExpr)
 {
     assert(compiler != NULL);
     assert(leftExpr != NULL);
