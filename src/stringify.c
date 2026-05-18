@@ -3,17 +3,12 @@
 #include "reduct/item.h"
 #include "reduct/list.h"
 
-REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, char* buffer, size_t size)
+REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, char* buffer, size_t size)
 {
     assert(reduct != NULL);
     assert(buffer != NULL || size == 0);
 
-    if (handle == NULL)
-    {
-        return snprintf(buffer, size, "<null>");
-    }
-
-    if (REDUCT_HANDLE_IS_NONE(handle))
+    if (REDUCT_HANDLE_IS_NIL(handle))
     {
         return snprintf(buffer, size, "<none>");
     }
@@ -68,17 +63,23 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, ch
         size_t res = snprintf(buffer, size, "(");
         written += res;
 
-        reduct_handle_t child;
-        REDUCT_LIST_FOR_EACH(&child, &item->list)
+        reduct_list_iter_t iter = REDUCT_LIST_ITER(&item->list);
+        reduct_list_chunk_t chunk;
+        while (reduct_list_iter_next_chunk(&iter, &chunk))
         {
-            res = reduct_stringify(reduct, &child, size > written ? buffer + written : NULL,
-                size > written ? size - written : 0);
-            written += res;
-
-            if (_iter.index + 1 < item->length)
+            size_t baseIdx = iter.index - chunk.count;
+            for (size_t i = 0; i < chunk.count; i++)
             {
-                res = snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, " ");
+                reduct_handle_t child = chunk.handles[i];
+                res = reduct_stringify(reduct, child, size > written ? buffer + written : NULL,
+                    size > written ? size - written : 0);
                 written += res;
+
+                if (baseIdx + i + 1 < item->length)
+                {
+                    res = snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, " ");
+                    written += res;
+                }
             }
         }
 
@@ -95,4 +96,18 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t* handle, ch
         return snprintf(buffer, size, "<unknown>");
     }
     return 0;
+}
+
+REDUCT_API char* reduct_stringify_alloc(reduct_t* reduct, reduct_handle_t handle)
+{
+    size_t len = reduct_stringify(reduct, handle, NULL, 0);
+    char* buffer = (char*)malloc(len + 1);
+    if (buffer == NULL)
+    {
+        REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+        return NULL;
+    }
+
+    reduct_stringify(reduct, handle, buffer, len + 1);
+    return buffer;
 }

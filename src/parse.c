@@ -80,11 +80,11 @@ static bool reduct_parse_compare_suffix(reduct_atom_t* atom, const char* suffix)
 static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t* ctx, reduct_handle_t handle,
     bool unary)
 {
-    if (!REDUCT_HANDLE_IS_ITEM(&handle))
+    if (!REDUCT_HANDLE_IS_ITEM(handle))
     {
         return REDUCT_PARSE_PRECEDENCE_NONE;
     }
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&handle);
+    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(handle);
     reduct_atom_t* atom = NULL;
 
     if (item->type == REDUCT_ITEM_TYPE_ATOM)
@@ -95,12 +95,12 @@ static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t*
     {
         reduct_list_t* list = &item->list;
         reduct_handle_t head = reduct_list_first(ctx->reduct, list);
-        if (REDUCT_HANDLE_IS_ATOM(&head) && reduct_atom_is_equal(REDUCT_HANDLE_TO_ATOM(&head), "get-in", 6))
+        if (REDUCT_HANDLE_IS_ATOM(head) && reduct_atom_is_equal(REDUCT_HANDLE_TO_ATOM(head), "get-in", 6))
         {
             reduct_handle_t last = reduct_list_nth(ctx->reduct, list, list->length - 1);
-            if (REDUCT_HANDLE_IS_ATOM(&last))
+            if (REDUCT_HANDLE_IS_ATOM(last))
             {
-                atom = REDUCT_HANDLE_TO_ATOM(&last);
+                atom = REDUCT_HANDLE_TO_ATOM(last);
             }
         }
     }
@@ -239,7 +239,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
         (*pos)++;
         if (*pos >= list->length)
         {
-            reduct_item_t* opItem = REDUCT_HANDLE_TO_ITEM(&op);
+            reduct_item_t* opItem = REDUCT_HANDLE_TO_ITEM(op);
             REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->input->buffer + opItem->position,
                 "infix operator '%.*s' missing right operand", (int)opItem->atom.length, opItem->atom.string);
         }
@@ -265,7 +265,7 @@ static reduct_list_t* reduct_parse_infix_transform(reduct_parse_ctx_t* ctx, redu
 
     size_t pos = 0;
     reduct_handle_t result = reduct_parse_infix_transform_recursive(ctx, list, &pos, REDUCT_PARSE_PRECEDENCE_NONE);
-    return &REDUCT_HANDLE_TO_ITEM(&result)->list;
+    return REDUCT_HANDLE_TO_LIST(result);
 }
 
 static inline reduct_list_t* reduct_parse_infix(reduct_parse_ctx_t* ctx, size_t position)
@@ -351,7 +351,7 @@ static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t*
 
     reduct_item_t* getInListItem = REDUCT_CONTAINER_OF(*getInList, reduct_item_t, list);
 
-    if (REDUCT_HANDLE_IS_NONE(getInTarget))
+    if (REDUCT_HANDLE_IS_NIL(*getInTarget))
     {
         REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->input->buffer + getInListItem->position,
             "get-in: missing target");
@@ -375,7 +375,7 @@ static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t*
     reduct_list_push(ctx->reduct, list, REDUCT_HANDLE_FROM_LIST(wrapper));
 
     *getInList = NULL;
-    *getInTarget = REDUCT_HANDLE_NONE;
+    *getInTarget = REDUCT_HANDLE_NIL(ctx->reduct);
 }
 
 static void reduct_parse_dot_atom(reduct_parse_ctx_t* ctx, reduct_list_t** getInList, reduct_handle_t* getInTarget,
@@ -453,7 +453,7 @@ static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char exp
         REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->ptr, "unexpected end of file");
     }
 
-    reduct_handle_t getInTarget = REDUCT_HANDLE_NONE;
+    reduct_handle_t getInTarget = REDUCT_HANDLE_NIL(ctx->reduct);
     reduct_list_t* getInList = NULL;
     while (1)
     {

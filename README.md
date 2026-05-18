@@ -628,14 +628,15 @@ The included results were automatically generated using the `run_bench.sh` scrip
 
 All benchmarks were performed on the following system:
 
-- **Timestamp:** `Sat May  2 06:07:36 PM CEST 2026`
+- **Timestamp:** `Mon May 18 02:06:26 AM CEST 2026`
 - **CPU:** `AMD Ryzen 5 3600X 6-Core Processor`
 - **OS:** `Fedora Linux 43 (KDE Plasma Desktop Edition)`
 - **Kernel:** `6.19.14-200.fc43.x86_64`
-- **Reduct:** `Reduct 2.0.0+fc8fa1f`
+- **Reduct:** `Reduct 3.4.0+779b0a3`
 - **Hyperfine:** `hyperfine 1.20.0`
 - **Heaptrack:** `heaptrack 1.5.0`
 - **Lua:** `Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio`
+- **LuaJIT:** `LuaJIT 2.1.1767980792 -- Copyright (C) 2005-2026 Mike Pall. https://luajit.org/`
 - **Python:** `Python 3.14.4`
 - **Janet:** `Janet 1.35.2-meson`
 
@@ -643,81 +644,109 @@ All benchmarks were performed on the following system:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct bench/brainfuck.rdt` | 1.0 ± 0.2 | 0.9 | 3.9 | 1.00 |
-| `lua bench/brainfuck.lua` | 1.2 ± 0.2 | 1.0 | 2.4 | 1.17 ± 0.30 |
+| `reduct` | 1.0 ± 0.1 | 0.9 | 2.5 | 1.14 ± 0.24 |
+| `lua` | 1.2 ± 0.2 | 1.0 | 4.0 | 1.30 ± 0.28 |
+| `luajit (jit)` | 1.0 ± 0.1 | 0.9 | 2.2 | 1.12 ± 0.24 |
+| `luajit (int)` | 0.9 ± 0.1 | 0.8 | 3.9 | 1.00 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct bench/brainfuck.rdt` | 132.41K |
-| `lua bench/brainfuck.lua` | 102.77K |
+| `reduct` | 132.73K |
+| `lua` | 103.77K |
+| `luajit (jit)` | 78.38K |
+| `luajit (int)` | 78.30K |
+
+---
 
 ### fib35
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct bench/fib35.rdt` | 520.1 ± 9.0 | 509.3 | 542.5 | 1.00 |
-| `lua bench/fib35.lua` | 752.6 ± 40.7 | 729.3 | 858.5 | 1.45 ± 0.08 |
-| `python3 bench/fib35.py` | 1037.1 ± 15.0 | 1019.0 | 1072.3 | 1.99 ± 0.04 |
-| `janet bench/fib35.janet` | 1495.5 ± 58.1 | 1445.7 | 1587.0 | 2.88 ± 0.12 |
+| `reduct` | 320.2 ± 6.9 | 314.1 | 338.9 | 2.63 ± 0.10 |
+| `lua` | 737.4 ± 21.1 | 723.1 | 795.4 | 6.07 ± 0.25 |
+| `luajit (jit)` | 121.5 ± 3.7 | 117.3 | 134.0 | 1.00 |
+| `luajit (int)` | 470.9 ± 28.4 | 444.4 | 506.0 | 3.87 ± 0.26 |
+| `python3` | 1071.7 ± 48.0 | 1040.8 | 1201.8 | 8.82 ± 0.48 |
+| `janet` | 1537.4 ± 56.6 | 1447.6 | 1589.6 | 12.65 ± 0.60 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct bench/fib35.rdt` | 98.34K |
-| `lua bench/fib35.lua` | 99.52K |
-| `python3 bench/fib35.py` | 1.82M |
-| `janet bench/fib35.janet` | 1.07M |
+| `reduct` | 101.74K |
+| `lua` | 102.45K |
+| `luajit (jit)` | 78.38K |
+| `luajit (int)` | 78.30K |
+| `python3` | 1.82M |
+| `janet` | 1.07M |
+
+---
 
 ### fib65
 
 | Command | Mean [µs] | Min [µs] | Max [µs] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct bench/fib65.rdt` | 748.1 ± 141.3 | 617.0 | 2133.3 | 1.00 |
-| `lua bench/fib65.lua` | 1023.4 ± 212.7 | 881.1 | 2051.6 | 1.37 ± 0.38 |
-| `python3 bench/fib65.py` | 12110.8 ± 1486.0 | 11212.3 | 22285.1 | 16.19 ± 3.65 |
-| `janet bench/fib65.janet` | 3411.9 ± 494.4 | 3153.6 | 6672.3 | 4.56 ± 1.09 |
+| `reduct` | 736.9 ± 128.1 | 636.9 | 1670.9 | 1.00 |
+| `lua` | 960.3 ± 150.7 | 869.5 | 2463.8 | 1.30 ± 0.31 |
+| `luajit (jit)` | 815.9 ± 147.8 | 707.5 | 1734.6 | 1.11 ± 0.28 |
+| `luajit (int)` | 828.2 ± 154.4 | 705.3 | 1705.2 | 1.12 ± 0.29 |
+| `python3` | 12028.1 ± 1064.7 | 11159.6 | 21961.3 | 16.32 ± 3.18 |
+| `janet` | 3367.9 ± 498.4 | 3106.2 | 7022.3 | 4.57 ± 1.04 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct bench/fib65.rdt` | 97.12K |
-| `lua bench/fib65.lua` | 99.38K |
-| `python3 bench/fib65.py` | 1.82M |
-| `janet bench/fib65.janet` | 1.07M |
+| `reduct` | 100.51K |
+| `lua` | 99.38K |
+| `luajit (jit)` | 78.30K |
+| `luajit (int)` | 78.30K |
+| `python3` | 1.82M |
+| `janet` | 1.07M |
+
+---
 
 ### fizzbuzz
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct bench/fizzbuzz.rdt` | 1.8 ± 0.2 | 1.7 | 4.3 | 1.00 |
-| `lua bench/fizzbuzz.lua` | 6.2 ± 1.1 | 5.8 | 12.1 | 3.43 ± 0.73 |
-| `janet bench/fizzbuzz.janet` | 9.6 ± 0.8 | 9.3 | 19.6 | 5.35 ± 0.78 |
+| `reduct` | 1.5 ± 0.2 | 1.4 | 3.0 | 1.04 ± 0.26 |
+| `lua` | 6.1 ± 0.9 | 5.6 | 11.7 | 4.15 ± 0.97 |
+| `luajit (jit)` | 1.6 ± 0.3 | 1.4 | 3.2 | 1.05 ± 0.28 |
+| `luajit (int)` | 1.5 ± 0.3 | 1.3 | 3.1 | 1.00 |
+| `janet` | 9.8 ± 1.5 | 9.2 | 21.5 | 6.66 ± 1.61 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct bench/fizzbuzz.rdt` | 97.18K |
-| `lua bench/fizzbuzz.lua` | 102.38K |
-| `janet bench/fizzbuzz.janet` | 1.21M |
+| `reduct` | 100.62K |
+| `lua` | 105.45K |
+| `luajit (jit)` | 78.38K |
+| `luajit (int)` | 78.30K |
+| `janet` | 1.22M |
+
+---
 
 ### mandelbrot
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct bench/mandelbrot.rdt` | 336.3 ± 1.6 | 333.6 | 338.6 | 1.00 |
-| `lua bench/mandelbrot.lua` | 352.9 ± 14.4 | 340.0 | 382.3 | 1.05 ± 0.04 |
+| `reduct` | 259.8 ± 2.2 | 257.4 | 264.5 | 14.58 ± 0.94 |
+| `lua` | 287.8 ± 6.5 | 282.8 | 301.4 | 16.15 ± 1.10 |
+| `luajit (jit)` | 17.8 ± 1.1 | 17.4 | 31.5 | 1.00 |
+| `luajit (int)` | 126.6 ± 6.7 | 123.7 | 152.4 | 7.10 ± 0.59 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct bench/mandelbrot.rdt` | 154.49K |
-| `lua bench/mandelbrot.lua` | 112.34K |
+| `reduct` | 174.77K |
+| `lua` | 112.02K |
+| `luajit (jit)` | 78.38K |
+| `luajit (int)` | 78.30K |
 
 ## Testing
 
@@ -841,6 +870,10 @@ The following constants are defined by default in the Reduct environment:
 **`(quote <expression>) -> <expression>`**
 
 Returns the provided expression without evaluating it.
+
+**`(recur {expression}) -> <item>`**
+
+Calls the currently executing lambda with the provided arguments.
 
 **`(list {expression} ) -> <list>`**
 
@@ -993,18 +1026,6 @@ Will stop evaluating arguments as soon as one is not equal.
 **`(!= <item> <item> {item}) -> <true|false>`**
 
 Returns `true` if any arguments are not equal, otherwise `false`.
-
-Will stop evaluating arguments as soon as one is equal.
-
-**`(exact== <item> <item> {item}) -> <true|false>`**
-
-Returns `true` if all arguments are exactly equal using string comparison, otherwise `false`.
-
-Will stop evaluating arguments as soon as one is not equal.
-
-**`(exact!= <item> <item> {item}) -> <true|false>`**
-
-Returns `true` if any arguments are not exactly equal using string comparison, otherwise `false`.
 
 Will stop evaluating arguments as soon as one is equal.
 
@@ -1308,6 +1329,18 @@ Returns `true` if all items are empty lists `()`, or empty atoms `""`, otherwise
 **`(nil? <item> {item}) -> <true|false>`**
 
 Returns `true` if all items are `nil`, otherwise `false`.
+
+**`(exact== <item> <item> {item}) -> <true|false>`**
+
+Returns `true` if all arguments are exactly equal using string comparison, otherwise `false`.
+
+Will stop evaluating arguments as soon as one is not equal.
+
+**`(exact!= <item> <item> {item}) -> <true|false>`**
+
+Returns `true` if any arguments are not exactly equal using string comparison, otherwise `false`.
+
+Will stop evaluating arguments as soon as one is equal.
 
 ---
 

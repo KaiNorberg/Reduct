@@ -38,6 +38,22 @@ typedef struct reduct_closure
  */
 REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_function_t* function);
 
+/**
+ * @brief Retain a closure, preventing it from being collected by the garbage collector.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param closure Pointer to the closure.
+ */
+REDUCT_API void reduct_closure_retain(struct reduct* reduct, reduct_closure_t* closure);
+
+/**
+ * @brief Release a closure, potentially allowing the garbage collector to collect it.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param closure Pointer to the closure.
+ */
+REDUCT_API void reduct_closure_release(struct reduct* reduct, reduct_closure_t* closure);
+
 /** @} */
 
 #endif

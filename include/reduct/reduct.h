@@ -13,6 +13,7 @@
 #include "reduct/item.h"
 #include "reduct/list.h"
 #include "reduct/native.h"
+#include "reduct/optimize.h"
 #include "reduct/parse.h"
 #include "reduct/standard.h"
 #include "reduct/stringify.h"

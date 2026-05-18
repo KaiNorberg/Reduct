@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 3.15)
-project(reduct VERSION 3.3.0 LANGUAGES C)
+project(reduct VERSION 3.4.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+# I don't know why, but clang produces code that is significantly faster than GCC.
+# Especially on benchmarks such as fib35 which sees an almost 40% improvement.
+# Maybe one day I can be bothered to dig into the disassembly to figure out why.
+set(CMAKE_C_COMPILER clang)
 
 find_package(Git QUIET)
 if(GIT_FOUND)
@@ -45,10 +50,12 @@ set(REDUCT_SOURCES
     src/function.c
     src/gc.c
     src/handle.c
+    src/inst.c
     src/intrinsic.c
     src/item.c
     src/list.c
     src/native.c
+    src/optimize.c
     src/parse.c
     src/schema.c
     src/standard.c
@@ -102,8 +109,8 @@ if(REDUCT_USE_FUZZER AND NOT (WIN32 OR APPLE))
 endif()
 
 if(NOT WIN32)
-    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized)
-    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized)
+    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter)
+    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter)
 endif()
 
 add_subdirectory(tools/reduct-cli)

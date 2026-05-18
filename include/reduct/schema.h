@@ -74,6 +74,17 @@ typedef uint32_t reduct_schema_index_t; ///< Schema index type.
 REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t count, ...);
 
 /**
+ * @brief Create a new schema from an array of fields.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param count Number of fields.
+ * @param fields Array of field definitions.
+ * @return The ID of the newly created schema.
+ */
+REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, size_t count,
+    const reduct_schema_t* fields);
+
+/**
  * @brief Apply a schema to an association list and populate a C structure.
  *
  * Any fields not explicitly set by the given list are guaranteed to be left untouched.
@@ -84,7 +95,16 @@ REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t co
  * @param out Pointer to the destination C structure.
  * @return `true` if the schema was applied successfully, `false` otherwise.
  */
-REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t* listH, void* out);
+REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listH, void* out);
+
+/**
+ * @brief Get the number of fields in a schema.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param id The schema ID.
+ * @return The number of fields, or 0 if the ID is invalid.
+ */
+REDUCT_API size_t reduct_schema_get_count(struct reduct* reduct, reduct_schema_id_t id);
 
 /**
  * @brief Transform a C structure into an association list using a schema.

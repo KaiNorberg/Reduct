@@ -51,7 +51,7 @@ typedef struct reduct_error_frame
  * @brief Error structure.
  * @struct reduct_error_t
  */
-typedef struct
+typedef struct reduct_error
 {
     const char* input;   ///< The input buffer.
     size_t inputLength;  ///< The total length of the input buffer.
@@ -61,6 +61,7 @@ typedef struct
     jmp_buf jmp;
     reduct_error_type_t type; ///< The type of the error.
     char message[REDUCT_ERROR_MAX_LEN];
+    struct reduct_error* prev;                               ///< Previous error handler in the stack.
     struct reduct* reduct;                                   ///< The owning Reduct structure.
     reduct_error_frame_t frames[REDUCT_ERROR_BACKTRACE_MAX]; ///< Backtrace frames for the error.
     uint8_t frameCount;                                      ///< The number of backtrace frames.
@@ -130,11 +131,48 @@ REDUCT_API void reduct_error_get_item_params(struct reduct* reduct, struct reduc
 REDUCT_API REDUCT_NORETURN void reduct_error_throw_runtime(struct reduct* reduct, const char* message, ...);
 
 /**
+ * @brief Push a new error handler onto the stack.
+ *
+ * This will cause the provided error handler to be called when an error occurs instead of the previous one.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param error Pointer to the error structure to push.
+ */
+REDUCT_API void reduct_error_push(struct reduct* reduct, reduct_error_t* error);
+
+/**
+ * @brief Pop the current error handler from the stack.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ */
+REDUCT_API void reduct_error_pop(struct reduct* reduct);
+
+/**
  * @brief Catch an error using the jump buffer in the error structure.
  *
  * @param _error Pointer to the error structure.
  */
 #define REDUCT_ERROR_CATCH(_error) (setjmp((_error)->jmp))
+
+/**
+ * @brief Execute a block of code safely, catching any Reduct errors.
+ *
+ * @warning Do not use `return`, `break`, `continue`, or `goto` to exit the block, as it
+ * will skip the necessary error stack cleanup. Use a status variable instead.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _error Pointer to the error structure.
+ */
+#define REDUCT_ERROR_TRY(_reduct, _error) \
+    for (int _once = (reduct_error_push((_reduct), (_error)), 0); _once < 1; (reduct_error_pop(_reduct), _once++)) \
+        if (REDUCT_ERROR_CATCH(_error) == 0)
+
+/**
+ * @brief Check if an error structure indicates a successful operation.
+ *
+ * @param _error Pointer to the error structure.
+ */
+#define REDUCT_ERROR_SUCCESS(_error) ((_error)->type == REDUCT_ERROR_TYPE_NONE)
 
 /**
  * @brief Throw an error using the jump buffer in the error structure.
@@ -205,7 +243,7 @@ REDUCT_API REDUCT_NORETURN void reduct_error_throw_runtime(struct reduct* reduct
     do \
     { \
         reduct_handle_t __handle = REDUCT_HANDLE_FROM_ITEM((_compiler)->lastItem); \
-        REDUCT_ERROR_COMPILE((_compiler), &__handle, __VA_ARGS__); \
+        REDUCT_ERROR_COMPILE((_compiler), __handle, __VA_ARGS__); \
     } while (0)
 
 /**
@@ -222,7 +260,7 @@ REDUCT_API REDUCT_NORETURN void reduct_error_throw_runtime(struct reduct* reduct
         if (REDUCT_UNLIKELY(!(_expr))) \
         { \
             reduct_handle_t __handle = REDUCT_HANDLE_FROM_ITEM((_compiler)->lastItem); \
-            REDUCT_ERROR_COMPILE((_compiler), &__handle, __VA_ARGS__); \
+            REDUCT_ERROR_COMPILE((_compiler), __handle, __VA_ARGS__); \
         } \
     } while (0)
 

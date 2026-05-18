@@ -102,7 +102,8 @@ typedef uint16_t reduct_const_t;
 typedef enum reduct_function_flags
 {
     REDUCT_FUNCTION_FLAG_NONE = 0,
-    REDUCT_FUNCTION_FLAG_VARIADIC = 1 << 0, ///< Function accepts variadic arguments.
+    REDUCT_FUNCTION_FLAG_VARIADIC = 1 << 0,  ///< Function accepts variadic arguments.
+    REDUCT_FUNCTION_FLAG_OPTIMIZED = 1 << 1, ///< Function has been optimized.
 } reduct_function_flags_t;
 
 /**
@@ -177,6 +178,22 @@ static inline void reduct_function_emit(struct reduct* reduct, reduct_function_t
  */
 REDUCT_API reduct_const_t reduct_function_lookup_constant(struct reduct* reduct, reduct_function_t* func,
     reduct_const_slot_t* slot);
+
+/**
+ * @brief Retain a function, preventing it from being collected by the garbage collector.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param function Pointer to the function.
+ */
+REDUCT_API void reduct_function_retain(struct reduct* reduct, reduct_function_t* function);
+
+/**
+ * @brief Release a function, potentially allowing the garbage collector to collect it.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param function Pointer to the function.
+ */
+REDUCT_API void reduct_function_release(struct reduct* reduct, reduct_function_t* function);
 
 /** @} */
 

@@ -2,6 +2,7 @@
 #include "reduct/char.h"
 #include "reduct/core.h"
 #include "reduct/defs.h"
+#include "reduct/gc.h"
 #include "reduct/item.h"
 
 #include <stdbool.h>
@@ -159,10 +160,6 @@ static inline void reduct_atom_map_update(reduct_t* reduct, reduct_atom_t* atom,
 REDUCT_API bool reduct_atom_is_equal(reduct_atom_t* atom, const char* str, size_t len)
 {
     if (atom->length != len)
-    {
-        return false;
-    }
-    if (atom->hash != reduct_hash(str, len))
     {
         return false;
     }
@@ -784,6 +781,22 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
     }
 }
 
+REDUCT_API void reduct_atom_retain(reduct_t* reduct, reduct_atom_t* atom)
+{
+    assert(reduct != NULL);
+    assert(atom != NULL);
+
+    reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
+}
+
+REDUCT_API void reduct_atom_release(reduct_t* reduct, reduct_atom_t* atom)
+{
+    assert(reduct != NULL);
+    assert(atom != NULL);
+
+    reduct_gc_release(reduct, REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
+}
+
 REDUCT_API void reduct_atom_check_native(reduct_t* reduct, reduct_atom_t* atom)
 {
     assert(reduct != NULL);
@@ -894,4 +907,36 @@ REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_ato
     reduct_atom_t* superAtom = reduct_atom_new(reduct, len);
     memcpy(superAtom->string, atom->string, atom->length);
     return superAtom;
+}
+
+REDUCT_API int64_t reduct_atom_as_int(struct reduct* reduct, reduct_atom_t* atom)
+{
+    if (reduct_atom_is_number(atom))
+    {
+        return reduct_atom_get_int(atom);
+    }
+
+    reduct_atom_t* unqouted = reduct_atom_lookup(reduct, atom->string, atom->length, REDUCT_ATOM_LOOKUP_NONE);
+    if (reduct_atom_is_number(unqouted))
+    {
+        return reduct_atom_get_int(unqouted);
+    }
+
+    return 0;
+}
+
+REDUCT_API double reduct_atom_as_float(struct reduct* reduct, reduct_atom_t* atom)
+{
+    if (reduct_atom_is_number(atom))
+    {
+        return reduct_atom_get_float(atom);
+    }
+
+    reduct_atom_t* unqouted = reduct_atom_lookup(reduct, atom->string, atom->length, REDUCT_ATOM_LOOKUP_NONE);
+    if (reduct_atom_is_number(unqouted))
+    {
+        return reduct_atom_get_float(unqouted);
+    }
+
+    return 0.0;
 }

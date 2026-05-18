@@ -7,11 +7,12 @@
 #include "reduct/intrinsic.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
+#include "reduct/optimize.h"
+#include <string.h>
 
-REDUCT_API reduct_function_t* reduct_compile(reduct_t* reduct, reduct_handle_t* ast)
+REDUCT_API reduct_handle_t reduct_compile(reduct_t* reduct, reduct_handle_t ast)
 {
     assert(reduct != NULL);
-    assert(ast != NULL);
 
     reduct_function_t* func = reduct_function_new(reduct);
 
@@ -34,7 +35,7 @@ REDUCT_API reduct_function_t* reduct_compile(reduct_t* reduct, reduct_handle_t* 
 
     reduct_compiler_deinit(&compiler);
 
-    return func;
+    return REDUCT_HANDLE_FROM_FUNCTION(func);
 }
 
 REDUCT_API void reduct_compiler_init(reduct_compiler_t* compiler, reduct_t* reduct, reduct_function_t* function,
@@ -139,10 +140,9 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
     }
 }
 
-static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_handle_t* handle, reduct_expr_t* out)
+static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_handle_t handle, reduct_expr_t* out)
 {
     assert(compiler != NULL);
-    assert(handle != NULL);
     assert(out != NULL);
 
     if (REDUCT_HANDLE_IS_NUMBER_SHAPED(handle))
@@ -212,11 +212,11 @@ static inline void reduct_expr_build_atom(reduct_compiler_t* compiler, reduct_ha
         break;
     }
 
-    REDUCT_ERROR_COMPILE(compiler, handle, "undefined local '%.*s'%s", atom->length, atom->string,
+    REDUCT_ERROR_COMPILE(compiler, handle, "unknown symbol '%.*s'%s", atom->length, atom->string,
         atom->flags & REDUCT_ATOM_FLAG_OVERFLOW ? " (integer overflow)" : "");
 }
 
-static inline bool reduct_compiler_is_data(reduct_compiler_t* compiler, reduct_handle_t* handle)
+static inline bool reduct_compiler_is_data(reduct_compiler_t* compiler, reduct_handle_t handle)
 {
     assert(compiler != NULL);
 
@@ -240,9 +240,41 @@ static inline bool reduct_compiler_is_data(reduct_compiler_t* compiler, reduct_h
         }
 
         reduct_handle_t head = reduct_list_first(compiler->reduct, list);
-        return reduct_compiler_is_data(compiler, &head);
+        return reduct_compiler_is_data(compiler, head);
     }
 
+    return false;
+}
+
+static bool reduct_compiler_is_self_call(reduct_compiler_t* compiler, reduct_expr_t* callable)
+{
+    if (callable->mode != REDUCT_MODE_CONST)
+    {
+        return false;
+    }
+
+    reduct_const_slot_t* slot = &compiler->function->constants[callable->constant];
+    if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE && REDUCT_HANDLE_IS_FUNCTION(slot->handle))
+    {
+        return REDUCT_HANDLE_TO_FUNCTION(slot->handle) == compiler->function;
+    }
+
+    if (slot->type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
+    {
+        reduct_atom_t* name = slot->capture;
+        reduct_compiler_t* current = compiler->enclosing;
+        while (current != NULL)
+        {
+            for (int16_t i = (int16_t)current->localCount - 1; i >= 0; i--)
+            {
+                if (current->locals[i].name == name)
+                {
+                    return !REDUCT_LOCAL_IS_DEFINED(&current->locals[i]);
+                }
+            }
+            current = current->enclosing;
+        }
+    }
     return false;
 }
 
@@ -259,15 +291,15 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_li
     }
 
     reduct_handle_t head = reduct_list_first(compiler->reduct, list);
-    if (reduct_compiler_is_data(compiler, &head))
+    if (reduct_compiler_is_data(compiler, head))
     {
         reduct_intrinsic_list_generic(compiler, list, 0, out);
         return;
     }
 
-    if (REDUCT_HANDLE_IS_INTRINSIC(compiler->reduct, &head))
+    if (REDUCT_HANDLE_IS_INTRINSIC(compiler->reduct, head))
     {
-        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(&head);
+        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(head);
         atom->intrinsic(compiler, list, out);
         return;
     }
@@ -288,23 +320,36 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_li
     }
 
     reduct_expr_t callable = REDUCT_EXPR_NONE();
-    reduct_expr_build(compiler, &head, &callable);
+    reduct_expr_build(compiler, head, &callable);
 
-    reduct_handle_t argH;
-    REDUCT_LIST_FOR_EACH_AT(&argH, list, 1)
+    reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(list, 1);
+    reduct_list_chunk_t chunk;
+    while (reduct_list_iter_next_chunk(&iter, &chunk))
     {
-        reduct_reg_t target = (reduct_reg_t)(base + _iter.index - 1);
-        reduct_expr_t argExpr = REDUCT_EXPR_TARGET(target);
-        reduct_expr_build(compiler, &argH, &argExpr);
-
-        if (argExpr.mode != REDUCT_MODE_REG || argExpr.reg != target)
+        size_t baseIdx = iter.index - chunk.count;
+        for (size_t i = 0; i < chunk.count; i++)
         {
-            reduct_compile_move(compiler, target, &argExpr);
-            reduct_expr_done(compiler, &argExpr);
+            reduct_handle_t argH = chunk.handles[i];
+            reduct_reg_t target = (reduct_reg_t)(base + baseIdx + i - 1);
+            reduct_expr_t argExpr = REDUCT_EXPR_TARGET(target);
+            reduct_expr_build(compiler, argH, &argExpr);
+
+            if (argExpr.mode != REDUCT_MODE_REG || argExpr.reg != target)
+            {
+                reduct_compile_move(compiler, target, &argExpr);
+                reduct_expr_done(compiler, &argExpr);
+            }
         }
     }
 
-    reduct_compile_call(compiler, base, &callable, arity);
+    if (reduct_compiler_is_self_call(compiler, &callable))
+    {
+        reduct_compile_recur(compiler, base, arity);
+    }
+    else
+    {
+        reduct_compile_call(compiler, base, &callable, arity);
+    }
 
     reduct_expr_done(compiler, &callable);
 
@@ -316,10 +361,9 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_li
     *out = REDUCT_EXPR_REG(base);
 }
 
-REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_handle_t* handle, reduct_expr_t* out)
+REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_handle_t handle, reduct_expr_t* out)
 {
     assert(compiler != NULL);
-    assert(handle != NULL);
     assert(out != NULL);
 
     reduct_item_t* previousItem = compiler->lastItem;
@@ -342,7 +386,7 @@ REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_handle_t* 
     }
     else
     {
-        REDUCT_ERROR_COMPILE_LAST(compiler, "unexpected %s", REDUCT_HANDLE_GET_TYPE_STR(handle));
+        REDUCT_ERROR_COMPILE_LAST(compiler, "unexpected %s", REDUCT_HANDLE_GET_TYPE_STRING(handle));
     }
 
     compiler->lastItem = previousItem;
@@ -482,4 +526,23 @@ REDUCT_API reduct_local_t* reduct_local_lookup(reduct_compiler_t* compiler, redu
     }
 
     return NULL;
+}
+
+REDUCT_API void reduct_compile_return(reduct_compiler_t* compiler, reduct_expr_t* expr)
+{
+    assert(compiler != NULL);
+    assert(expr != NULL);
+
+    if (expr->mode == REDUCT_MODE_NONE)
+    {
+        reduct_expr_t nilExpr = REDUCT_EXPR_NIL(compiler);
+        uint32_t pos = compiler->lastItem != NULL ? compiler->lastItem->position : 0;
+        reduct_function_emit(compiler->reduct, compiler->function,
+            REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_RET | REDUCT_MODE_CONST, 0, 0, nilExpr.constant), pos);
+        return;
+    }
+
+    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    reduct_compile_inst(compiler,
+        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_RET | (reduct_opcode_t)expr->mode), 0, 0, expr->value));
 }

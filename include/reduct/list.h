@@ -56,6 +56,16 @@ typedef struct reduct_list
 } reduct_list_t;
 
 /**
+ * @brief A key-value pair for creating association lists.
+ * @struct reduct_list_entry_t
+ */
+typedef struct
+{
+    const char* key;
+    reduct_handle_t value;
+} reduct_list_entry_t;
+
+/**
  * @brief Create a new editable list.
  *
  * @param reduct Pointer to the Reduct structure.
@@ -82,6 +92,16 @@ REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t 
  * @return A pointer to the newly created association list.
  */
 REDUCT_API reduct_list_t* reduct_list_new_alist(struct reduct* reduct, size_t count, ...);
+
+/**
+ * @brief Create a new association list from an array of entries.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param count Number of entries.
+ * @param entries Array of key-value pairs.
+ */
+REDUCT_API reduct_list_t* reduct_list_new_alist_entries(struct reduct* reduct, size_t count,
+    const reduct_list_entry_t* entries);
 
 /**
  * @brief Create a new list with an updated value at the specified index.
@@ -175,14 +195,14 @@ REDUCT_API void reduct_list_push(struct reduct* reduct, reduct_list_t* list, red
 REDUCT_API void reduct_list_push_list(struct reduct* reduct, reduct_list_t* list, reduct_list_t* other);
 
 /**
- * @brief Create a new list from an array of handles.
+ * @brief Copy elements from a list into a C array of handles.
  *
- * @param reduct Pointer to the Reduct structure.
- * @param count The number of handles.
- * @param handles The array of handles.
- * @return A pointer to the newly created list.
+ * @param list Pointer to the list.
+ * @param out Pointer to the destination array.
+ * @param capacity The maximum number of handles to copy.
+ * @return The number of handles actually copied.
  */
-REDUCT_API reduct_list_t* reduct_list_new_from_handles(struct reduct* reduct, size_t count, reduct_handle_t* handles);
+REDUCT_API size_t reduct_list_to_handles(reduct_list_t* list, reduct_handle_t* out, size_t capacity);
 
 /**
  * @brief Find the leaf node containing the element at the specified index.
@@ -195,6 +215,16 @@ REDUCT_API reduct_list_t* reduct_list_new_from_handles(struct reduct* reduct, si
 REDUCT_API reduct_list_node_t* reduct_list_find_leaf(reduct_list_t* list, size_t index, size_t tailOffset);
 
 /**
+ * @brief A contiguous chunk of handles from a list.
+ * @struct reduct_list_chunk_t
+ */
+typedef struct
+{
+    reduct_handle_t* handles; ///< Pointer to the first handle in the chunk.
+    size_t count;             ///< Number of handles in the chunk.
+} reduct_list_chunk_t;
+
+/**
  * @brief List iterator structure.
  * @struct reduct_list_iter_t
  */
@@ -202,8 +232,9 @@ typedef struct reduct_list_iter
 {
     reduct_list_t* list;
     size_t index;
-    reduct_list_node_t* leaf;
     size_t tailOffset;
+    reduct_handle_t* chunkPtr;
+    uint32_t chunkRem;
 } reduct_list_iter_t;
 
 /**
@@ -218,7 +249,7 @@ typedef struct reduct_list_iter
  *
  * @param _list The list to iterate over.
  */
-#define REDUCT_LIST_ITER(_list) {(_list), 0, NULL, REDUCT_LIST_TAIL_OFFSET(_list)}
+#define REDUCT_LIST_ITER(_list) ((reduct_list_iter_t){(_list), 0, REDUCT_LIST_TAIL_OFFSET(_list), NULL, 0})
 
 /**
  * @brief Create a initializer for a list iterator start at a specific index.
@@ -226,7 +257,37 @@ typedef struct reduct_list_iter
  * @param _list The list to iterate over.
  * @param _start The starting index.
  */
-#define REDUCT_LIST_ITER_AT(_list, _start) {(_list), (_start), NULL, REDUCT_LIST_TAIL_OFFSET(_list)}
+#define REDUCT_LIST_ITER_AT(_list, _start) \
+    ((reduct_list_iter_t){(_list), (_start), REDUCT_LIST_TAIL_OFFSET(_list), NULL, 0})
+
+/**
+ * @brief Get the next chunk of elements from the iterator.
+ *
+ * @param iter Pointer to the iterator.
+ * @param out Pointer to store the retrieved chunk info.
+ * @return `true` if a chunk was retrieved, `false` if the end was reached.
+ */
+static inline REDUCT_ALWAYS_INLINE bool reduct_list_iter_next_chunk(reduct_list_iter_t* iter, reduct_list_chunk_t* out)
+{
+    if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
+    {
+        return false;
+    }
+
+    reduct_list_node_t* leaf = reduct_list_find_leaf(iter->list, iter->index, iter->tailOffset);
+    size_t offset = iter->index & REDUCT_LIST_MASK;
+
+    out->handles = &leaf->handles[offset];
+
+    size_t nodeRem = REDUCT_LIST_WIDTH - offset;
+    size_t listRem = (size_t)iter->list->length - iter->index;
+    out->count = nodeRem < listRem ? nodeRem : listRem;
+
+    iter->index += out->count;
+    iter->chunkPtr = NULL;
+    iter->chunkRem = 0;
+    return true;
+}
 
 /**
  * @brief Get the next element from the iterator.
@@ -237,22 +298,25 @@ typedef struct reduct_list_iter
  */
 static inline REDUCT_ALWAYS_INLINE bool reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out)
 {
-    if (iter->leaf != NULL)
+    if (REDUCT_UNLIKELY(iter->chunkRem == 0))
     {
-        iter->index++;
+        if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
+        {
+            return false;
+        }
+
+        reduct_list_node_t* leaf = reduct_list_find_leaf(iter->list, iter->index, iter->tailOffset);
+        size_t offset = iter->index & REDUCT_LIST_MASK;
+        iter->chunkPtr = &leaf->handles[offset];
+
+        size_t nodeRem = REDUCT_LIST_WIDTH - offset;
+        size_t listRem = (size_t)iter->list->length - iter->index;
+        iter->chunkRem = (uint32_t)(nodeRem < listRem ? nodeRem : listRem);
     }
 
-    if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
-    {
-        return false;
-    }
-
-    if ((iter->index & REDUCT_LIST_MASK) == 0 || iter->leaf == NULL)
-    {
-        iter->leaf = reduct_list_find_leaf(iter->list, iter->index, iter->tailOffset);
-    }
-
-    *out = iter->leaf->handles[iter->index & REDUCT_LIST_MASK];
+    *out = *iter->chunkPtr++;
+    iter->index++;
+    iter->chunkRem--;
     return true;
 }
 
@@ -313,9 +377,19 @@ static inline REDUCT_ALWAYS_INLINE reduct_handle_t reduct_list_second(struct red
  * @param reduct Pointer to the Reduct structure.
  * @param list Pointer to the list.
  * @param key Pointer to the key handle.
- * @return The handle of the entry list, or `REDUCT_HANDLE_NONE` if not found.
+ * @return The handle of the entry list, or `REDUCT_HANDLE_NIL(reduct)` if not found.
  */
-REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, reduct_list_t* list, reduct_handle_t* key);
+REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, reduct_list_t* list, reduct_handle_t key);
+
+/**
+ * @brief High-level helper to get a value from an association list by a C string key.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param list Pointer to the list.
+ * @param key The key string to look up.
+ * @return The value handle, or `REDUCT_HANDLE_NIL(reduct)` if not found.
+ */
+REDUCT_API reduct_handle_t reduct_list_get(struct reduct* reduct, reduct_list_t* list, const char* key);
 
 /**
  * @brief Find the index of an entry in an association list by its key.
@@ -326,7 +400,7 @@ REDUCT_API reduct_handle_t reduct_list_find_entry(struct reduct* reduct, reduct_
  * @param outIndex Pointer to store the index of the entry if found.
  * @return `true` if the entry was found, `false` otherwise.
  */
-REDUCT_API bool reduct_list_find_entry_index(struct reduct* reduct, reduct_list_t* list, reduct_handle_t* key,
+REDUCT_API bool reduct_list_find_entry_index(struct reduct* reduct, reduct_list_t* list, reduct_handle_t key,
     size_t* outIndex);
 
 /**
@@ -338,8 +412,24 @@ REDUCT_API bool reduct_list_find_entry_index(struct reduct* reduct, reduct_list_
  * @param outVal Pointer to store the value handle, can be `NULL`.
  * @return `true` if the entry is valid and handles were retrieved, `false` otherwise.
  */
-REDUCT_API bool reduct_list_get_entry(struct reduct* reduct, reduct_handle_t* entryH, reduct_handle_t* outKey,
+REDUCT_API bool reduct_list_get_entry(struct reduct* reduct, reduct_handle_t entryH, reduct_handle_t* outKey,
     reduct_handle_t* outVal);
+
+/**
+ * @brief Retain a list, preventing it from being collected by the garbage collector.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param list Pointer to the list.
+ */
+REDUCT_API void reduct_list_retain(struct reduct* reduct, reduct_list_t* list);
+
+/**
+ * @brief Release a list, potentially allowing the garbage collector to collect it.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param list Pointer to the list.
+ */
+REDUCT_API void reduct_list_release(struct reduct* reduct, reduct_list_t* list);
 
 /** @} */
 

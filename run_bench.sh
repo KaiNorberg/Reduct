@@ -59,6 +59,7 @@ echo -e "- **Reduct:** \`$($REDUCT_BIN --version 2>/dev/null || echo "unknown")\
 echo -e "- **Hyperfine:** \`$(hyperfine --version)\`" >> "$OUTPUT_MD"
 echo -e "- **Heaptrack:** \`$(heaptrack --version | head -n 1)\`" >> "$OUTPUT_MD"
 echo -e "- **Lua:** \`$(lua -v 2>&1 | head -n 1)\`" >> "$OUTPUT_MD"
+echo -e "- **LuaJIT:** \`$(luajit -v 2>&1 | head -n 1 || echo "unknown")\`" >> "$OUTPUT_MD"
 echo -e "- **Python:** \`$(python3 --version)\`" >> "$OUTPUT_MD"
 echo -e "- **Janet:** \`Janet $(janet -v 2>/dev/null || echo "unknown")\`\n" >> "$OUTPUT_MD"
 
@@ -72,55 +73,64 @@ fi
 for rdt_file in $RDT_FILES; do
     base_name=$(basename "$rdt_file" .rdt)
     echo -e "\n${YELLOW}Benchmarking: $base_name${NC}"
-    
+
     echo -e "### $base_name\n" >> "$OUTPUT_MD"
-    
-    cmds=("$REDUCT_BIN $rdt_file")
-    
+
+    hf_args=()
+    bench_cmds=()
+
+    add_bench() {
+        hf_args+=(--command-name "$1" "$2")
+        bench_cmds+=("$1|$2")
+    }
+
+    add_bench "reduct" "$REDUCT_BIN $rdt_file"
+
     lua_script="$BENCH_DIR/$base_name.lua"
     if [ -f "$lua_script" ]; then
-        cmds+=("lua $lua_script")
+        add_bench "lua" "lua $lua_script"
+        if command -v luajit &> /dev/null; then
+            add_bench "luajit (jit)" "luajit -jon $lua_script"
+            add_bench "luajit (int)" "luajit -joff $lua_script"
+        fi
     fi
-    
+
     python_script="$BENCH_DIR/$base_name.py"
     if [ -f "$python_script" ]; then
-        cmds+=("python3 $python_script")
+        add_bench "python3" "python3 $python_script"
     fi
 
     janet_script="$BENCH_DIR/$base_name.janet"
     if [ -f "$janet_script" ]; then
-        cmds+=("janet $janet_script")
+        add_bench "janet" "janet $janet_script"
     fi
 
-    hyperfine --warmup=10 -N --export-markdown "tmp_hf.md" "${cmds[@]}"
-    sed -i "s|$REDUCT_BIN|reduct|g" "tmp_hf.md"
+    echo -e "  - Running performance tests..."
+    hyperfine --warmup=10 -N --export-markdown "tmp_hf.md" "${hf_args[@]}"
     cat "tmp_hf.md" >> "$OUTPUT_MD"
     rm "tmp_hf.md"
-    echo -e "${GREEN}Done${NC}"
-    
+
     echo -e "\n##### Memory Usage\n" >> "$OUTPUT_MD"
     echo -e "| Command | Peak Memory |" >> "$OUTPUT_MD"
     echo -e "|:---|---:|" >> "$OUTPUT_MD"
-    
-    for cmd in "${cmds[@]}"; do
-        heaptrack --record-only $cmd
-        
+
+    for entry in "${bench_cmds[@]}"; do
+        name="${entry%%|*}"
+        cmd="${entry#*|}"
+
+        heaptrack --record-only $cmd > /dev/null 2>&1
         latest_log=$(ls -t heaptrack.*.zst | head -n 1)
-        
         if [ -f "$latest_log" ]; then
-            peak_mem=$(heaptrack_print "$latest_log" | grep "peak heap memory consumption:" | sed 's/peak heap memory consumption: //')
-            
-            display_name=$(echo "$cmd" | sed "s|$REDUCT_BIN|reduct|")
-            echo "| \`$display_name\` | $peak_mem |" >> "$OUTPUT_MD"
-            
+            peak_mem=$(heaptrack_print "$latest_log" | grep "peak heap memory consumption:" | sed 's/peak heap memory consumption: //' | tr -d '[:space:]')
+            echo "| \`$name\` | $peak_mem |" >> "$OUTPUT_MD"
             rm "$latest_log"
         else
-            echo "| \`$cmd\` | N/A |" >> "$OUTPUT_MD"
+            echo "| \`$name\` | N/A |" >> "$OUTPUT_MD"
         fi
     done
-    echo -e "${GREEN}DONE${NC}"
-    
-    echo -e "\n" >> "$OUTPUT_MD"
+
+    echo -e "${GREEN}Done${NC}"
+    echo -e "\n---\n" >> "$OUTPUT_MD"
 done
 
 echo "----------------------------------------------------"

@@ -78,6 +78,7 @@ typedef struct reduct_scratch
  */
 typedef struct reduct
 {
+    reduct_handle_t nil;
     reduct_eval_frame_t* frames;
     size_t frameCount;
     size_t frameCapacity;
@@ -117,6 +118,7 @@ typedef struct reduct
     reduct_schema_internal_t** schemas;
     size_t schemaCount;
     size_t schemaCapacity;
+    void* userdata;
     int argc;
     char** argv;
 } reduct_t;
@@ -135,6 +137,22 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error);
  * @param reduct Pointer to the Reduct structure to free.
  */
 REDUCT_API void reduct_free(reduct_t* reduct);
+
+/**
+ * @brief Set the user data pointer for the Reduct structure.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param userdata The user data pointer.
+ */
+REDUCT_API void reduct_userdata_set(reduct_t* reduct, void* userdata);
+
+/**
+ * @brief Get the user data pointer from the Reduct structure.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @return The user data pointer.
+ */
+REDUCT_API void* reduct_userdata_get(reduct_t* reduct);
 
 /**
  * @brief Set the command line arguments for the Reduct structure.

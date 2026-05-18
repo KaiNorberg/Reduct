@@ -102,3 +102,19 @@ REDUCT_API reduct_const_t reduct_function_lookup_constant(reduct_t* reduct, redu
     func->constants[func->constantCount] = *slot;
     return func->constantCount++;
 }
+
+REDUCT_API void reduct_function_retain(reduct_t* reduct, reduct_function_t* function)
+{
+    assert(reduct != NULL);
+    assert(function != NULL);
+
+    reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(function, reduct_item_t, function));
+}
+
+REDUCT_API void reduct_function_release(reduct_t* reduct, reduct_function_t* function)
+{
+    assert(reduct != NULL);
+    assert(function != NULL);
+
+    reduct_gc_release(reduct, REDUCT_CONTAINER_OF(function, reduct_item_t, function));
+}

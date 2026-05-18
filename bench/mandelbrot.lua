@@ -4,7 +4,7 @@ local function mandelbrot(width, height, max_iter)
         local ci = (y * 2 / height) - 1
         local line = ""
         for x = 0, width - 1 do
-            local cr = (x * 3 / width) - 2
+            local cr = (x * 3.5 / width) - 2.5
             local zr, zi = 0, 0
             local iter = 0
             while zr * zr + zi * zi <= 4 and iter < max_iter do

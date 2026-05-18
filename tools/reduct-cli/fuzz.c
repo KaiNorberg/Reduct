@@ -20,7 +20,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     reduct = reduct_new(&error);
 
     reduct_handle_t parsed = reduct_parse(reduct, (const char*)data, size, "<test>");
-    reduct_function_t* function = reduct_compile(reduct, &parsed);
+    reduct_handle_t function = reduct_compile(reduct, parsed);
 
     reduct_free(reduct);
     return 0;

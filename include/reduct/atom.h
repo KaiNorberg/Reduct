@@ -210,9 +210,9 @@ REDUCT_API reduct_atom_t* reduct_atom_new_native(struct reduct* reduct, reduct_n
 REDUCT_API bool reduct_atom_intern(struct reduct* reduct, reduct_atom_t* atom);
 
 /**
- * @brief Lookup an atom in the Reduct structure.
+ * @brief Lookup an interned atom in the Reduct structure.
  *
- * Will create a new atom if it does not exist.
+ * Will create and intern a new atom if it does not exist.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param str The string to lookup.
@@ -274,6 +274,22 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom);
  * @param atom Pointer to the atom.
  */
 REDUCT_API void reduct_atom_check_native(struct reduct* reduct, reduct_atom_t* atom);
+
+/**
+ * @brief Retain an atom, preventing it from being collected by the garbage collector.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param atom Pointer to the atom.
+ */
+REDUCT_API void reduct_atom_retain(struct reduct* reduct, reduct_atom_t* atom);
+
+/**
+ * @brief Release an atom, potentially allowing the garbage collector to collect it.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param atom Pointer to the atom.
+ */
+REDUCT_API void reduct_atom_release(struct reduct* reduct, reduct_atom_t* atom);
 
 /**
  * @brief Check if an atom is an intrinsic.
@@ -434,6 +450,24 @@ static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_atom_new_copy(struct re
     memcpy(atom->string, data, len);
     return atom;
 }
+
+/**
+ * @brief Retrieve an integer value from an atom, regardless of if it is quoted or not.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param atom Pointer to the atom.
+ * @return The integer value.
+ */
+REDUCT_API int64_t reduct_atom_as_int(struct reduct* reduct, reduct_atom_t* atom);
+
+/**
+ * @brief Retrieve a float value from an atom, regardless of if it is quoted or not.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param atom Pointer to the atom.
+ * @return The float value.
+ */
+REDUCT_API double reduct_atom_as_float(struct reduct* reduct, reduct_atom_t* atom);
 
 /** @} */
 

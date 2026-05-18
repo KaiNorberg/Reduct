@@ -35,6 +35,8 @@ typedef struct reduct_expr
     };
 } reduct_expr_t;
 
+#define REDUCT_JUMP_INVALID ((size_t)-1) ///< Sentinel value for an invalid jump.
+
 /**
  * @brief Local structure.
  * @struct reduct_local_t
@@ -68,9 +70,9 @@ typedef struct reduct_compiler
  *
  * @param reduct Pointer to the Reduct structure.
  * @param ast The root AST item to compile (usually a list of expressions).
- * @return A pointer to the compiled function.
+ * @return Handle to the compiled function.
  */
-REDUCT_API reduct_function_t* reduct_compile(reduct_t* reduct, reduct_handle_t* ast);
+REDUCT_API reduct_handle_t reduct_compile(reduct_t* reduct, reduct_handle_t ast);
 
 /**
  * @brief Initialize a compiler context.
@@ -217,7 +219,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  */
 #define REDUCT_EXPR_HANDLE(_compiler, _handle) \
     REDUCT_EXPR_CONST(reduct_function_lookup_constant((_compiler)->reduct, (_compiler)->function, \
-        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = *(_handle)}))
+        &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = (_handle)}))
 
 /**
  * @brief Create a `REDUCT_MODE_CONST` mode expression for a specific atom.
@@ -312,7 +314,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @param handle The handle to compile.
  * @param out Output pointer for the compiled expression.
  */
-REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_handle_t* handle, reduct_expr_t* out);
+REDUCT_API void reduct_expr_build(reduct_compiler_t* compiler, reduct_handle_t handle, reduct_expr_t* out);
 
 /**
  * @brief Free resources associated with an expression descriptor.
@@ -466,6 +468,19 @@ static inline void reduct_compile_call(reduct_compiler_t* compiler, reduct_reg_t
 }
 
 /**
+ * @brief Emits a `REDUCT_OPCODE_RECUR` instruction, that returns its result in the target register.
+ *
+ * @param compiler The compiler context.
+ * @param target The target register (also base of arguments).
+ * @param arity The number of arguments.
+ */
+static inline void reduct_compile_recur(reduct_compiler_t* compiler, reduct_reg_t target, uint32_t arity)
+{
+    assert(compiler != NULL);
+    reduct_compile_inst(compiler, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_RECUR, target, arity, 0));
+}
+
+/**
  * @brief Emits a `REDUCT_OPCODE_MOVE` instruction, that moves the value of the source expression to the target
  * register.
  *
@@ -560,106 +575,49 @@ static inline reduct_reg_t reduct_compile_move_or_alloc(reduct_compiler_t* compi
  * @param compiler The compiler context.
  * @param expr The expression to return.
  */
-static inline void reduct_compile_return(reduct_compiler_t* compiler, reduct_expr_t* expr)
-{
-    assert(compiler != NULL);
-    assert(expr != NULL);
-
-    if (expr->mode == REDUCT_MODE_REG)
-    {
-        reduct_reg_t retReg = expr->reg;
-        uint32_t retInstPos = compiler->function->instCount;
-
-        for (size_t i = 0; i < retInstPos; i++)
-        {
-            reduct_inst_t inst = compiler->function->insts[i];
-            reduct_opcode_t op = REDUCT_INST_GET_OP_BASE(inst);
-
-            if (op != REDUCT_OPCODE_CALL)
-            {
-                continue;
-            }
-
-            bool isTail = false;
-
-            size_t curr = i + 1;
-            reduct_reg_t currentReg = REDUCT_INST_GET_A(inst);
-            bool valid = true;
-
-            while (curr < retInstPos)
-            {
-                reduct_inst_t nextInst = compiler->function->insts[curr];
-                reduct_opcode_t nextOp = REDUCT_INST_GET_OP(nextInst);
-                reduct_opcode_t nextOpBase = REDUCT_INST_GET_OP_BASE(nextInst);
-
-                if (nextOp == REDUCT_OPCODE_MOV && REDUCT_INST_GET_A(nextInst) == retReg &&
-                    REDUCT_INST_GET_C(nextInst) == currentReg)
-                {
-                    currentReg = retReg;
-                    curr++;
-                }
-                else if (nextOpBase == REDUCT_OPCODE_JMP)
-                {
-                    int32_t offset = REDUCT_INST_GET_SBX(nextInst);
-                    if (offset < 0)
-                    {
-                        valid = false;
-                        break;
-                    }
-                    curr = curr + 1 + offset;
-                }
-                else
-                {
-                    valid = false;
-                    break;
-                }
-            }
-
-            if (valid && currentReg == retReg && curr == retInstPos)
-            {
-                isTail = true;
-            }
-
-            if (isTail)
-            {
-                reduct_mode_t mode = (reduct_mode_t)(REDUCT_INST_GET_OP(inst) & REDUCT_MODE_CONST);
-                compiler->function->insts[i] =
-                    (inst & ~REDUCT_INST_MASK_OPCODE) | ((REDUCT_OPCODE_TAILCALL | mode) & REDUCT_INST_MASK_OPCODE);
-            }
-        }
-    }
-
-    if (expr->mode == REDUCT_MODE_NONE)
-    {
-        reduct_expr_t nilExpr = REDUCT_EXPR_NIL(compiler);
-        uint32_t pos = compiler->lastItem != NULL ? compiler->lastItem->position : 0;
-        reduct_function_emit(compiler->reduct, compiler->function,
-            REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_RET | REDUCT_MODE_CONST, 0, 0, nilExpr.constant), pos);
-        return;
-    }
-
-    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
-    reduct_compile_inst(compiler,
-        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_RET | (reduct_opcode_t)expr->mode), 0, 0, expr->value));
-}
+REDUCT_API void reduct_compile_return(reduct_compiler_t* compiler, reduct_expr_t* expr);
 
 /**
  * @brief Emits a comparison, arithmetic or bitwise instruction.
  *
  * @param compiler The compiler context.
  * @param opBase The base opcode (without a mode) for the operation (e.g, `REDUCT_OPCODE_ADD`, `REDUCT_OPCODE_EQ`).
- * @param target The target register.
+ * @param target Pointer to the target register, can be `REDUCT_REG_INVALID`, might be updated.
  * @param left The left operand register.
  * @param right The right operand expression.
  */
-static inline void reduct_compile_binary(reduct_compiler_t* compiler, reduct_opcode_t opBase, reduct_reg_t target,
+static inline void reduct_compile_binary(reduct_compiler_t* compiler, reduct_opcode_t opBase, reduct_reg_t* target,
     reduct_reg_t left, reduct_expr_t* right)
 {
     assert(compiler != NULL);
     assert(right != NULL);
     assert(right->mode == REDUCT_MODE_REG || right->mode == REDUCT_MODE_CONST);
+
+    if (*target == REDUCT_REG_INVALID)
+    {
+        *target = reduct_reg_alloc(compiler);
+    }
+
     reduct_compile_inst(compiler,
-        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(opBase | right->mode), target, left, right->value));
+        REDUCT_INST_MAKE_ABC((reduct_opcode_t)(opBase | right->mode), *target, left, right->value));
+}
+
+/**
+ * @brief Emits a skip-comparison instruction (JEQ, JNEQ, JLT, JLE, JGT, JGE) that skips the next
+ * instruction if the comparison is true.
+ *
+ * @param compiler The compiler context.
+ * @param opBase The opcode (e.g, `REDUCT_OPCODE_JEQ`).
+ * @param left The left operand register.
+ * @param right The right operand expression.
+ */
+static inline void reduct_compile_skip(reduct_compiler_t* compiler, reduct_opcode_t opBase, reduct_reg_t left,
+    reduct_expr_t* right)
+{
+    assert(compiler != NULL);
+    assert(right != NULL);
+    assert(right->mode == REDUCT_MODE_REG || right->mode == REDUCT_MODE_CONST);
+    reduct_compile_inst(compiler, REDUCT_INST_MAKE_ABC((reduct_opcode_t)(opBase | right->mode), left, 0, right->value));
 }
 
 /**

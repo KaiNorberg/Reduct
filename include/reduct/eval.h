@@ -41,7 +41,7 @@ typedef struct reduct_eval_frame
  * @param function The function to evaluate.
  * @return The result of the evaluation as a Reduct handle.
  */
-REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_function_t* function);
+REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t function);
 
 /**
  * @brief Parses, compiles and evaluates a file.
@@ -73,6 +73,17 @@ REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char*
  */
 REDUCT_API reduct_handle_t reduct_eval_call(struct reduct* reduct, reduct_handle_t callable, size_t argc,
     reduct_handle_t* argv);
+
+/**
+ * @brief Calls a Reduct callable (closure or native) with variadic arguments.
+ *
+ * @param reduct The Reduct instance.
+ * @param callable The callable item handle.
+ * @param argc The number of arguments.
+ * @param ... The arguments (as reduct_handle_t).
+ * @return The result of the call.
+ */
+REDUCT_API reduct_handle_t reduct_eval_call_v(struct reduct* reduct, reduct_handle_t callable, size_t argc, ...);
 
 /** @} */
 

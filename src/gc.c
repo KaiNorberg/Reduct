@@ -15,10 +15,10 @@ static void reduct_gc_mark_node_contents(reduct_t* reduct, uint32_t shift, reduc
     {
         for (uint32_t i = 0; i < REDUCT_LIST_WIDTH; i++)
         {
-            reduct_handle_t h = node->handles[i];
-            if (REDUCT_HANDLE_IS_ITEM(&h))
+            reduct_handle_t handle = node->handles[i];
+            if (REDUCT_HANDLE_IS_ITEM(handle))
             {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(&h));
+                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(handle));
             }
         }
     }
@@ -87,9 +87,9 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
         {
             if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_HANDLE)
             {
-                if (REDUCT_HANDLE_IS_ITEM(&item->function.constants[i].handle))
+                if (REDUCT_HANDLE_IS_ITEM(item->function.constants[i].handle))
                 {
-                    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(&item->function.constants[i].handle));
+                    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(item->function.constants[i].handle));
                 }
             }
             else if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
@@ -104,9 +104,9 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
         for (uint16_t i = 0; i < item->closure.function->constantCount; i++)
         {
             reduct_handle_t handle = item->closure.constants[i];
-            if (REDUCT_HANDLE_IS_ITEM(&handle))
+            if (REDUCT_HANDLE_IS_ITEM(handle))
             {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(&handle));
+                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(handle));
             }
         }
     }
@@ -115,6 +115,8 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
 REDUCT_API void reduct_gc(reduct_t* reduct)
 {
     assert(reduct != NULL);
+
+    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(reduct->nil));
 
     for (size_t i = 0; i < reduct->retainedCount; i++)
     {
@@ -126,9 +128,9 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
         for (uint32_t i = 0; i < reduct->regCount; i++)
         {
             reduct_handle_t child = reduct->regs[i];
-            if (REDUCT_HANDLE_IS_ITEM(&child))
+            if (REDUCT_HANDLE_IS_ITEM(child))
             {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(&child));
+                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(child));
             }
         }
         for (uint32_t i = 0; i < reduct->frameCount; i++)

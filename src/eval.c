@@ -1,13 +1,13 @@
-#include "reduct/closure.h"
-#include "reduct/defs.h"
 #include "reduct/eval.h"
-#include "reduct/item.h"
-#include "reduct/standard.h"
-#include "reduct/parse.h"
+#include "reduct/closure.h"
 #include "reduct/compile.h"
+#include "reduct/defs.h"
+#include "reduct/item.h"
+#include "reduct/parse.h"
+#include "reduct/standard.h"
+#include <stdarg.h>
 
-static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct,
-    uint32_t neededRegs)
+static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct, uint32_t neededRegs)
 {
     assert(reduct != NULL);
 
@@ -35,8 +35,8 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct
     reduct->regs = newRegs;
 }
 
-static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct,
-    reduct_closure_t* closure, uint32_t target)
+static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct, reduct_closure_t* closure,
+    uint32_t target)
 {
     assert(reduct != NULL);
     assert(closure != NULL);
@@ -49,8 +49,8 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct,
         }
 
         reduct->frameCapacity *= REDUCT_EVAL_FRAMES_GROWTH_FACTOR;
-        reduct->frames = (reduct_eval_frame_t*)realloc(reduct->frames,
-            sizeof(reduct_eval_frame_t) * reduct->frameCapacity);
+        reduct->frames =
+            (reduct_eval_frame_t*)realloc(reduct->frames, sizeof(reduct_eval_frame_t) * reduct->frameCapacity);
         if (reduct->frames == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
@@ -78,8 +78,7 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_pop_frame(reduct_t* reduct)
     reduct->regCount = frame->prevRegCount;
 }
 
-static inline REDUCT_ALWAYS_INLINE void reduct_eval_tail_frame(reduct_t* reduct,
-    reduct_closure_t* closure)
+static inline REDUCT_ALWAYS_INLINE void reduct_eval_tail_frame(reduct_t* reduct, reduct_closure_t* closure)
 {
     assert(reduct != NULL);
     assert(reduct->frameCount > 0);
@@ -122,16 +121,16 @@ static inline REDUCT_ALWAYS_INLINE uint32_t reduct_eval_bundle_args(reduct_t* re
     uint32_t argc, reduct_handle_t* argv)
 {
     uint32_t arity = func->arity;
-    if (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC)
+    if (REDUCT_UNLIKELY(func->flags & REDUCT_FUNCTION_FLAG_VARIADIC))
     {
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= (uint32_t)arity - 1, NULL,
-            "expected at least %u arguments, got %u", arity - 1, argc);
+        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= (uint32_t)arity - 1, "expected at least %u arguments, got %u",
+            arity - 1, argc);
 
         uint32_t fixed = arity - 1;
         argv[fixed] = REDUCT_HANDLE_CREATE_HANDLES(reduct, argc - fixed, &argv[fixed]);
         return arity;
     }
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == arity, NULL, "expected %u arguments, got %u", arity, argc);
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == arity, "expected %u arguments, got %u", arity, argc);
     return argc;
 }
 
@@ -141,14 +140,15 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
 
     reduct_eval_frame_t* frame = &reduct->frames[reduct->frameCount - 1];
     reduct_inst_t* ip = frame->ip;
-    reduct_handle_t* base = reduct->regs + frame->base;
+    reduct_handle_t* regs = reduct->regs;
+    reduct_handle_t* base = regs + frame->base;
     reduct_handle_t* constants = frame->closure->constants;
     reduct_inst_t inst;
-    reduct_handle_t result = REDUCT_HANDLE_NONE;
+    reduct_handle_t result = REDUCT_HANDLE_NIL(reduct);
 
+    // clang-format off
     /// @todo Write some macro magic to turn this into a switch case if not using GCC or Clang.
 
-    // The `frame->ip = ip` line is needed for error checking, even if it does hurt performance.
 #define DISPATCH() \
     do \
     { \
@@ -162,14 +162,16 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
     do { \
         frame = &reduct->frames[reduct->frameCount - 1]; \
         ip = frame->ip; \
-        base = reduct->regs + frame->base; \
+        base = regs + frame->base; \
         constants = frame->closure->constants; \
     } while (0)
 
+#define UPDATE_BASE() (base = regs + frame->base)
+
 #define PREPARE_CALLABLE() \
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&valC), NULL, "cannot call value of type %s", \
-        REDUCT_HANDLE_GET_TYPE_STR(&valC)); \
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&valC)
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), NULL, "cannot call value of type %s", \
+        REDUCT_HANDLE_GET_TYPE_STRING(valC)); \
+    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(valC)
 
 #define DECODE_A() uint32_t a = REDUCT_INST_GET_A(inst)
 #define DECODE_B() uint32_t b = REDUCT_INST_GET_B(inst)
@@ -182,23 +184,11 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
     reduct_handle_t valC = constants[c]
 #define DECODE_SBX() int32_t sbx = REDUCT_INST_GET_SBX(inst)
 
-#define OP_ENTRY(_op, _label) [_op] = &&_label, [_op | REDUCT_MODE_CONST] = &&_label
-
-#define OP_ENTRY_C(_op, _label) [_op] = &&_label, [_op | REDUCT_MODE_CONST] = &&_label##_k
-
 #define OP_BITWISE(_label, _op) \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    REDUCT_HANDLE_BITWISE_FAST(reduct, &base[a], &base[b], &valC, _op); \
-    DISPATCH(); \
-})
-
-#define OP_EQUALITY(_label, _func, _truth) \
-LABEL_C_OP(_label, { \
-    DECODE_A(); \
-    DECODE_B(); \
-    base[a] = REDUCT_HANDLE_FROM_BOOL(_func(reduct, &base[b], &valC) == _truth); \
+    REDUCT_HANDLE_BITWISE_FAST(reduct, &base[a], base[b], valC, _op); \
     DISPATCH(); \
 })
 
@@ -206,7 +196,7 @@ LABEL_C_OP(_label, { \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    base[a] = REDUCT_HANDLE_FROM_BOOL(REDUCT_HANDLE_COMPARE_FAST(reduct, &base[b], &valC, _op)); \
+    base[a] = REDUCT_HANDLE_FROM_BOOL(REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], valC, _op)); \
     DISPATCH(); \
 })
 
@@ -214,7 +204,7 @@ LABEL_C_OP(_label, { \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &base[a], &base[b], &valC, _op); \
+    REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &base[a], base[b], valC, _op); \
     DISPATCH(); \
 })
 
@@ -222,51 +212,70 @@ LABEL_C_OP(_label, { \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    int64_t amount; \
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&valC))) \
-    { \
-        amount = REDUCT_HANDLE_TO_INT(&valC); \
-    } \
-    else \
-    { \
-        amount = reduct_handle_as_int(reduct, &valC); \
-    } \
+    int64_t amount = reduct_handle_as_int(reduct, valC); \
     REDUCT_ERROR_RUNTIME_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_INT_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, amount); \
-    base[a] = REDUCT_HANDLE_FROM_INT(reduct_handle_as_int(reduct, &base[b]) _op amount); \
+    base[a] = REDUCT_HANDLE_FROM_INT(reduct_handle_as_int(reduct, base[b]) _op amount); \
     DISPATCH(); \
 })
 
-    static const void* dispatchTable[] = {
-        OP_ENTRY(REDUCT_OPCODE_NONE, label_none),
-        OP_ENTRY(REDUCT_OPCODE_LIST, label_list),
-        OP_ENTRY(REDUCT_OPCODE_JMP, label_jmp),
-        OP_ENTRY(REDUCT_OPCODE_JMPF, label_jmpf),
-        OP_ENTRY(REDUCT_OPCODE_JMPT, label_jmpt),
-        OP_ENTRY_C(REDUCT_OPCODE_CALL, label_call),
-        OP_ENTRY_C(REDUCT_OPCODE_MOV, label_mov),
-        OP_ENTRY_C(REDUCT_OPCODE_RET, label_ret),
-        OP_ENTRY_C(REDUCT_OPCODE_EQ, label_eq),
-        OP_ENTRY_C(REDUCT_OPCODE_NEQ, label_neq),
-        OP_ENTRY_C(REDUCT_OPCODE_SEQ, label_seq),
-        OP_ENTRY_C(REDUCT_OPCODE_SNEQ, label_sneq),
-        OP_ENTRY_C(REDUCT_OPCODE_LT, label_lt),
-        OP_ENTRY_C(REDUCT_OPCODE_LE, label_le),
-        OP_ENTRY_C(REDUCT_OPCODE_GT, label_gt),
-        OP_ENTRY_C(REDUCT_OPCODE_GE, label_ge),
-        OP_ENTRY_C(REDUCT_OPCODE_ADD, label_add),
-        OP_ENTRY_C(REDUCT_OPCODE_SUB, label_sub),
-        OP_ENTRY_C(REDUCT_OPCODE_MUL, label_mul),
-        OP_ENTRY_C(REDUCT_OPCODE_DIV, label_div),
-        OP_ENTRY_C(REDUCT_OPCODE_MOD, label_mod),
-        OP_ENTRY_C(REDUCT_OPCODE_BAND, label_band),
-        OP_ENTRY_C(REDUCT_OPCODE_BOR, label_bor),
-        OP_ENTRY_C(REDUCT_OPCODE_BXOR, label_bxor),
-        OP_ENTRY_C(REDUCT_OPCODE_BNOT, label_bnot),
-        OP_ENTRY_C(REDUCT_OPCODE_SHL, label_shl),
-        OP_ENTRY_C(REDUCT_OPCODE_SHR, label_shr),
-        OP_ENTRY(REDUCT_OPCODE_CLOSURE, label_closure),
-        OP_ENTRY_C(REDUCT_OPCODE_CAPTURE, label_capture),
-        OP_ENTRY_C(REDUCT_OPCODE_TAILCALL, label_tailcall),
+#define OP_SKIP_CMP(_label, _op) \
+    _label: \
+    { \
+        DECODE_A(); \
+        DECODE_C(); \
+        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[a], base[c], _op)) \
+        { \
+            ip++; \
+        } \
+        DISPATCH(); \
+    } \
+    _label##_k: \
+    { \
+        DECODE_A(); \
+        DECODE_C_CONST(); \
+        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[a], valC, _op)) \
+        { \
+            ip++; \
+        } \
+        DISPATCH(); \
+    }
+
+    static const void* dispatchTable[64] = {
+        [REDUCT_OPCODE_LIST] = &&label_list,
+        [REDUCT_OPCODE_JMP] = &&label_jmp,
+        [REDUCT_OPCODE_JMPF] = &&label_jmpf,
+        [REDUCT_OPCODE_JMPT] = &&label_jmpt,
+        [REDUCT_OPCODE_CALL] = &&label_call, [REDUCT_OPCODE_CALL_CONST] = &&label_call_k,
+        [REDUCT_OPCODE_MOV] = &&label_mov, [REDUCT_OPCODE_MOV_CONST] = &&label_mov_k,
+        [REDUCT_OPCODE_RET] = &&label_ret, [REDUCT_OPCODE_RET_CONST] = &&label_ret_k,
+        [REDUCT_OPCODE_EQ] = &&label_eq, [REDUCT_OPCODE_EQ_CONST] = &&label_eq_k,
+        [REDUCT_OPCODE_NEQ] = &&label_neq, [REDUCT_OPCODE_NEQ_CONST] = &&label_neq_k,
+        [REDUCT_OPCODE_LT] = &&label_lt, [REDUCT_OPCODE_LT_CONST] = &&label_lt_k,
+        [REDUCT_OPCODE_LE] = &&label_le, [REDUCT_OPCODE_LE_CONST] = &&label_le_k,
+        [REDUCT_OPCODE_GT] = &&label_gt, [REDUCT_OPCODE_GT_CONST] = &&label_gt_k,
+        [REDUCT_OPCODE_GE] = &&label_ge, [REDUCT_OPCODE_GE_CONST] = &&label_ge_k,
+        [REDUCT_OPCODE_ADD] = &&label_add, [REDUCT_OPCODE_ADD_CONST] = &&label_add_k,
+        [REDUCT_OPCODE_SUB] = &&label_sub, [REDUCT_OPCODE_SUB_CONST] = &&label_sub_k,
+        [REDUCT_OPCODE_MUL] = &&label_mul, [REDUCT_OPCODE_MUL_CONST] = &&label_mul_k,
+        [REDUCT_OPCODE_DIV] = &&label_div, [REDUCT_OPCODE_DIV_CONST] = &&label_div_k,
+        [REDUCT_OPCODE_MOD] = &&label_mod, [REDUCT_OPCODE_MOD_CONST] = &&label_mod_k,
+        [REDUCT_OPCODE_BAND] = &&label_band, [REDUCT_OPCODE_BAND_CONST] = &&label_band_k,
+        [REDUCT_OPCODE_BOR] = &&label_bor, [REDUCT_OPCODE_BOR_CONST] = &&label_bor_k,
+        [REDUCT_OPCODE_BXOR] = &&label_bxor, [REDUCT_OPCODE_BXOR_CONST] = &&label_bxor_k,
+        [REDUCT_OPCODE_BNOT] = &&label_bnot, [REDUCT_OPCODE_BNOT_CONST] = &&label_bnot_k,
+        [REDUCT_OPCODE_SHL] = &&label_shl, [REDUCT_OPCODE_SHL_CONST] = &&label_shl_k,
+        [REDUCT_OPCODE_SHR] = &&label_shr, [REDUCT_OPCODE_SHR_CONST] = &&label_shr_k,
+        [REDUCT_OPCODE_CLOSURE] = &&label_closure, [REDUCT_OPCODE_NOP] = &&label_nop,
+        [REDUCT_OPCODE_CAPTURE] = &&label_capture, [REDUCT_OPCODE_CAPTURE_CONST] = &&label_capture_k,
+        [REDUCT_OPCODE_TAILCALL] = &&label_tailcall, [REDUCT_OPCODE_TAILCALL_CONST] = &&label_tailcall_k,
+        [REDUCT_OPCODE_JEQ] = &&label_jeq, [REDUCT_OPCODE_JEQ_CONST] = &&label_jeq_k,
+        [REDUCT_OPCODE_JNEQ] = &&label_jneq, [REDUCT_OPCODE_JNEQ_CONST] = &&label_jneq_k,
+        [REDUCT_OPCODE_JLT] = &&label_jlt, [REDUCT_OPCODE_JLT_CONST] = &&label_jlt_k,
+        [REDUCT_OPCODE_JLE] = &&label_jle, [REDUCT_OPCODE_JLE_CONST] = &&label_jle_k,
+        [REDUCT_OPCODE_JGT] = &&label_jgt, [REDUCT_OPCODE_JGT_CONST] = &&label_jgt_k,
+        [REDUCT_OPCODE_JGE] = &&label_jge, [REDUCT_OPCODE_JGE_CONST] = &&label_jge_k,
+        [REDUCT_OPCODE_RECUR] = &&label_recur,
+        [REDUCT_OPCODE_TAILRECUR] = &&label_tailrecur,
     };
 
 #define LABEL_C_OP(_label, ...) \
@@ -282,8 +291,8 @@ LABEL_C_OP(_label, { \
     }
 
     DISPATCH();
-label_none:
-    REDUCT_ERROR_RUNTIME(reduct, "invalid opcode %u at instruction %zu", inst, (size_t)(ip - frame->closure->function->insts - 1));
+/*label_invalid:
+    REDUCT_ERROR_RUNTIME(reduct, "invalid opcode %u at instruction %zu", inst, (size_t)(ip - frame->closure->function->insts - 1));*/
 label_list:
 {
     DECODE_A();
@@ -302,7 +311,7 @@ label_jmpf:
     DECODE_A();
     DECODE_SBX();
     reduct_handle_t val = base[a];
-    if (!REDUCT_HANDLE_IS_TRUTHY(&val))
+    if (!REDUCT_HANDLE_IS_TRUTHY(val))
     {
         ip += sbx;
     }
@@ -313,7 +322,7 @@ label_jmpt:
     DECODE_A();
     DECODE_SBX();
     reduct_handle_t val = base[a];
-    if (REDUCT_HANDLE_IS_TRUTHY(&val))
+    if (REDUCT_HANDLE_IS_TRUTHY(val))
     {
         ip += sbx;
     }
@@ -329,6 +338,7 @@ LABEL_C_OP(label_call, {
         b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
 
         reduct_eval_push_frame(reduct, closure, frame->base + a);
+        regs = reduct->regs;
 
         UPDATE_STATE();
 
@@ -338,7 +348,7 @@ LABEL_C_OP(label_call, {
     {
         reduct_handle_t* args = &base[a];
         reduct_handle_t result = item->atom.native(reduct, b, args);
-        UPDATE_STATE();
+        UPDATE_BASE();
         base[a] = result;
 
         reduct_gc_if_needed(reduct);
@@ -357,12 +367,17 @@ LABEL_C_OP(label_tailcall, {
         reduct_closure_t* closure = &item->closure;
         b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
 
-        if (a != 0)
+        if (REDUCT_LIKELY(a != 0))
         {
-            memmove(base, base + a, b * sizeof(reduct_handle_t));
+            reduct_handle_t* src = base + a;
+            for (uint32_t i = 0; i < b; i++)
+            {
+                base[i] = src[i];
+            }
         }
 
         reduct_eval_tail_frame(reduct, closure);
+        regs = reduct->regs;
 
         UPDATE_STATE();
 
@@ -392,6 +407,39 @@ LABEL_C_OP(label_tailcall, {
 
     REDUCT_ERROR_RUNTIME(reduct, "cannot call value of type %s", reduct_item_type_str(item));
 })
+label_recur:
+{
+    DECODE_A();
+    DECODE_B();
+    reduct_closure_t* closure = frame->closure;
+    b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
+
+    reduct_eval_push_frame(reduct, closure, frame->base + a);
+    regs = reduct->regs;
+
+    UPDATE_STATE();
+    reduct_gc_if_needed(reduct);
+    DISPATCH();
+}
+label_tailrecur:
+{
+    DECODE_A();
+    DECODE_B();
+    reduct_closure_t* closure = frame->closure;
+    b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
+    if (REDUCT_LIKELY(a != 0))
+    {
+        reduct_handle_t* src = base + a;
+        for (uint32_t i = 0; i < b; i++)
+        {
+            base[i] = src[i];
+        }
+    }
+    frame->ip = closure->function->insts;
+    UPDATE_STATE();
+    reduct_gc_if_needed(reduct);
+    DISPATCH();
+}
 LABEL_C_OP(label_mov, {
     DECODE_A();
     base[a] = valC;
@@ -410,25 +458,29 @@ LABEL_C_OP(label_ret, {
 })
 OP_COMPARE(label_eq, ==)
 OP_COMPARE(label_neq, !=)
-OP_EQUALITY(label_seq, reduct_handle_is_equal, true)
-OP_EQUALITY(label_sneq, reduct_handle_is_equal, false)
 OP_COMPARE(label_lt, <)
 OP_COMPARE(label_le, <=)
 OP_COMPARE(label_gt, >)
 OP_COMPARE(label_ge, >=)
+OP_SKIP_CMP(label_jeq, ==)
+OP_SKIP_CMP(label_jneq, !=)
+OP_SKIP_CMP(label_jlt, <)
+OP_SKIP_CMP(label_jle, <=)
+OP_SKIP_CMP(label_jgt, >)
+OP_SKIP_CMP(label_jge, >=)
 OP_ARITH(label_add, +)
 OP_ARITH(label_sub, -)
 OP_ARITH(label_mul, *)
 LABEL_C_OP(label_div, {
     DECODE_A();
     DECODE_B();
-    REDUCT_HANDLE_DIV_FAST(reduct, &base[a], &base[b], &valC);
+    REDUCT_HANDLE_DIV_FAST(reduct, &base[a], base[b], valC);
     DISPATCH();
 })
 LABEL_C_OP(label_mod, {
     DECODE_A();
     DECODE_B();
-    REDUCT_HANDLE_MOD_FAST(reduct, &base[a], &base[b], &valC);
+    REDUCT_HANDLE_MOD_FAST(reduct, &base[a], base[b], valC);
     DISPATCH();
 })
 OP_BITWISE(label_band, &)
@@ -436,15 +488,7 @@ OP_BITWISE(label_bor, |)
 OP_BITWISE(label_bxor, ^)
 LABEL_C_OP(label_bnot, {
     DECODE_A();
-    int64_t val;
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_INT(&valC)))
-    {
-        val = REDUCT_HANDLE_TO_INT(&valC);
-    }
-    else
-    {
-        val = reduct_handle_as_int(reduct, &valC);
-    }
+    int64_t val = reduct_handle_as_int(reduct, valC);
     base[a] = REDUCT_HANDLE_FROM_INT(~val);
     DISPATCH();
 })
@@ -455,20 +499,24 @@ label_closure:
     DECODE_A();
     DECODE_C();
     reduct_handle_t protoHandle = frame->closure->constants[c];
-    assert(REDUCT_HANDLE_IS_ITEM(&protoHandle));
+    assert(REDUCT_HANDLE_IS_ITEM(protoHandle));
 
-    reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(&protoHandle);
+    reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(protoHandle);
     assert(protoItem->type == REDUCT_ITEM_TYPE_FUNCTION);
 
     reduct_function_t* proto = &protoItem->function;
     base[a] = REDUCT_HANDLE_FROM_CLOSURE(reduct_closure_new(reduct, proto));
     DISPATCH();
 }
+label_nop:
+{
+    DISPATCH();
+}
 LABEL_C_OP(label_capture, {
     DECODE_A();
     DECODE_B();
     reduct_handle_t closureHandle = base[a];
-    reduct_closure_t* closurePtr = &REDUCT_HANDLE_TO_ITEM(&closureHandle)->closure;
+    reduct_closure_t* closurePtr = &REDUCT_HANDLE_TO_ITEM(closureHandle)->closure;
     closurePtr->constants[b] = valC;
     DISPATCH();
 })
@@ -477,10 +525,13 @@ eval_end:
     return result;
 }
 
-REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_function_t* function)
+REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t functionHandle)
 {
     assert(reduct != NULL);
-    assert(function != NULL);
+
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_FUNCTION(functionHandle),
+        "eval: expected compiled function, got %s", REDUCT_HANDLE_GET_TYPE_STRING(functionHandle));
+    reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(functionHandle);
 
     reduct_eval_ensure_ready(reduct);
 
@@ -498,7 +549,7 @@ REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path)
     assert(path != NULL);
 
     reduct_handle_t parsed = reduct_parse_file(reduct, path);
-    reduct_function_t* function = reduct_compile(reduct, &parsed);
+    reduct_handle_t function = reduct_compile(reduct, parsed);
     return reduct_eval(reduct, function);
 }
 
@@ -508,23 +559,25 @@ REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str,
     assert(str != NULL);
 
     reduct_handle_t parsed = reduct_parse(reduct, str, len, "<eval>");
-    reduct_function_t* function = reduct_compile(reduct, &parsed);
+    reduct_handle_t function = reduct_compile(reduct, parsed);
     return reduct_eval(reduct, function);
 }
 
-REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t callable, size_t argc, reduct_handle_t* argv)
+REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t callable, size_t argc,
+    reduct_handle_t* argv)
 {
     assert(reduct != NULL);
     assert(argv != NULL || argc == 0);
 
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(&callable), NULL, "cannot call value");
+    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(callable), NULL, "cannot call value");
 
     reduct_eval_ensure_ready(reduct);
 
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(&callable);
+    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(callable);
     if (item->type == REDUCT_ITEM_TYPE_ATOM)
     {
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, reduct_atom_is_native(reduct, &item->atom), NULL, "cannot call atom, only native functions and closures are callable");
+        REDUCT_ERROR_RUNTIME_ASSERT(reduct, reduct_atom_is_native(reduct, &item->atom), NULL,
+            "cannot call atom, only native functions and closures are callable");
         return item->atom.native(reduct, argc, argv);
     }
 
@@ -562,4 +615,27 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     }
 
     REDUCT_ERROR_RUNTIME(reduct, "cannot call value");
+}
+
+REDUCT_API reduct_handle_t reduct_eval_call_v(struct reduct* reduct, reduct_handle_t callable, size_t argc, ...)
+{
+    assert(reduct != NULL);
+
+    if (argc == 0)
+    {
+        return reduct_eval_call(reduct, callable, 0, NULL);
+    }
+
+    REDUCT_SCRATCH(reduct, argv, reduct_handle_t, argc);
+    va_list args;
+    va_start(args, argc);
+    for (size_t i = 0; i < argc; i++)
+    {
+        argv[i] = va_arg(args, reduct_handle_t);
+    }
+    va_end(args);
+
+    reduct_handle_t result = reduct_eval_call(reduct, callable, argc, argv);
+    REDUCT_SCRATCH_FREE(reduct, argv);
+    return result;
 }

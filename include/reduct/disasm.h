@@ -16,10 +16,10 @@
  * @brief Disassembles a compiled function.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param function The compiled function to disassemble.
+ * @param function Handle to the compiled function.
  * @param out The output file stream to write the disassembly to.
  */
-REDUCT_API void reduct_disasm(reduct_t* reduct, reduct_function_t* function, FILE* out);
+REDUCT_API void reduct_disasm(reduct_t* reduct, reduct_handle_t function, FILE* out);
 
 /** @} */
 

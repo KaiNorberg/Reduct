@@ -24,14 +24,14 @@
  * @note Usually the garbage collector will only be ran in between the evaluation of two instructions. As such, when
  * evaluation is not taking place, or when evaluating an instruction, there is no need to retain specific items.
  *
- * @param reduct The Reduct structure.
+ * @param reduct Pointer to the Reduct structure.
  */
 REDUCT_API void reduct_gc(reduct_t* reduct);
 
 /**
  * @brief Optionally run the garbage collector if the free list is low.
  *
- * @param reduct The Reduct structure.
+ * @param reduct Pointer to the Reduct structure.
  */
 static inline REDUCT_ALWAYS_INLINE void reduct_gc_if_needed(reduct_t* reduct)
 {
@@ -47,16 +47,16 @@ static inline REDUCT_ALWAYS_INLINE void reduct_gc_if_needed(reduct_t* reduct)
 /**
  * @brief Retain an item, preventing it from being collected by the garbage collector.
  *
- * @param reduct The Reduct structure.
- * @param item The item to retain.
+ * @param reduct Pointer to the Reduct structure.
+ * @param item Pointer to the item to retain.
  */
 REDUCT_API void reduct_gc_retain(reduct_t* reduct, struct reduct_item* item);
 
 /**
- * @brief Release a previously retained item, potentially allowing the garbage collector to collect it.
+ * @brief Release an item, potentially allowing the garbage collector to collect it.
  *
- * @param reduct The Reduct structure.
- * @param item The item to release.
+ * @param reduct Pointer to the Reduct structure.
+ * @param item Pointer to the item to release.
  */
 REDUCT_API void reduct_gc_release(reduct_t* reduct, struct reduct_item* item);
 

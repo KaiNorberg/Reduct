@@ -23,6 +23,7 @@ int main(int argc, char **argv)
     int isSilent = 0;
     int parseOnly = 0;
     int shouldDump = 0;
+    reduct_optimize_flags_t optFlags = REDUCT_OPTIMIZE_O3;
     const char* evalExpr = NULL;
     const char* filename = NULL;
 
@@ -60,6 +61,35 @@ int main(int argc, char **argv)
         {
             shouldDump = 1;
         }
+        else if (strncmp(argv[i], "-O", 2) == 0)
+        {
+            const char* level = argv[i] + 2;
+            if (*level == '\0')
+            {
+                optFlags = REDUCT_OPTIMIZE_O3;
+            }
+            else if (strcmp(level, "0") == 0)
+            {
+                optFlags = REDUCT_OPTIMIZE_NONE;
+            }
+            else if (strcmp(level, "1") == 0)
+            {
+                optFlags = REDUCT_OPTIMIZE_O1;
+            }
+            else if (strcmp(level, "2") == 0)
+            {
+                optFlags = REDUCT_OPTIMIZE_O2;
+            }
+            else if (strcmp(level, "3") == 0)
+            {
+                optFlags = REDUCT_OPTIMIZE_O3;
+            }
+            else
+            {
+                fprintf(stderr, "error: unknown optimization level '%s'\n", level);
+                return 1;
+            }
+        }
         else if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--parse-only") == 0)
         {
             parseOnly = 1;
@@ -89,6 +119,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "  -s, --silent   Do not print the evaluation result\n");
         fprintf(stderr, "  -I <path>      Add a directory to the import search path\n");
         fprintf(stderr, "  -d             Output the compiled bytecode (disassemble)\n");
+        fprintf(stderr, "  -O<level>      Set optimization level (0-3, default 3)\n");
         fprintf(stderr, "  -v, --version  Output version information\n");        
         fprintf(stderr, "Environment Variables:\n");
         fprintf(stderr, "  REDUCT_PATH    Colon-separated or semi-colon-separated list of directories for imports\n");
@@ -107,7 +138,7 @@ int main(int argc, char **argv)
 
     reduct_args_set(reduct, argc, argv);
 
-    reduct_handle_t ast = REDUCT_HANDLE_NONE;
+    reduct_handle_t ast = REDUCT_HANDLE_NIL(reduct);
     if (evalExpr != NULL)
     {
         ast = reduct_parse(reduct, evalExpr, strlen(evalExpr), "<eval>");
@@ -117,7 +148,7 @@ int main(int argc, char **argv)
         ast = reduct_parse_file(reduct, filename);
     }
 
-    if (REDUCT_HANDLE_IS_NONE(&ast))
+    if (REDUCT_HANDLE_IS_NIL(ast))
     {
         fprintf(stderr, "error: nothing to evaluate\n");
         result = 1;
@@ -128,14 +159,15 @@ int main(int argc, char **argv)
 
     if (parseOnly)
     {    
-        reduct_stringify(reduct, &ast, buffer, sizeof(buffer));
+        reduct_stringify(reduct, ast, buffer, sizeof(buffer));
         printf("%s", buffer);
         goto cleanup;
     }
 
     reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
 
-    reduct_function_t* function = reduct_compile(reduct, &ast);
+    reduct_handle_t function = reduct_compile(reduct, ast);
+    reduct_optimize(reduct, function, optFlags);
 
     if (shouldDump)
     {
@@ -149,7 +181,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    reduct_stringify(reduct, &eval, buffer, sizeof(buffer));
+    reduct_stringify(reduct, eval, buffer, sizeof(buffer));
     printf("%s", buffer);
 
 cleanup:

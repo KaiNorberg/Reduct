@@ -15,7 +15,7 @@
 /**
  * @brief Parse a Reduct string.
  *
- * @warning The jump buffer must have been set using `REDUCT_CATCH` before calling this function.
+ * @warning The jump buffer must have been set using `REDUCT_ERROR_CATCH` before calling this function.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param str The Reduct string to parse. The caller is responsible for the memory of this string, it must not be freed
@@ -29,7 +29,7 @@ REDUCT_API reduct_handle_t reduct_parse(reduct_t* reduct, const char* str, size_
 /**
  * @brief Parse a Reduct file.
  *
- * @warning The jump buffer must have been set using `REDUCT_CATCH` before calling this function.
+ * @warning The jump buffer must have been set using `REDUCT_ERROR_CATCH` before calling this function.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param path The path to the file to parse.

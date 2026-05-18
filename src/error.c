@@ -319,6 +319,23 @@ REDUCT_API void reduct_error_set(reduct_error_t* error, const char* path, const 
     }
 }
 
+REDUCT_API void reduct_error_push(reduct_t* reduct, reduct_error_t* error)
+{
+    assert(reduct != NULL);
+    assert(error != NULL);
+
+    error->reduct = reduct;
+    error->prev = reduct->error;
+    reduct->error = error;
+}
+
+REDUCT_API void reduct_error_pop(reduct_t* reduct)
+{
+    assert(reduct != NULL);
+    assert(reduct->error != NULL);
+    reduct->error = reduct->error->prev;
+}
+
 REDUCT_API void reduct_error_get_item_params(reduct_t* reduct, reduct_item_t* item, const char** path,
     const char** input, size_t* inputLength, size_t* regionLength, size_t* position)
 {

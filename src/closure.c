@@ -1,4 +1,5 @@
 #include "reduct/closure.h"
+#include "reduct/gc.h"
 #include "reduct/handle.h"
 #include "reduct/item.h"
 
@@ -24,14 +25,14 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
     {
         if (function->constants[i].type != REDUCT_CONST_SLOT_TYPE_HANDLE)
         {
-            closure->constants[i] = REDUCT_HANDLE_NONE;
+            closure->constants[i] = REDUCT_HANDLE_NIL(reduct);
             continue;
         }
 
         reduct_handle_t handle = function->constants[i].handle;
-        if (REDUCT_HANDLE_IS_ATOM(&handle))
+        if (REDUCT_HANDLE_IS_ATOM(handle))
         {
-            reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(&handle);
+            reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(handle);
             if (reduct_atom_is_int(atom))
             {
                 closure->constants[i] = REDUCT_HANDLE_FROM_INT(reduct_atom_get_int(atom));
@@ -48,4 +49,20 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
     }
 
     return closure;
+}
+
+REDUCT_API void reduct_closure_retain(reduct_t* reduct, reduct_closure_t* closure)
+{
+    assert(reduct != NULL);
+    assert(closure != NULL);
+
+    reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(closure, reduct_item_t, closure));
+}
+
+REDUCT_API void reduct_closure_release(reduct_t* reduct, reduct_closure_t* closure)
+{
+    assert(reduct != NULL);
+    assert(closure != NULL);
+
+    reduct_gc_release(reduct, REDUCT_CONTAINER_OF(closure, reduct_item_t, closure));
 }

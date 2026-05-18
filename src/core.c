@@ -55,7 +55,19 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
     reduct_add_import_path(reduct, "/lib/reduct");
 #endif
 
+    reduct->nil = REDUCT_HANDLE_CREATE_LIST(reduct);
+
     return reduct;
+}
+
+REDUCT_API void reduct_userdata_set(reduct_t* reduct, void* userdata)
+{
+    reduct->userdata = userdata;
+}
+
+REDUCT_API void* reduct_userdata_get(reduct_t* reduct)
+{
+    return reduct->userdata;
 }
 
 REDUCT_API void reduct_free(reduct_t* reduct)
