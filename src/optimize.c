@@ -2,6 +2,8 @@
 #include "reduct/core.h"
 #include "reduct/function.h"
 #include "reduct/inst.h"
+#include "reduct/handle.h"
+
 #include <string.h>
 
 #define REDUCT_OPT_INDEX_NONE ((size_t)-1)
@@ -939,4 +941,6 @@ REDUCT_API void reduct_optimize(reduct_t* reduct, reduct_handle_t handle, reduct
             reduct_optimize(reduct, slot->handle, flags);
         }
     }
+
+    func->optimizeFlags = flags;
 }

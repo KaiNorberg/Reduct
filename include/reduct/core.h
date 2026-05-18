@@ -4,13 +4,13 @@
 #include "reduct/atom.h"
 #include "reduct/defs.h"
 #include "reduct/error.h"
-#include "reduct/eval.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
 #include "reduct/native.h"
 #include "reduct/schema.h"
 
 struct reduct_item;
+struct reduct_eval_frame;
 
 #include <assert.h>
 #include <setjmp.h>
@@ -79,7 +79,7 @@ typedef struct reduct_scratch
 typedef struct reduct
 {
     reduct_handle_t nil;
-    reduct_eval_frame_t* frames;
+    struct reduct_eval_frame* frames;
     size_t frameCount;
     size_t frameCapacity;
     reduct_handle_t* regs;

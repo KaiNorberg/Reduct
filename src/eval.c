@@ -3,6 +3,7 @@
 #include "reduct/compile.h"
 #include "reduct/defs.h"
 #include "reduct/item.h"
+#include "reduct/optimize.h"
 #include "reduct/parse.h"
 #include "reduct/standard.h"
 #include <stdarg.h>
@@ -543,23 +544,25 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t functio
     return reduct_eval_run(reduct, initialFrameCount);
 }
 
-REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path)
+REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path, reduct_optimize_flags_t optimize)
 {
     assert(reduct != NULL);
     assert(path != NULL);
 
     reduct_handle_t parsed = reduct_parse_file(reduct, path);
     reduct_handle_t function = reduct_compile(reduct, parsed);
+    reduct_optimize(reduct, function, optimize);
     return reduct_eval(reduct, function);
 }
 
-REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, size_t len)
+REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, size_t len, reduct_optimize_flags_t optimize)
 {
     assert(reduct != NULL);
     assert(str != NULL);
 
     reduct_handle_t parsed = reduct_parse(reduct, str, len, "<eval>");
     reduct_handle_t function = reduct_compile(reduct, parsed);
+    reduct_optimize(reduct, function, optimize);
     return reduct_eval(reduct, function);
 }
 

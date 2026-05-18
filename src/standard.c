@@ -2014,6 +2014,7 @@ REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t han
 
     reduct_handle_t ast = reduct_parse(reduct, str, len, "<run>");
     reduct_handle_t function = reduct_compile(reduct, ast);
+    reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
     return reduct_eval(reduct, function);
 }
 
@@ -2141,6 +2142,7 @@ load_shared_lib:
 
     reduct_handle_t ast = reduct_parse_file(reduct, pathString);
     reduct_handle_t function = reduct_compile(reduct, ast);
+    reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
     return reduct_eval(reduct, function);
 }
 
@@ -2953,7 +2955,9 @@ REDUCT_STDLIB_WRAPPER_1(float, reduct_stdlib_float_impl)
 
 static reduct_handle_t reduct_stdlib_eval_impl(reduct_t* reduct, reduct_handle_t arg)
 {
-    return reduct_eval(reduct, reduct_compile(reduct, arg));
+    reduct_handle_t function = reduct_compile(reduct, arg);
+    reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
+    return reduct_eval(reduct, function);
 }
 REDUCT_STDLIB_WRAPPER_1(eval, reduct_stdlib_eval_impl)
 

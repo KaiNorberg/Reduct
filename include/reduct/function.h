@@ -1,15 +1,16 @@
 #ifndef REDUCT_FUNCTION_H
 #define REDUCT_FUNCTION_H 1
 
+#include "reduct/optimize.h"
 #include "reduct/defs.h"
 #include "reduct/inst.h"
+
+#include <assert.h>
+#include <stdlib.h>
 
 struct reduct;
 struct reduct_item;
 struct reduct_atom;
-
-#include <assert.h>
-#include <stdlib.h>
 
 /**
  * @file function.h
@@ -122,6 +123,7 @@ typedef struct reduct_function
     uint16_t registerCount;         ///< The number of registers the function uses.
     uint8_t arity;                  ///< The number of arguments the function expects.
     reduct_function_flags_t flags;  ///< The function flags.
+    reduct_optimize_flags_t optimizeFlags; ///< The optimization flags that have been applied to the function.
 } reduct_function_t;
 
 /**

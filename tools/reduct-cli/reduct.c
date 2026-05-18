@@ -23,7 +23,7 @@ int main(int argc, char **argv)
     int isSilent = 0;
     int parseOnly = 0;
     int shouldDump = 0;
-    reduct_optimize_flags_t optFlags = REDUCT_OPTIMIZE_O3;
+    reduct_optimize_flags_t optimizeFlags = REDUCT_OPTIMIZE_O3;
     const char* evalExpr = NULL;
     const char* filename = NULL;
 
@@ -66,23 +66,23 @@ int main(int argc, char **argv)
             const char* level = argv[i] + 2;
             if (*level == '\0')
             {
-                optFlags = REDUCT_OPTIMIZE_O3;
+                optimizeFlags = REDUCT_OPTIMIZE_O3;
             }
             else if (strcmp(level, "0") == 0)
             {
-                optFlags = REDUCT_OPTIMIZE_NONE;
+                optimizeFlags = REDUCT_OPTIMIZE_NONE;
             }
             else if (strcmp(level, "1") == 0)
             {
-                optFlags = REDUCT_OPTIMIZE_O1;
+                optimizeFlags = REDUCT_OPTIMIZE_O1;
             }
             else if (strcmp(level, "2") == 0)
             {
-                optFlags = REDUCT_OPTIMIZE_O2;
+                optimizeFlags = REDUCT_OPTIMIZE_O2;
             }
             else if (strcmp(level, "3") == 0)
             {
-                optFlags = REDUCT_OPTIMIZE_O3;
+                optimizeFlags = REDUCT_OPTIMIZE_O3;
             }
             else
             {
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
     reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
 
     reduct_handle_t function = reduct_compile(reduct, ast);
-    reduct_optimize(reduct, function, optFlags);
+    reduct_optimize(reduct, function, optimizeFlags);
 
     if (shouldDump)
     {

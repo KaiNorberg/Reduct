@@ -541,10 +541,9 @@ int main(int argc, char **argv)
     }
 
     reduct = reduct_new(&error);
-
     reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
 
-    reduct_handle_t result = reduct_eval_file(reduct, "my_file.rdt");
+    reduct_handle_t result = reduct_eval_file(reduct, "my_file.rdt", REDUCT_OPTIMIZE_ALL);
 
     reduct_stringify(reduct, &result, buffer, sizeof(buffer));
     printf("%s\n", buffer);
@@ -752,7 +751,7 @@ All benchmarks were performed on the following system:
 
 Testing is done via the `tests/run_tests.sh` script, which is ran via [github actions](https://github.com/KaiNorberg/Reduct/blob/main/.github/workflows/test.yml) on Ubuntu, Windows and macOS.
 
-The script will compile the CLI tool with clang `-fsanitize=address,undefined`, run a set of test scripts found in `tests/` and then use libfuzzer to fuzz the parser, compiler and evaluator.
+The script will compile the CLI tool with clang `-fsanitize=address,undefined`, run a set of test scripts found in `tests/` and then use libfuzzer to fuzz the parser, compiler and optimizer.
 
 In addition to the test script, the code base heavily uses assertions to, hopefully, catch any potential bugs or regressions.
 

@@ -1,7 +1,9 @@
 #ifndef REDUCT_OPTIMIZE_H
 #define REDUCT_OPTIMIZE_H 1
 
-#include "reduct/compile.h"
+#include "reduct/defs.h"
+
+struct reduct;
 
 /**
  * @file optimize.h
@@ -40,7 +42,7 @@ typedef enum reduct_optimize_flags
  * @param handle Handle to the function to optimize.
  * @param flags Optimization flags to control which optimizations are applied.
  */
-REDUCT_API void reduct_optimize(reduct_t* reduct, reduct_handle_t handle, reduct_optimize_flags_t flags);
+REDUCT_API void reduct_optimize(struct reduct* reduct, reduct_handle_t handle, reduct_optimize_flags_t flags);
 
 /** @} */
 

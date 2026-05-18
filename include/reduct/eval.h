@@ -1,6 +1,10 @@
 #ifndef REDUCT_EVAL_H
 #define REDUCT_EVAL_H 1
 
+#include "reduct/function.h"
+#include "reduct/handle.h"
+#include "reduct/optimize.h"
+
 struct reduct_closure;
 
 /**
@@ -10,9 +14,6 @@ struct reduct_closure;
  *
  * @{
  */
-
-#include "reduct/function.h"
-#include "reduct/handle.h"
 
 #define REDUCT_EVAL_REGS_INITIAL 64      ///< The initial amount of registers.
 #define REDUCT_EVAL_REGS_GROWTH_FACTOR 2 ///< The growth factor of the registers array.
@@ -48,9 +49,10 @@ REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t fu
  *
  * @param reduct The Reduct instance.
  * @param path The path to the file.
+ * @param flags Optimization flags to control which optimizations are applied.
  * @return The result of the evaluation.
  */
-REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* path);
+REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* path, reduct_optimize_flags_t optimize);
 
 /**
  * @brief Parses, compiles and evaluates a string.
@@ -58,9 +60,10 @@ REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* p
  * @param reduct The Reduct instance.
  * @param str The string to evaluate.
  * @param len The length of the string.
+ * @param flags Optimization flags to control which optimizations are applied.
  * @return The result of the evaluation.
  */
-REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char* str, size_t len);
+REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char* str, size_t len, reduct_optimize_flags_t optimize);
 
 /**
  * @brief Calls a Reduct callable (closure or native) with arguments.

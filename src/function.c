@@ -18,6 +18,7 @@ REDUCT_API void reduct_function_init(reduct_function_t* func)
     func->registerCount = 0;
     func->arity = 0;
     func->flags = REDUCT_FUNCTION_FLAG_NONE;
+    func->optimizeFlags = REDUCT_OPTIMIZE_NONE;
 }
 
 REDUCT_API void reduct_function_deinit(reduct_function_t* func)
