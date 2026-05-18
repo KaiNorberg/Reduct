@@ -2,7 +2,7 @@
     "name": "reduct",
     "displayName": "Reduct Language Support",
     "description": "Syntax highlighting and language support for Reduct",
-    "version": "2.2.2",
+    "version": "3.4.0",
     "author": "Kai Norberg",
     "publisher": "KaiNorberg",
     "repository": {

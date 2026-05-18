@@ -10,7 +10,9 @@ include(CMakePackageConfigHelpers)
 # I don't know why, but clang produces code that is significantly faster than GCC.
 # Especially on benchmarks such as fib35 which sees an almost 40% improvement.
 # Maybe one day I can be bothered to dig into the disassembly to figure out why.
-set(CMAKE_C_COMPILER clang)
+if(NOT APPLE)
+    set(CMAKE_C_COMPILER clang)
+endif()
 
 find_package(Git QUIET)
 if(GIT_FOUND)
