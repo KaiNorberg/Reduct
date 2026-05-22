@@ -14,7 +14,11 @@ typedef struct
     reduct_input_t* input;
 } reduct_parse_ctx_t;
 
+static reduct_handle_t reduct_parse_expression(reduct_parse_ctx_t* ctx);
 static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char expectedClose, size_t position);
+static inline reduct_atom_t* reduct_parse_quoted_atom(reduct_parse_ctx_t* ctx);
+static inline reduct_atom_t* reduct_parse_unquoted_atom(reduct_parse_ctx_t* ctx);
+static inline reduct_list_t* reduct_parse_infix(reduct_parse_ctx_t* ctx, size_t position);
 
 static void reduct_parse_whitespace(reduct_parse_ctx_t* ctx)
 {
@@ -53,6 +57,142 @@ static void reduct_parse_whitespace(reduct_parse_ctx_t* ctx)
     }
 }
 
+static reduct_handle_t reduct_parse_dot_finalize(reduct_parse_ctx_t* ctx, reduct_handle_t target, reduct_list_t* path)
+{
+    if (REDUCT_HANDLE_IS_NIL(target))
+    {
+        reduct_item_t* pathItem = REDUCT_CONTAINER_OF(path, reduct_item_t, list);
+        REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->input->buffer + pathItem->position,
+            "dot notation: missing target");
+    }
+
+    reduct_list_t* wrapper = reduct_list_new(ctx->reduct);
+    reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
+    reduct_item_t* pathItem = REDUCT_CONTAINER_OF(path, reduct_item_t, list);
+    wrapperItem->inputId = pathItem->inputId;
+    wrapperItem->position = pathItem->position;
+
+    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "get-in"));
+    reduct_list_push(ctx->reduct, wrapper, target);
+
+    if (path->length == 2)
+    {
+        reduct_list_push(ctx->reduct, wrapper, reduct_list_second(ctx->reduct, path));
+    }
+    else
+    {
+        reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_FROM_LIST(path));
+    }
+
+    return REDUCT_HANDLE_FROM_LIST(wrapper);
+}
+
+static reduct_handle_t reduct_parse_dot_chain(reduct_parse_ctx_t* ctx, reduct_handle_t head)
+{
+    reduct_handle_t target = REDUCT_HANDLE_NIL(ctx->reduct);
+    reduct_list_t* path = reduct_list_new(ctx->reduct);
+    reduct_list_push(ctx->reduct, path, REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "list"));
+
+    bool isFirst = true;
+    reduct_handle_t current = head;
+    while (1)
+    {
+        if (!REDUCT_HANDLE_IS_ATOM(current))
+        {
+            reduct_list_push(ctx->reduct, path, current);
+            break;
+        }
+
+        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(current);
+        const char* start = atom->string;
+        const char* dot;
+
+        while ((dot = memchr(start, '.', (size_t)(atom->string + atom->length - start))) != NULL)
+        {
+            size_t len = (size_t)(dot - start);
+            if (len > 0)
+            {
+                reduct_atom_t* part = reduct_atom_lookup(ctx->reduct, start, len,
+                    isFirst ? REDUCT_ATOM_LOOKUP_NONE : REDUCT_ATOM_LOOKUP_QUOTED);
+                if (isFirst)
+                {
+                    target = REDUCT_HANDLE_FROM_ATOM(part);
+                    isFirst = false;
+                }
+                else
+                {
+                    reduct_list_push(ctx->reduct, path, REDUCT_HANDLE_FROM_ATOM(part));
+                }
+            }
+            start = dot + 1;
+        }
+
+        size_t remaining = (size_t)(atom->string + atom->length - start);
+        if (remaining > 0)
+        {
+            reduct_atom_t* part = reduct_atom_lookup(ctx->reduct, start, remaining,
+                isFirst ? REDUCT_ATOM_LOOKUP_NONE : REDUCT_ATOM_LOOKUP_QUOTED);
+            if (isFirst)
+            {
+                target = REDUCT_HANDLE_FROM_ATOM(part);
+                isFirst = false;
+            }
+            else
+            {
+
+                reduct_list_push(ctx->reduct, path, REDUCT_HANDLE_FROM_ATOM(part));
+            }
+        }
+
+        if (atom->length > 0 && atom->string[atom->length - 1] == '.')
+        {
+            reduct_parse_whitespace(ctx);
+            if (ctx->ptr >= ctx->input->end)
+            {
+                break;
+            }
+            current = reduct_parse_expression(ctx);
+            continue;
+        }
+        break;
+    }
+
+    return reduct_parse_dot_finalize(ctx, target, path);
+}
+
+static reduct_handle_t reduct_parse_expression(reduct_parse_ctx_t* ctx)
+{
+    size_t pos = (size_t)(ctx->ptr - ctx->input->buffer);
+    reduct_handle_t result;
+
+    switch (*ctx->ptr)
+    {
+    case '(':
+        ctx->ptr++;
+        return REDUCT_HANDLE_FROM_LIST(reduct_parse_list(ctx, ')', pos));
+    case '{':
+        ctx->ptr++;
+        return REDUCT_HANDLE_FROM_LIST(reduct_parse_infix(ctx, pos));
+    case '"':
+        ctx->ptr++;
+        return REDUCT_HANDLE_FROM_ATOM(reduct_parse_quoted_atom(ctx));
+    default:
+        result = REDUCT_HANDLE_FROM_ATOM(reduct_parse_unquoted_atom(ctx));
+        break;
+    }
+
+    if (REDUCT_HANDLE_IS_ATOM(result))
+    {
+        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(result);
+        if (!reduct_atom_is_number(atom) && memchr(atom->string, '.', atom->length))
+        {
+            return reduct_parse_dot_chain(ctx, result);
+        }
+    }
+
+    return result;
+}
+
 typedef enum
 {
     REDUCT_PARSE_PRECEDENCE_NONE = 0,
@@ -77,19 +217,17 @@ static bool reduct_parse_compare_suffix(reduct_atom_t* atom, const char* suffix)
     return memcmp(atom->string + atom->length - suffixLen, suffix, suffixLen) == 0;
 }
 
-static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t* ctx, reduct_handle_t handle,
-    bool unary)
+static reduct_atom_t* reduct_parse_get_operator_atom(reduct_parse_ctx_t* ctx, reduct_handle_t handle, bool unary)
 {
     if (!REDUCT_HANDLE_IS_ITEM(handle))
     {
-        return REDUCT_PARSE_PRECEDENCE_NONE;
+        return NULL;
     }
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(handle);
-    reduct_atom_t* atom = NULL;
 
     if (item->type == REDUCT_ITEM_TYPE_ATOM)
     {
-        atom = &item->atom;
+        return &item->atom;
     }
     else if (!unary && item->type == REDUCT_ITEM_TYPE_LIST && item->length >= 3)
     {
@@ -100,10 +238,17 @@ static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t*
             reduct_handle_t last = reduct_list_nth(ctx->reduct, list, list->length - 1);
             if (REDUCT_HANDLE_IS_ATOM(last))
             {
-                atom = REDUCT_HANDLE_TO_ATOM(last);
+                return REDUCT_HANDLE_TO_ATOM(last);
             }
         }
     }
+    return NULL;
+}
+
+static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t* ctx, reduct_handle_t handle,
+    bool unary)
+{
+    reduct_atom_t* atom = reduct_parse_get_operator_atom(ctx, handle, unary);
 
     if (atom == NULL)
     {
@@ -239,9 +384,10 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
         (*pos)++;
         if (*pos >= list->length)
         {
+            reduct_atom_t* opAtom = reduct_parse_get_operator_atom(ctx, op, false);
             reduct_item_t* opItem = REDUCT_HANDLE_TO_ITEM(op);
             REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->input->buffer + opItem->position,
-                "infix operator '%.*s' missing right operand", (int)opItem->atom.length, opItem->atom.string);
+                "infix operator '%.*s' missing right operand", (int)opAtom->length, opAtom->string);
         }
 
         reduct_handle_t right = reduct_parse_infix_transform_recursive(ctx, list, pos, prec + 1);
@@ -341,106 +487,6 @@ static inline reduct_atom_t* reduct_parse_unquoted_atom(reduct_parse_ctx_t* ctx)
     return atom;
 }
 
-static void reduct_parse_get_in_finalize(reduct_parse_ctx_t* ctx, reduct_list_t* list, reduct_list_t** getInList,
-    reduct_handle_t* getInTarget)
-{
-    if (*getInList == NULL)
-    {
-        return;
-    }
-
-    reduct_item_t* getInListItem = REDUCT_CONTAINER_OF(*getInList, reduct_item_t, list);
-
-    if (REDUCT_HANDLE_IS_NIL(*getInTarget))
-    {
-        REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->input->buffer + getInListItem->position,
-            "get-in: missing target");
-    }
-
-    reduct_list_t* wrapper = reduct_list_new(ctx->reduct);
-    reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
-    wrapperItem->inputId = getInListItem->inputId;
-    wrapperItem->position = getInListItem->position;
-
-    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "get-in"));
-    reduct_list_push(ctx->reduct, wrapper, *getInTarget);
-    if ((*getInList)->length == 2)
-    {
-        reduct_list_push(ctx->reduct, wrapper, reduct_list_second(ctx->reduct, *getInList));
-    }
-    else
-    {
-        reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_FROM_LIST(*getInList));
-    }
-    reduct_list_push(ctx->reduct, list, REDUCT_HANDLE_FROM_LIST(wrapper));
-
-    *getInList = NULL;
-    *getInTarget = REDUCT_HANDLE_NIL(ctx->reduct);
-}
-
-static void reduct_parse_dot_atom(reduct_parse_ctx_t* ctx, reduct_list_t** getInList, reduct_handle_t* getInTarget,
-    reduct_atom_t* atom)
-{
-    reduct_item_t* atomItem = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
-    bool isFirst = (*getInList == NULL);
-
-    if (isFirst)
-    {
-        *getInList = reduct_list_new(ctx->reduct);
-        reduct_item_t* getInListItem = REDUCT_CONTAINER_OF(*getInList, reduct_item_t, list);
-        getInListItem->inputId = atomItem->inputId;
-        getInListItem->position = atomItem->position;
-
-        reduct_list_push(ctx->reduct, *getInList,
-            REDUCT_HANDLE_FROM_ATOM(reduct_atom_lookup(ctx->reduct, "list", 4, REDUCT_ATOM_LOOKUP_NONE)));
-    }
-
-    const char* dotStart = atom->string;
-    const char* dotEnd;
-    while ((dotEnd = memchr(dotStart, '.', (size_t)(atom->string + atom->length - dotStart))) != NULL)
-    {
-        size_t partLen = (size_t)(dotEnd - dotStart);
-        if (partLen > 0)
-        {
-            reduct_atom_lookup_flags_t flags = isFirst ? REDUCT_ATOM_LOOKUP_NONE : REDUCT_ATOM_LOOKUP_QUOTED;
-            reduct_atom_t* part = reduct_atom_lookup(ctx->reduct, dotStart, partLen, flags);
-            reduct_item_t* partItem = REDUCT_CONTAINER_OF(part, reduct_item_t, atom);
-            partItem->inputId = ctx->input->id;
-            partItem->position = (size_t)(dotStart - ctx->input->buffer);
-
-            if (isFirst)
-            {
-                *getInTarget = REDUCT_HANDLE_FROM_ATOM(part);
-                isFirst = false;
-            }
-            else
-            {
-                reduct_list_push(ctx->reduct, *getInList, REDUCT_HANDLE_FROM_ATOM(part));
-            }
-        }
-        dotStart = dotEnd + 1;
-    }
-
-    size_t lastLen = (size_t)(atom->string + atom->length - dotStart);
-    if (lastLen > 0)
-    {
-        reduct_atom_lookup_flags_t flags = isFirst ? REDUCT_ATOM_LOOKUP_NONE : REDUCT_ATOM_LOOKUP_QUOTED;
-        reduct_atom_t* lastPart = reduct_atom_lookup(ctx->reduct, dotStart, lastLen, flags);
-        reduct_item_t* lastPartItem = REDUCT_CONTAINER_OF(lastPart, reduct_item_t, atom);
-        lastPartItem->inputId = ctx->input->id;
-        lastPartItem->position = (size_t)(dotStart - ctx->input->buffer);
-
-        if (isFirst)
-        {
-            *getInTarget = REDUCT_HANDLE_FROM_ATOM(lastPart);
-        }
-        else
-        {
-            reduct_list_push(ctx->reduct, *getInList, REDUCT_HANDLE_FROM_ATOM(lastPart));
-        }
-    }
-}
-
 static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char expectedClose, size_t position)
 {
     reduct_list_t* list = reduct_list_new(ctx->reduct);
@@ -453,8 +499,6 @@ static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char exp
         REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->input, ctx->ptr, "unexpected end of file");
     }
 
-    reduct_handle_t getInTarget = REDUCT_HANDLE_NIL(ctx->reduct);
-    reduct_list_t* getInList = NULL;
     while (1)
     {
         reduct_parse_whitespace(ctx);
@@ -475,50 +519,7 @@ static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char exp
             return list;
         }
 
-        switch (*ctx->ptr)
-        {
-        case '(':
-        {
-            size_t pos = (size_t)(ctx->ptr - ctx->input->buffer);
-            ctx->ptr++;
-            reduct_handle_t child = REDUCT_HANDLE_FROM_LIST(reduct_parse_list(ctx, ')', pos));
-            reduct_list_push(ctx->reduct, getInList != NULL ? getInList : list, child);
-        }
-        break;
-        case '{':
-        {
-            size_t pos = (size_t)(ctx->ptr - ctx->input->buffer);
-            ctx->ptr++;
-            reduct_handle_t child = REDUCT_HANDLE_FROM_LIST(reduct_parse_infix(ctx, pos));
-            reduct_list_push(ctx->reduct, getInList != NULL ? getInList : list, child);
-        }
-        break;
-        case '"':
-        {
-            ctx->ptr++;
-            reduct_atom_t* atom = reduct_parse_quoted_atom(ctx);
-            reduct_list_push(ctx->reduct, getInList != NULL ? getInList : list, REDUCT_HANDLE_FROM_ATOM(atom));
-        }
-        break;
-        default:
-        {
-            reduct_atom_t* atom = reduct_parse_unquoted_atom(ctx);
-            if (!reduct_atom_is_number(atom) && memchr(atom->string, '.', atom->length) != NULL)
-            {
-                reduct_parse_dot_atom(ctx, &getInList, &getInTarget, atom);
-            }
-            else
-            {
-                reduct_list_push(ctx->reduct, getInList != NULL ? getInList : list, REDUCT_HANDLE_FROM_ATOM(atom));
-            }
-        }
-        break;
-        }
-
-        if (getInList != NULL && *(ctx->ptr - 1) != '.')
-        {
-            reduct_parse_get_in_finalize(ctx, list, &getInList, &getInTarget);
-        }
+        reduct_list_push(ctx->reduct, list, reduct_parse_expression(ctx));
     }
 
     return list;

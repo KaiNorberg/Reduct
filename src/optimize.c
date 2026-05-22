@@ -1,8 +1,8 @@
 #include "reduct/optimize.h"
 #include "reduct/core.h"
 #include "reduct/function.h"
-#include "reduct/inst.h"
 #include "reduct/handle.h"
+#include "reduct/inst.h"
 
 #include <string.h>
 

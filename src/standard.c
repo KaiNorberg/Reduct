@@ -112,8 +112,8 @@ REDUCT_API reduct_handle_t reduct_filter(reduct_t* reduct, reduct_handle_t list,
     assert(reduct != NULL);
     REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_LIST(list), "filter: expected list, got %s",
         REDUCT_HANDLE_GET_TYPE_STRING(list));
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_CALLABLE(reduct, callable),
-        "filter: expected callable, got %s", REDUCT_HANDLE_GET_TYPE_STRING(callable));
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_CALLABLE(reduct, callable), "filter: expected callable, got %s",
+        REDUCT_HANDLE_GET_TYPE_STRING(callable));
 
     reduct_list_t* sourceList = REDUCT_HANDLE_TO_LIST(list);
     reduct_list_t* filteredList = reduct_list_new(reduct);
@@ -142,8 +142,8 @@ REDUCT_API reduct_handle_t reduct_reduce(reduct_t* reduct, reduct_handle_t list,
     assert(reduct != NULL);
     REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_LIST(list), "reduce: expected list, got %s",
         REDUCT_HANDLE_GET_TYPE_STRING(list));
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_CALLABLE(reduct, callable),
-        "reduce: expected callable, got %s", REDUCT_HANDLE_GET_TYPE_STRING(callable));
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_CALLABLE(reduct, callable), "reduce: expected callable, got %s",
+        REDUCT_HANDLE_GET_TYPE_STRING(callable));
 
     reduct_list_t* sourceList = REDUCT_HANDLE_TO_LIST(list);
     reduct_handle_t accumulator = initial;
@@ -460,8 +460,8 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, size_t argc, reduct_h
             resultIsList = true;
             continue;
         }
-        REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM_LIKE(argv[i]),
-            "concat: expected list or atom, got %s", REDUCT_HANDLE_GET_TYPE_STRING(argv[i]));
+        REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM_LIKE(argv[i]), "concat: expected list or atom, got %s",
+            REDUCT_HANDLE_GET_TYPE_STRING(argv[i]));
     }
 
     if (resultIsList)
@@ -1581,8 +1581,8 @@ REDUCT_API reduct_handle_t reduct_join(reduct_t* reduct, reduct_handle_t listHan
 {
     assert(reduct != NULL);
 
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_LIST(listHandle),
-        "join: first argument must be a list, got %s", REDUCT_HANDLE_GET_TYPE_STRING(listHandle));
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_LIST(listHandle), "join: first argument must be a list, got %s",
+        REDUCT_HANDLE_GET_TYPE_STRING(listHandle));
 
     reduct_list_t* list = REDUCT_HANDLE_TO_LIST(listHandle);
     if (list->length == 0)
@@ -2318,8 +2318,7 @@ REDUCT_API reduct_handle_t reduct_chr(struct reduct* reduct, reduct_handle_t han
     assert(reduct != NULL);
 
     int64_t val = reduct_handle_as_int(reduct, handle);
-    REDUCT_ERROR_ASSERT(reduct, val >= 0 && val <= 255, "chr: expected integer 0-255, got %lld",
-        (long long)val);
+    REDUCT_ERROR_ASSERT(reduct, val >= 0 && val <= 255, "chr: expected integer 0-255, got %lld", (long long)val);
 
     char c = (char)(uint8_t)val;
     return REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_copy(reduct, &c, 1));
@@ -2791,8 +2790,7 @@ REDUCT_API reduct_handle_t reduct_seed(struct reduct* reduct, reduct_handle_t va
 #define REDUCT_STDLIB_WRAPPER_V1(_name, _impl) \
     static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
-        REDUCT_ERROR_ASSERT(reduct, argc >= 1, #_name ": expected at least 1 argument(s), got %zu", \
-            (size_t)argc); \
+        REDUCT_ERROR_ASSERT(reduct, argc >= 1, #_name ": expected at least 1 argument(s), got %zu", (size_t)argc); \
         return _impl(reduct, argc, argv); \
     }
 
@@ -2853,8 +2851,7 @@ REDUCT_STDLIB_WRAPPER_V1(exact_neq, reduct_exact_not_equal_impl)
 
 static reduct_handle_t reduct_stdlib_reduce(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_ASSERT(reduct, argc >= 2 && argc <= 3, "reduce: expected 2 to 3 argument(s), got %zu",
-        (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc >= 2 && argc <= 3, "reduce: expected 2 to 3 argument(s), got %zu", (size_t)argc);
     return reduct_reduce(reduct, argv[0], argc == 3 ? argv[1] : REDUCT_HANDLE_NIL(reduct),
         argc == 3 ? argv[2] : argv[1]);
 }
@@ -2867,8 +2864,7 @@ REDUCT_STDLIB_WRAPPER_R12(log, reduct_log)
 
 static reduct_handle_t reduct_stdlib_range(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 3, "range: expected 1 to 3 argument(s), got %zu",
-        (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 3, "range: expected 1 to 3 argument(s), got %zu", (size_t)argc);
     reduct_handle_t start = (argc >= 2) ? argv[0] : REDUCT_HANDLE_NIL(reduct);
     reduct_handle_t end = (argc == 1) ? argv[0] : (argc >= 2 ? argv[1] : REDUCT_HANDLE_NIL(reduct));
     reduct_handle_t step = (argc == 3) ? argv[2] : REDUCT_HANDLE_NIL(reduct);
@@ -2974,8 +2970,7 @@ REDUCT_STDLIB_WRAPPER_1(run, reduct_run)
 
 static reduct_handle_t reduct_stdlib_import(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 3, "import: expected 1 to 3 argument(s), got %zu",
-        (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 3, "import: expected 1 to 3 argument(s), got %zu", (size_t)argc);
     return reduct_import(reduct, argv[0], argc >= 2 ? argv[1] : REDUCT_HANDLE_NIL(reduct),
         argc == 3 ? argv[2] : REDUCT_HANDLE_NIL(reduct));
 }

@@ -124,8 +124,8 @@ static inline REDUCT_ALWAYS_INLINE uint32_t reduct_eval_bundle_args(reduct_t* re
     uint32_t arity = func->arity;
     if (REDUCT_UNLIKELY(func->flags & REDUCT_FUNCTION_FLAG_VARIADIC))
     {
-        REDUCT_ERROR_ASSERT(reduct, argc >= (uint32_t)arity - 1, "expected at least %u arguments, got %u",
-            arity - 1, argc);
+        REDUCT_ERROR_ASSERT(reduct, argc >= (uint32_t)arity - 1, "expected at least %u arguments, got %u", arity - 1,
+            argc);
 
         uint32_t fixed = arity - 1;
         argv[fixed] = REDUCT_HANDLE_CREATE_HANDLES(reduct, argc - fixed, &argv[fixed]);
@@ -530,8 +530,8 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t functio
 {
     assert(reduct != NULL);
 
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_FUNCTION(functionHandle),
-        "eval: expected compiled function, got %s", REDUCT_HANDLE_GET_TYPE_STRING(functionHandle));
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_FUNCTION(functionHandle), "eval: expected compiled function, got %s",
+        REDUCT_HANDLE_GET_TYPE_STRING(functionHandle));
     reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(functionHandle);
 
     reduct_eval_ensure_ready(reduct);
@@ -555,7 +555,8 @@ REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path, 
     return reduct_eval(reduct, function);
 }
 
-REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, size_t len, reduct_optimize_flags_t optimize)
+REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, size_t len,
+    reduct_optimize_flags_t optimize)
 {
     assert(reduct != NULL);
     assert(str != NULL);

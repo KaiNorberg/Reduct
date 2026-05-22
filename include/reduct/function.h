@@ -1,9 +1,9 @@
 #ifndef REDUCT_FUNCTION_H
 #define REDUCT_FUNCTION_H 1
 
-#include "reduct/optimize.h"
 #include "reduct/defs.h"
 #include "reduct/inst.h"
+#include "reduct/optimize.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -113,16 +113,16 @@ typedef enum reduct_function_flags
  */
 typedef struct reduct_function
 {
-    uint32_t instCount;             ///< Number of instructions.
-    uint32_t instCapacity;          ///< Capacity of the instruction array.
-    reduct_inst_t* insts;           ///< An array of instructions.
-    uint32_t* positions;            ///< An array of source positions parallel to the instructions.
-    reduct_const_slot_t* constants; ///< The array of constant slots forming the constant template.
-    uint16_t constantCount;         ///< Number of constants.
-    uint16_t constantCapacity;      ///< Capacity of the constant array.
-    uint16_t registerCount;         ///< The number of registers the function uses.
-    uint8_t arity;                  ///< The number of arguments the function expects.
-    reduct_function_flags_t flags;  ///< The function flags.
+    uint32_t instCount;                    ///< Number of instructions.
+    uint32_t instCapacity;                 ///< Capacity of the instruction array.
+    reduct_inst_t* insts;                  ///< An array of instructions.
+    uint32_t* positions;                   ///< An array of source positions parallel to the instructions.
+    reduct_const_slot_t* constants;        ///< The array of constant slots forming the constant template.
+    uint16_t constantCount;                ///< Number of constants.
+    uint16_t constantCapacity;             ///< Capacity of the constant array.
+    uint16_t registerCount;                ///< The number of registers the function uses.
+    uint8_t arity;                         ///< The number of arguments the function expects.
+    reduct_function_flags_t flags;         ///< The function flags.
     reduct_optimize_flags_t optimizeFlags; ///< The optimization flags that have been applied to the function.
 } reduct_function_t;
 

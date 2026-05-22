@@ -1089,8 +1089,7 @@ void reduct_intrinsic_greater_equal(reduct_compiler_t* compiler, reduct_list_t* 
 #define REDUCT_INTRINSIC_NATIVE_BITWISE(_name, _op) \
     static reduct_handle_t reduct_intrinsic_native_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
-        REDUCT_ERROR_ASSERT(reduct, argc >= 2, #_op ": expected at least 2 argument(s), got %zu", \
-            (size_t)argc); \
+        REDUCT_ERROR_ASSERT(reduct, argc >= 2, #_op ": expected at least 2 argument(s), got %zu", (size_t)argc); \
         int64_t res = reduct_handle_as_int(reduct, argv[0]); \
         for (size_t i = 1; i < argc; i++) \
         { \

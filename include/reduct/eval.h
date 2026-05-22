@@ -63,7 +63,8 @@ REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* p
  * @param flags Optimization flags to control which optimizations are applied.
  * @return The result of the evaluation.
  */
-REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char* str, size_t len, reduct_optimize_flags_t optimize);
+REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char* str, size_t len,
+    reduct_optimize_flags_t optimize);
 
 /**
  * @brief Calls a Reduct callable (closure or native) with arguments.
