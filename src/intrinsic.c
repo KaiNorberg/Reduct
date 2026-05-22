@@ -1089,7 +1089,7 @@ void reduct_intrinsic_greater_equal(reduct_compiler_t* compiler, reduct_list_t* 
 #define REDUCT_INTRINSIC_NATIVE_BITWISE(_name, _op) \
     static reduct_handle_t reduct_intrinsic_native_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= 2, #_op ": expected at least 2 argument(s), got %zu", \
+        REDUCT_ERROR_ASSERT(reduct, argc >= 2, #_op ": expected at least 2 argument(s), got %zu", \
             (size_t)argc); \
         int64_t res = reduct_handle_as_int(reduct, argv[0]); \
         for (size_t i = 1; i < argc; i++) \
@@ -1146,7 +1146,7 @@ static reduct_handle_t reduct_intrinsic_native_list(reduct_t* reduct, size_t arg
 
 static reduct_handle_t reduct_intrinsic_native_div(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= 1, "/: expected at least 1 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc >= 1, "/: expected at least 1 argument(s), got %zu", (size_t)argc);
     if (argc == 1)
     {
         reduct_handle_t res;
@@ -1164,7 +1164,7 @@ static reduct_handle_t reduct_intrinsic_native_div(reduct_t* reduct, size_t argc
 
 static reduct_handle_t reduct_intrinsic_native_mod(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 2, "%%: expected 2 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 2, "%%: expected 2 argument(s), got %zu", (size_t)argc);
     reduct_handle_t result;
     REDUCT_HANDLE_MOD_FAST(reduct, &result, argv[0], argv[1]);
     return result;
@@ -1172,7 +1172,7 @@ static reduct_handle_t reduct_intrinsic_native_mod(reduct_t* reduct, size_t argc
 
 static reduct_handle_t reduct_intrinsic_native_inc(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 1, "++: expected 1 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "++: expected 1 argument(s), got %zu", (size_t)argc);
     reduct_handle_t res;
     reduct_handle_t one = REDUCT_HANDLE_FROM_INT(1);
     REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &res, argv[0], one, +);
@@ -1181,7 +1181,7 @@ static reduct_handle_t reduct_intrinsic_native_inc(reduct_t* reduct, size_t argc
 
 static reduct_handle_t reduct_intrinsic_native_dec(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 1, "--: expected 1 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "--: expected 1 argument(s), got %zu", (size_t)argc);
     reduct_handle_t res;
     reduct_handle_t one = REDUCT_HANDLE_FROM_INT(1);
     REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &res, argv[0], one, -);
@@ -1190,18 +1190,18 @@ static reduct_handle_t reduct_intrinsic_native_dec(reduct_t* reduct, size_t argc
 
 static reduct_handle_t reduct_intrinsic_native_bnot(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 1, "~: expected 1 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "~: expected 1 argument(s), got %zu", (size_t)argc);
     return REDUCT_HANDLE_FROM_INT(~reduct_handle_as_int(reduct, argv[0]));
 }
 
 static reduct_handle_t reduct_intrinsic_native_shl(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 2, "<<: expected 2 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 2, "<<: expected 2 argument(s), got %zu", (size_t)argc);
     int64_t left = reduct_handle_as_int(reduct, argv[0]);
     int64_t right = reduct_handle_as_int(reduct, argv[1]);
     if (right < 0 || right >= REDUCT_HANDLE_INT_WIDTH)
     {
-        REDUCT_ERROR_RUNTIME(reduct, "<<: shift amount must be 0-%lu, got %lld", (unsigned long)REDUCT_HANDLE_INT_WIDTH,
+        REDUCT_ERROR_THROW(reduct, "<<: shift amount must be 0-%lu, got %lld", (unsigned long)REDUCT_HANDLE_INT_WIDTH,
             (long long)right);
     }
     return REDUCT_HANDLE_FROM_INT(left << right);
@@ -1209,12 +1209,12 @@ static reduct_handle_t reduct_intrinsic_native_shl(reduct_t* reduct, size_t argc
 
 static reduct_handle_t reduct_intrinsic_native_shr(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 2, ">>: expected 2 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 2, ">>: expected 2 argument(s), got %zu", (size_t)argc);
     int64_t left = reduct_handle_as_int(reduct, argv[0]);
     int64_t right = reduct_handle_as_int(reduct, argv[1]);
     if (right < 0 || right >= REDUCT_HANDLE_INT_WIDTH)
     {
-        REDUCT_ERROR_RUNTIME(reduct, ">>: shift amount must be 0-%lu, got %lld",
+        REDUCT_ERROR_THROW(reduct, ">>: shift amount must be 0-%lu, got %lld",
             (unsigned long)REDUCT_HANDLE_INT_WIDTH - 1, (long long)right);
     }
     return REDUCT_HANDLE_FROM_INT(left >> right);
@@ -1231,7 +1231,7 @@ static reduct_handle_t reduct_intrinsic_native_do(reduct_t* reduct, size_t argc,
 
 static reduct_handle_t reduct_intrinsic_native_not(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == 1, "not: expected 1 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "not: expected 1 argument(s), got %zu", (size_t)argc);
     return REDUCT_HANDLE_IS_TRUTHY(argv[0]) ? REDUCT_HANDLE_FALSE() : REDUCT_HANDLE_TRUE();
 }
 

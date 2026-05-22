@@ -148,6 +148,37 @@ REDUCT_API void reduct_error_push(struct reduct* reduct, reduct_error_t* error);
 REDUCT_API void reduct_error_pop(struct reduct* reduct);
 
 /**
+ * @brief Throw an error using the jump buffer in the error structure.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _error Pointer to the error structure.
+ * @param _item Pointer to the item that caused the error.
+ * @param _type The suffix of the error type (e.g., INTERNAL, RUNTIME, etc.).
+ * @param ... The error message format string and any optional arguments.
+ */
+#define REDUCT_ERROR_GENERIC(_reduct, _error, _item, _type, ...) \
+    do \
+    { \
+        const char* __path; \
+        const char* __input; \
+        size_t __inputLength; \
+        size_t __regionLength; \
+        size_t __position; \
+        reduct_error_get_item_params((_reduct), (_item), &__path, &__input, &__inputLength, &__regionLength, \
+            &__position); \
+        reduct_error_set((_error), __path, __input, __inputLength, __regionLength, __position, \
+            REDUCT_ERROR_TYPE_##_type, __VA_ARGS__); \
+        longjmp((_error)->jmp, true); \
+    } while (0)
+
+/**
+ * @brief Check if an error structure indicates a successful operation.
+ *
+ * @param _error Pointer to the error structure.
+ */
+#define REDUCT_ERROR_SUCCESS(_error) ((_error)->type == REDUCT_ERROR_TYPE_NONE)
+
+/**
  * @brief Catch an error using the jump buffer in the error structure.
  *
  * @param _error Pointer to the error structure.
@@ -168,34 +199,35 @@ REDUCT_API void reduct_error_pop(struct reduct* reduct);
         if (REDUCT_ERROR_CATCH(_error) == 0)
 
 /**
- * @brief Check if an error structure indicates a successful operation.
+ * @brief Throw a runtime error using the jump buffer in the error structure.
  *
- * @param _error Pointer to the error structure.
+ * @param _reduct Pointer to the Reduct structure.
+ * @param ... The error message format string and any optional arguments.
  */
-#define REDUCT_ERROR_SUCCESS(_error) ((_error)->type == REDUCT_ERROR_TYPE_NONE)
+#define REDUCT_ERROR_THROW(_reduct, ...) reduct_error_throw_runtime((_reduct), __VA_ARGS__)
 
 /**
- * @brief Throw an error using the jump buffer in the error structure.
+ * @brief Rethrow an existing error.
  *
  * @param _reduct Pointer to the Reduct structure.
  * @param _error Pointer to the error structure.
- * @param _item Pointer to the item that caused the error.
- * @param _type The suffix of the error type (e.g., INTERNAL, RUNTIME, etc.).
+ */
+#define REDUCT_ERROR_RETHROW(_reduct, _error) REDUCT_ERROR_THROW(_reduct, "%s", (_error)->message);
+
+/**
+ * @brief Throw a runtime error if the expression is false.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _expr The expression to check.
  * @param ... The error message format string and any optional arguments.
  */
-#define REDUCT_ERROR_THROW(_reduct, _error, _item, _type, ...) \
+#define REDUCT_ERROR_ASSERT(_reduct, _expr, ...) \
     do \
     { \
-        const char* __path; \
-        const char* __input; \
-        size_t __input_length; \
-        size_t __region_length; \
-        size_t __position; \
-        reduct_error_get_item_params((_reduct), (_item), &__path, &__input, &__input_length, &__region_length, \
-            &__position); \
-        reduct_error_set((_error), __path, __input, __input_length, __region_length, __position, \
-            REDUCT_ERROR_TYPE_##_type, __VA_ARGS__); \
-        longjmp((_error)->jmp, true); \
+        if (REDUCT_UNLIKELY(!(_expr))) \
+        { \
+            REDUCT_ERROR_THROW(_reduct, __VA_ARGS__); \
+        } \
     } while (0)
 
 /**
@@ -225,7 +257,7 @@ REDUCT_API void reduct_error_pop(struct reduct* reduct);
     do \
     { \
         struct reduct_item* __item = REDUCT_HANDLE_TO_ITEM(_handle); \
-        REDUCT_ERROR_THROW((_compiler)->reduct, (_compiler)->reduct->error, \
+        REDUCT_ERROR_GENERIC((_compiler)->reduct, (_compiler)->reduct->error, \
             (((__item) != NULL && (__item)->inputId != REDUCT_INPUT_ID_NONE) \
                     ? (__item) \
                     : ((_compiler)->lastItem != NULL ? (_compiler)->lastItem : (__item))), \
@@ -265,36 +297,12 @@ REDUCT_API void reduct_error_pop(struct reduct* reduct);
     } while (0)
 
 /**
- * @brief Throw a runtime error using the jump buffer in the error structure.
- *
- * @param _reduct Pointer to the Reduct structure.
- * @param ... The error message format string and any optional arguments.
- */
-#define REDUCT_ERROR_RUNTIME(_reduct, ...) reduct_error_throw_runtime((_reduct), __VA_ARGS__)
-
-/**
- * @brief Throw a runtime error if the expression is false.
- *
- * @param _reduct Pointer to the Reduct structure.
- * @param _expr The expression to check.
- * @param ... The error message format string and any optional arguments.
- */
-#define REDUCT_ERROR_RUNTIME_ASSERT(_reduct, _expr, ...) \
-    do \
-    { \
-        if (REDUCT_UNLIKELY(!(_expr))) \
-        { \
-            REDUCT_ERROR_RUNTIME(_reduct, __VA_ARGS__); \
-        } \
-    } while (0)
-
-/**
  * @brief Throw an internal error using the jump buffer in the error structure.
  *
  * @param _reduct Pointer to the Reduct structure.
  * @param ... The error message format string and any optional arguments.
  */
-#define REDUCT_ERROR_INTERNAL(_reduct, ...) REDUCT_ERROR_THROW(_reduct, (_reduct)->error, NULL, INTERNAL, __VA_ARGS__)
+#define REDUCT_ERROR_INTERNAL(_reduct, ...) REDUCT_ERROR_GENERIC(_reduct, (_reduct)->error, NULL, INTERNAL, __VA_ARGS__)
 
 /** @} */
 

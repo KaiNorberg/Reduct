@@ -89,7 +89,7 @@ REDUCT_API reduct_const_t reduct_function_lookup_constant(reduct_t* reduct, redu
         uint32_t newCapacity = func->constantCapacity == 0 ? 16 : func->constantCapacity * 2;
         if (newCapacity > REDUCT_CONSTANT_MAX)
         {
-            REDUCT_ERROR_RUNTIME(reduct, "too many constants in function");
+            REDUCT_ERROR_THROW(reduct, "too many constants in function");
         }
         reduct_const_slot_t* newConstants = realloc(func->constants, newCapacity * sizeof(reduct_const_slot_t));
         if (newConstants == NULL)

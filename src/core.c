@@ -9,7 +9,7 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
     reduct_t* reduct = calloc(1, sizeof(reduct_t));
     if (reduct == NULL)
     {
-        REDUCT_ERROR_THROW(NULL, error, NULL, INTERNAL, "out of memory");
+        REDUCT_ERROR_GENERIC(NULL, error, NULL, INTERNAL, "out of memory");
     }
     reduct->error = error;
     error->reduct = reduct;

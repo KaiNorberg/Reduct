@@ -164,7 +164,7 @@ REDUCT_API reduct_list_t* reduct_list_assoc(struct reduct* reduct, reduct_list_t
 
     if (REDUCT_UNLIKELY(index >= list->length))
     {
-        REDUCT_ERROR_RUNTIME(reduct, "index %zu out of bounds for list of length %u", index);
+        REDUCT_ERROR_THROW(reduct, "index %zu out of bounds for list of length %u", index);
     }
 
     reduct_list_t* newList = reduct_list_new(reduct);
@@ -230,7 +230,7 @@ REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t
 
     if (REDUCT_UNLIKELY(start > end || end > list->length))
     {
-        REDUCT_ERROR_RUNTIME(reduct, "slice: invalid range [%zu, %zu) for list of length %u", start, end, list->length);
+        REDUCT_ERROR_THROW(reduct, "slice: invalid range [%zu, %zu) for list of length %u", start, end, list->length);
     }
 
     reduct_list_t* newList = reduct_list_new(reduct);
@@ -302,7 +302,7 @@ REDUCT_API reduct_handle_t reduct_list_nth(struct reduct* reduct, reduct_list_t*
 
     if (REDUCT_UNLIKELY(index >= list->length))
     {
-        REDUCT_ERROR_RUNTIME(reduct, "index %zu out of bounds for list of length %u", index);
+        REDUCT_ERROR_THROW(reduct, "index %zu out of bounds for list of length %u", index);
     }
 
     size_t tailOffset = REDUCT_LIST_TAIL_OFFSET(list);
@@ -425,7 +425,7 @@ REDUCT_API size_t reduct_list_to_handles(reduct_list_t* list, reduct_handle_t* o
 
 REDUCT_API reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_list_t* list, reduct_handle_t key)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(key), "key must be an atom");
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(key), "key must be an atom");
 
     reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
 
@@ -485,7 +485,7 @@ REDUCT_API reduct_handle_t reduct_list_get(struct reduct* reduct, reduct_list_t*
 REDUCT_API bool reduct_list_find_entry_index(reduct_t* reduct, reduct_list_t* list, reduct_handle_t key,
     size_t* outIndex)
 {
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(key), "key must be an atom");
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(key), "key must be an atom");
 
     reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
 

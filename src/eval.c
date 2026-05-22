@@ -124,14 +124,14 @@ static inline REDUCT_ALWAYS_INLINE uint32_t reduct_eval_bundle_args(reduct_t* re
     uint32_t arity = func->arity;
     if (REDUCT_UNLIKELY(func->flags & REDUCT_FUNCTION_FLAG_VARIADIC))
     {
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc >= (uint32_t)arity - 1, "expected at least %u arguments, got %u",
+        REDUCT_ERROR_ASSERT(reduct, argc >= (uint32_t)arity - 1, "expected at least %u arguments, got %u",
             arity - 1, argc);
 
         uint32_t fixed = arity - 1;
         argv[fixed] = REDUCT_HANDLE_CREATE_HANDLES(reduct, argc - fixed, &argv[fixed]);
         return arity;
     }
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, argc == arity, "expected %u arguments, got %u", arity, argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == arity, "expected %u arguments, got %u", arity, argc);
     return argc;
 }
 
@@ -170,7 +170,7 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
 #define UPDATE_BASE() (base = regs + frame->base)
 
 #define PREPARE_CALLABLE() \
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), NULL, "cannot call value of type %s", \
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), NULL, "cannot call value of type %s", \
         REDUCT_HANDLE_GET_TYPE_STRING(valC)); \
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(valC)
 
@@ -214,7 +214,7 @@ LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
     int64_t amount = reduct_handle_as_int(reduct, valC); \
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_INT_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, amount); \
+    REDUCT_ERROR_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_INT_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, amount); \
     base[a] = REDUCT_HANDLE_FROM_INT(reduct_handle_as_int(reduct, base[b]) _op amount); \
     DISPATCH(); \
 })
@@ -293,7 +293,7 @@ LABEL_C_OP(_label, { \
 
     DISPATCH();
 /*label_invalid:
-    REDUCT_ERROR_RUNTIME(reduct, "invalid opcode %u at instruction %zu", inst, (size_t)(ip - frame->closure->function->insts - 1));*/
+    REDUCT_ERROR_THROW(reduct, "invalid opcode %u at instruction %zu", inst, (size_t)(ip - frame->closure->function->insts - 1));*/
 label_list:
 {
     DECODE_A();
@@ -357,7 +357,7 @@ LABEL_C_OP(label_call, {
         DISPATCH();
     }
 
-    REDUCT_ERROR_RUNTIME(reduct, "cannot call value of type %s", reduct_item_type_str(item));
+    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", reduct_item_type_str(item));
 })
 LABEL_C_OP(label_tailcall, {
     DECODE_A();
@@ -406,7 +406,7 @@ LABEL_C_OP(label_tailcall, {
         DISPATCH();
     }
 
-    REDUCT_ERROR_RUNTIME(reduct, "cannot call value of type %s", reduct_item_type_str(item));
+    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", reduct_item_type_str(item));
 })
 label_recur:
 {
@@ -530,7 +530,7 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t functio
 {
     assert(reduct != NULL);
 
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_FUNCTION(functionHandle),
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_FUNCTION(functionHandle),
         "eval: expected compiled function, got %s", REDUCT_HANDLE_GET_TYPE_STRING(functionHandle));
     reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(functionHandle);
 
@@ -572,14 +572,14 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     assert(reduct != NULL);
     assert(argv != NULL || argc == 0);
 
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(callable), NULL, "cannot call value");
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(callable), NULL, "cannot call value");
 
     reduct_eval_ensure_ready(reduct);
 
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(callable);
     if (item->type == REDUCT_ITEM_TYPE_ATOM)
     {
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, reduct_atom_is_native(reduct, &item->atom), NULL,
+        REDUCT_ERROR_ASSERT(reduct, reduct_atom_is_native(reduct, &item->atom), NULL,
             "cannot call atom, only native functions and closures are callable");
         return item->atom.native(reduct, argc, argv);
     }
@@ -617,7 +617,7 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
         return reduct_eval_run(reduct, initialFrameCount);
     }
 
-    REDUCT_ERROR_RUNTIME(reduct, "cannot call value");
+    REDUCT_ERROR_THROW(reduct, "cannot call value");
 }
 
 REDUCT_API reduct_handle_t reduct_eval_call_v(struct reduct* reduct, reduct_handle_t callable, size_t argc, ...)

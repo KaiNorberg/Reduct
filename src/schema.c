@@ -77,7 +77,7 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
         reduct_atom_t* atom =
             reduct_atom_lookup(reduct, schema->fields[i].key, strlen(schema->fields[i].key), REDUCT_ATOM_LOOKUP_QUOTED);
 
-        REDUCT_ERROR_RUNTIME_ASSERT(reduct, !(atom->flags & (REDUCT_ATOM_FLAG_INTEGER | REDUCT_ATOM_FLAG_FLOAT)),
+        REDUCT_ERROR_ASSERT(reduct, !(atom->flags & (REDUCT_ATOM_FLAG_INTEGER | REDUCT_ATOM_FLAG_FLOAT)),
             "schema key cannot be a number");
 
         if (!(atom->flags & REDUCT_ATOM_FLAG_SCHEMA))
@@ -369,13 +369,13 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
 
     if (id >= reduct->schemaCount)
     {
-        REDUCT_ERROR_RUNTIME(reduct, "invalid schema ID");
+        REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
 
     reduct_schema_internal_t* schema = reduct->schemas[id];
     if (schema == NULL)
     {
-        REDUCT_ERROR_RUNTIME(reduct, "invalid schema ID");
+        REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
 
     reduct_list_t* list = reduct_list_new(reduct);
@@ -405,7 +405,7 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
             reduct_handle_t valueHandle = reduct_schema_serialize_primitive(reduct, field->type, field->size, val);
             if (REDUCT_HANDLE_IS_NIL(valueHandle))
             {
-                REDUCT_ERROR_RUNTIME(reduct, "invalid schema field type");
+                REDUCT_ERROR_THROW(reduct, "invalid schema field type");
             }
             reduct_list_push(reduct, pair, valueHandle);
         }

@@ -166,7 +166,7 @@ REDUCT_API void reduct_handle_promote(struct reduct* reduct, reduct_handle_t* a,
 
     if (itemA->type != REDUCT_ITEM_TYPE_ATOM || itemB->type != REDUCT_ITEM_TYPE_ATOM)
     {
-        REDUCT_ERROR_RUNTIME(reduct, "incompatible operand types %s and %s", reduct_item_type_str(itemA),
+        REDUCT_ERROR_THROW(reduct, "incompatible operand types %s and %s", reduct_item_type_str(itemA),
             reduct_item_type_str(itemB));
     }
 
@@ -187,7 +187,7 @@ REDUCT_API void reduct_handle_promote(struct reduct* reduct, reduct_handle_t* a,
     }
     else
     {
-        REDUCT_ERROR_RUNTIME(reduct, "incompatible operand types %s and %s", reduct_item_type_str(itemA),
+        REDUCT_ERROR_THROW(reduct, "incompatible operand types %s and %s", reduct_item_type_str(itemA),
             reduct_item_type_str(itemB));
     }
 }
@@ -422,7 +422,7 @@ REDUCT_API void reduct_handle_atom_string(reduct_t* reduct, reduct_handle_t* han
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(*handle);
     if (item->type != REDUCT_ITEM_TYPE_ATOM)
     {
-        REDUCT_ERROR_RUNTIME(reduct, "expected atom, got %s", reduct_item_type_str(item));
+        REDUCT_ERROR_THROW(reduct, "expected atom, got %s", reduct_item_type_str(item));
     }
     *outStr = item->atom.string;
     *outLen = item->length;
@@ -434,7 +434,7 @@ REDUCT_API void reduct_handle_push(reduct_t* reduct, reduct_handle_t list, reduc
 
     if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(list)))
     {
-        REDUCT_ERROR_RUNTIME(reduct, "push: expected list, got %s", REDUCT_HANDLE_GET_TYPE_STRING(list));
+        REDUCT_ERROR_THROW(reduct, "push: expected list, got %s", REDUCT_HANDLE_GET_TYPE_STRING(list));
     }
 
     reduct_list_push(reduct, REDUCT_HANDLE_TO_LIST(list), val);
@@ -448,7 +448,7 @@ REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t ha
 
     if (REDUCT_UNLIKELY(index >= item->length))
     {
-        REDUCT_ERROR_RUNTIME(reduct, "index %zu out of bounds for %s of length %u", index, reduct_item_type_str(item),
+        REDUCT_ERROR_THROW(reduct, "index %zu out of bounds for %s of length %u", index, reduct_item_type_str(item),
             item->length);
     }
 
@@ -462,7 +462,7 @@ REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t ha
         return REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_copy(reduct, &c, 1));
     }
     default:
-        REDUCT_ERROR_RUNTIME(reduct, "expected list or atom, got %s", reduct_item_type_str(item));
+        REDUCT_ERROR_THROW(reduct, "expected list or atom, got %s", reduct_item_type_str(item));
     }
 }
 

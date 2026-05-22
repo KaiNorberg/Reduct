@@ -577,7 +577,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
             int64_t _cv = REDUCT_HANDLE_TO_INT(_cVal); \
             if (REDUCT_UNLIKELY(_cv == 0)) \
             { \
-                REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
             } \
             *(_a) = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(_bVal) / _cv); \
         } \
@@ -586,7 +586,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
             double _cv = REDUCT_HANDLE_TO_FLOAT(_cVal); \
             if (REDUCT_UNLIKELY(_cv == 0.0)) \
             { \
-                REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
             } \
             *(_a) = REDUCT_HANDLE_FROM_FLOAT(REDUCT_HANDLE_TO_FLOAT(_bVal) / _cv); \
         } \
@@ -598,7 +598,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
             { \
                 if (REDUCT_UNLIKELY(prom.b.intVal == 0)) \
                 { \
-                    REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+                    REDUCT_ERROR_THROW(_reduct, "division by zero"); \
                 } \
                 *(_a) = REDUCT_HANDLE_FROM_INT(prom.a.intVal / prom.b.intVal); \
             } \
@@ -606,7 +606,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
             { \
                 if (REDUCT_UNLIKELY(prom.b.floatVal == 0.0)) \
                 { \
-                    REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+                    REDUCT_ERROR_THROW(_reduct, "division by zero"); \
                 } \
                 *(_a) = REDUCT_HANDLE_FROM_FLOAT(prom.a.floatVal / prom.b.floatVal); \
             } \
@@ -632,7 +632,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
             int64_t _cv = REDUCT_HANDLE_TO_INT(_cVal); \
             if (REDUCT_UNLIKELY(_cv == 0)) \
             { \
-                REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
             } \
             *(_a) = REDUCT_HANDLE_FROM_INT(REDUCT_HANDLE_TO_INT(_bVal) % _cv); \
         } \
@@ -642,7 +642,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
             int64_t _cv = reduct_handle_as_int(_reduct, _cVal); \
             if (REDUCT_UNLIKELY(_cv == 0)) \
             { \
-                REDUCT_ERROR_RUNTIME(_reduct, "division by zero"); \
+                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
             } \
             *(_a) = REDUCT_HANDLE_FROM_INT(_bv % _cv); \
         } \
@@ -769,7 +769,7 @@ static inline REDUCT_ALWAYS_INLINE int64_t reduct_handle_as_int(struct reduct* r
         return (int64_t)REDUCT_HANDLE_TO_FLOAT(handle);
     }
 
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(handle), "expected atom");
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(handle), "expected atom");
     reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(handle);
     return reduct_atom_as_int(reduct, atom);
 }
@@ -796,7 +796,7 @@ static inline REDUCT_ALWAYS_INLINE double reduct_handle_as_float(struct reduct* 
         return (double)REDUCT_HANDLE_TO_INT(handle);
     }
 
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(handle), "expected atom");
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM(handle), "expected atom");
     reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(handle);
     return reduct_atom_as_float(reduct, atom);
 }
@@ -813,7 +813,7 @@ static inline REDUCT_ALWAYS_INLINE double reduct_handle_as_float(struct reduct* 
 static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_handle_as_atom(struct reduct* reduct, reduct_handle_t handle)
 {
     reduct_item_t* item = reduct_handle_as_item(reduct, handle);
-    REDUCT_ERROR_RUNTIME_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM, "expected atom");
+    REDUCT_ERROR_ASSERT(reduct, item->type == REDUCT_ITEM_TYPE_ATOM, "expected atom");
     return &item->atom;
 }
 
