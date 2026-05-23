@@ -19,6 +19,7 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
     fprintf(out, "Arity: %u\n", (unsigned int)function->arity);
     fprintf(out, "Instruction count: %u\n", (unsigned int)function->instCount);
     fprintf(out, "Constant count: %u\n", (unsigned int)function->constantCount);
+    fprintf(out, "Register count: %u\n", (unsigned int)function->registerCount);
     fprintf(out, "--------------------------------------------------------------------------------\n");
 
     for (size_t i = 0; i < function->instCount; ++i)
@@ -254,13 +255,9 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
             if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE)
             {
                 reduct_handle_t handle = slot->handle;
-                if (REDUCT_HANDLE_IS_INT(handle))
+                if (REDUCT_HANDLE_IS_NUMBER(handle))
                 {
-                    fprintf(out, "%lld\n", (long long)REDUCT_HANDLE_TO_INT(handle));
-                }
-                else if (REDUCT_HANDLE_IS_FLOAT(handle))
-                {
-                    fprintf(out, "%f\n", REDUCT_HANDLE_TO_FLOAT(handle));
+                    fprintf(out, "%g\n", REDUCT_HANDLE_TO_NUMBER(handle));
                 }
                 else if (REDUCT_HANDLE_IS_ATOM(handle))
                 {
@@ -313,13 +310,9 @@ static void reduct_disasm_internal(reduct_t* reduct, reduct_function_t* function
             {
                 reduct_handle_t handle = slot->handle;
                 fprintf(out, "[K%03u] ", (unsigned int)i);
-                if (REDUCT_HANDLE_IS_INT(handle))
+                if (REDUCT_HANDLE_IS_NUMBER(handle))
                 {
-                    fprintf(out, "%lld\n", (long long)REDUCT_HANDLE_TO_INT(handle));
-                }
-                else if (REDUCT_HANDLE_IS_FLOAT(handle))
-                {
-                    fprintf(out, "%f\n", REDUCT_HANDLE_TO_FLOAT(handle));
+                    fprintf(out, "%g\n", REDUCT_HANDLE_TO_NUMBER(handle));
                 }
                 else if (REDUCT_HANDLE_IS_ATOM(handle))
                 {

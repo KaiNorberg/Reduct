@@ -178,8 +178,8 @@ void reduct_intrinsic_lambda(reduct_compiler_t* compiler, reduct_list_t* list, r
 
         reduct_atom_t* captureName = func->constants[i].capture;
         reduct_local_t* captured = reduct_local_lookup(compiler, func->constants[i].capture);
-        REDUCT_ERROR_COMPILE_ASSERT(compiler, captured != NULL, "unable to capture '%.*s'%s", captureName->length,
-            captureName->string, captureName->flags & REDUCT_ATOM_FLAG_OVERFLOW ? " (integer overflow)" : "");
+        REDUCT_ERROR_COMPILE_ASSERT(compiler, captured != NULL, "unable to capture '%.*s'", captureName->length,
+            captureName->string);
 
         if (!REDUCT_LOCAL_IS_DEFINED(captured))
         {
@@ -764,7 +764,7 @@ void reduct_intrinsic_binary_generic(reduct_compiler_t* compiler, reduct_list_t*
         if (opBase == REDUCT_OPCODE_SUB || opBase == REDUCT_OPCODE_DIV)
         {
             reduct_expr_t initialExpr =
-                (opBase == REDUCT_OPCODE_SUB) ? REDUCT_EXPR_INT(compiler, 0) : REDUCT_EXPR_INT(compiler, 1);
+                (opBase == REDUCT_OPCODE_SUB) ? REDUCT_EXPR_NUMBER(compiler, 0.0) : REDUCT_EXPR_NUMBER(compiler, 1.0);
             reduct_reg_t initialReg = reduct_compile_move_or_alloc(compiler, &initialExpr);
             reduct_reg_t target = targetHint;
             reduct_compile_binary(compiler, opBase, &target, initialReg, &leftExpr);
@@ -868,12 +868,12 @@ static void reduct_intrinsic_unary_op_generic(reduct_compiler_t* compiler, reduc
 
 void reduct_intrinsic_inc(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out)
 {
-    reduct_intrinsic_unary_op_generic(compiler, list, out, REDUCT_OPCODE_ADD, REDUCT_EXPR_INT(compiler, 1), "inc");
+    reduct_intrinsic_unary_op_generic(compiler, list, out, REDUCT_OPCODE_ADD, REDUCT_EXPR_NUMBER(compiler, 1.0), "inc");
 }
 
 void reduct_intrinsic_dec(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out)
 {
-    reduct_intrinsic_unary_op_generic(compiler, list, out, REDUCT_OPCODE_SUB, REDUCT_EXPR_INT(compiler, 1), "dec");
+    reduct_intrinsic_unary_op_generic(compiler, list, out, REDUCT_OPCODE_SUB, REDUCT_EXPR_NUMBER(compiler, 1.0), "dec");
 }
 
 void reduct_intrinsic_bit_and(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out)
@@ -909,10 +909,10 @@ void reduct_intrinsic_bit_not(reduct_compiler_t* compiler, reduct_list_t* list, 
         reduct_handle_t argHandle;
         if (reduct_expr_get_handle(compiler, &argExpr, &argHandle))
         {
-            if (REDUCT_HANDLE_IS_INT_SHAPED(argHandle))
+            if (REDUCT_HANDLE_IS_NUMBER_SHAPED(argHandle))
             {
                 reduct_atom_t* result =
-                    reduct_atom_new_int(compiler->reduct, ~reduct_handle_as_int(compiler->reduct, argHandle));
+                    reduct_atom_new_number(compiler->reduct, (double)(~reduct_handle_as_int(compiler->reduct, argHandle)));
                 reduct_expr_done(compiler, &argExpr);
                 *out = REDUCT_EXPR_ATOM(compiler, result);
                 return;
@@ -1049,12 +1049,12 @@ void reduct_intrinsic_greater_equal(reduct_compiler_t* compiler, reduct_list_t* 
     { \
         if (argc == 0) \
         { \
-            return REDUCT_HANDLE_FROM_INT(_identity); \
+            return REDUCT_HANDLE_FROM_NUMBER((double)_identity); \
         } \
         if (argc == 1) \
         { \
             reduct_handle_t res; \
-            reduct_handle_t id = REDUCT_HANDLE_FROM_INT(_identity); \
+            reduct_handle_t id = REDUCT_HANDLE_FROM_NUMBER((double)_identity); \
             REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &res, id, argv[0], _op); \
             return res; \
         } \
@@ -1095,7 +1095,7 @@ void reduct_intrinsic_greater_equal(reduct_compiler_t* compiler, reduct_list_t* 
         { \
             res _op## = reduct_handle_as_int(reduct, argv[i]); \
         } \
-        return REDUCT_HANDLE_FROM_INT(res); \
+        return REDUCT_HANDLE_FROM_NUMBER((double)res); \
     }
 
 #define REDUCT_INTRINSIC_NATIVE_COMPARE(_name, _op) \
@@ -1149,7 +1149,7 @@ static reduct_handle_t reduct_intrinsic_native_div(reduct_t* reduct, size_t argc
     if (argc == 1)
     {
         reduct_handle_t res;
-        reduct_handle_t one = REDUCT_HANDLE_FROM_INT(1);
+        reduct_handle_t one = REDUCT_HANDLE_FROM_NUMBER(1.0);
         REDUCT_HANDLE_DIV_FAST(reduct, &res, one, argv[0]);
         return res;
     }
@@ -1173,7 +1173,7 @@ static reduct_handle_t reduct_intrinsic_native_inc(reduct_t* reduct, size_t argc
 {
     REDUCT_ERROR_ASSERT(reduct, argc == 1, "++: expected 1 argument(s), got %zu", (size_t)argc);
     reduct_handle_t res;
-    reduct_handle_t one = REDUCT_HANDLE_FROM_INT(1);
+    reduct_handle_t one = REDUCT_HANDLE_FROM_NUMBER(1.0);
     REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &res, argv[0], one, +);
     return res;
 }
@@ -1182,7 +1182,7 @@ static reduct_handle_t reduct_intrinsic_native_dec(reduct_t* reduct, size_t argc
 {
     REDUCT_ERROR_ASSERT(reduct, argc == 1, "--: expected 1 argument(s), got %zu", (size_t)argc);
     reduct_handle_t res;
-    reduct_handle_t one = REDUCT_HANDLE_FROM_INT(1);
+    reduct_handle_t one = REDUCT_HANDLE_FROM_NUMBER(1.0);
     REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &res, argv[0], one, -);
     return res;
 }
@@ -1190,7 +1190,7 @@ static reduct_handle_t reduct_intrinsic_native_dec(reduct_t* reduct, size_t argc
 static reduct_handle_t reduct_intrinsic_native_bnot(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
     REDUCT_ERROR_ASSERT(reduct, argc == 1, "~: expected 1 argument(s), got %zu", (size_t)argc);
-    return REDUCT_HANDLE_FROM_INT(~reduct_handle_as_int(reduct, argv[0]));
+    return REDUCT_HANDLE_FROM_NUMBER((double)(~reduct_handle_as_int(reduct, argv[0])));
 }
 
 static reduct_handle_t reduct_intrinsic_native_shl(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
@@ -1198,12 +1198,12 @@ static reduct_handle_t reduct_intrinsic_native_shl(reduct_t* reduct, size_t argc
     REDUCT_ERROR_ASSERT(reduct, argc == 2, "<<: expected 2 argument(s), got %zu", (size_t)argc);
     int64_t left = reduct_handle_as_int(reduct, argv[0]);
     int64_t right = reduct_handle_as_int(reduct, argv[1]);
-    if (right < 0 || right >= REDUCT_HANDLE_INT_WIDTH)
+    if (right < 0 || right >= REDUCT_HANDLE_NUMBER_WIDTH)
     {
-        REDUCT_ERROR_THROW(reduct, "<<: shift amount must be 0-%lu, got %lld", (unsigned long)REDUCT_HANDLE_INT_WIDTH,
+        REDUCT_ERROR_THROW(reduct, "<<: shift amount must be 0-%lu, got %lld", (unsigned long)REDUCT_HANDLE_NUMBER_WIDTH,
             (long long)right);
     }
-    return REDUCT_HANDLE_FROM_INT(left << right);
+    return REDUCT_HANDLE_FROM_NUMBER((double)(left << right));
 }
 
 static reduct_handle_t reduct_intrinsic_native_shr(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
@@ -1211,12 +1211,12 @@ static reduct_handle_t reduct_intrinsic_native_shr(reduct_t* reduct, size_t argc
     REDUCT_ERROR_ASSERT(reduct, argc == 2, ">>: expected 2 argument(s), got %zu", (size_t)argc);
     int64_t left = reduct_handle_as_int(reduct, argv[0]);
     int64_t right = reduct_handle_as_int(reduct, argv[1]);
-    if (right < 0 || right >= REDUCT_HANDLE_INT_WIDTH)
+    if (right < 0 || right >= REDUCT_HANDLE_NUMBER_WIDTH)
     {
         REDUCT_ERROR_THROW(reduct, ">>: shift amount must be 0-%lu, got %lld",
-            (unsigned long)REDUCT_HANDLE_INT_WIDTH - 1, (long long)right);
+            (unsigned long)REDUCT_HANDLE_NUMBER_WIDTH - 1, (long long)right);
     }
-    return REDUCT_HANDLE_FROM_INT(left >> right);
+    return REDUCT_HANDLE_FROM_NUMBER((double)(left >> right));
 }
 
 static reduct_handle_t reduct_intrinsic_native_do(reduct_t* reduct, size_t argc, reduct_handle_t* argv)

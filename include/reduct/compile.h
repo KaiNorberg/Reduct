@@ -285,27 +285,18 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
             .handle = REDUCT_HANDLE_NIL((_compiler)->reduct)}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for an integer.
+ * @brief Create a `REDUCT_MODE_CONST` mode expression for a number.
  *
  * @param _compiler The compiler context.
- * @param _val The integer value.
+ * @param _val The number value.
  */
-#define REDUCT_EXPR_INT(_compiler, _val) REDUCT_EXPR_ATOM(_compiler, reduct_atom_new_int((_compiler)->reduct, (_val)))
+#define REDUCT_EXPR_NUMBER(_compiler, _val) REDUCT_EXPR_ATOM(_compiler, reduct_atom_new_number((_compiler)->reduct, (_val)))
 
 /**
  * @brief Get the target register index from an expression, or -1 if no target is specified.
  * @param _expr The expression to check.
  */
 #define REDUCT_EXPR_GET_TARGET(_expr) (((_expr)->mode == REDUCT_MODE_TARGET) ? (_expr)->reg : REDUCT_REG_INVALID)
-
-/**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for a float.
- *
- * @param _compiler The compiler context.
- * @param _val The float value.
- */
-#define REDUCT_EXPR_FLOAT(_compiler, _val) \
-    REDUCT_EXPR_ATOM(_compiler, reduct_atom_new_float((_compiler)->reduct, (_val)))
 
 /**
  * @brief Compiles a single Reduct handle into an expression descriptor.

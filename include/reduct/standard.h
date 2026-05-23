@@ -98,8 +98,6 @@ REDUCT_API reduct_handle_t reduct_lower(struct reduct* reduct, reduct_handle_t s
 REDUCT_API reduct_handle_t reduct_trim(struct reduct* reduct, reduct_handle_t srcHandle);
 
 REDUCT_API reduct_handle_t reduct_is_atom(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
-REDUCT_API reduct_handle_t reduct_is_int(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
-REDUCT_API reduct_handle_t reduct_is_float(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 REDUCT_API reduct_handle_t reduct_is_number(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 REDUCT_API reduct_handle_t reduct_is_lambda(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 REDUCT_API reduct_handle_t reduct_is_native(struct reduct* reduct, size_t argc, reduct_handle_t* argv);

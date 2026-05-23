@@ -236,11 +236,11 @@ static inline reduct_handle_t reduct_eval_maybe_call(reduct_t* reduct, reduct_ha
                 reduct_handle_t result = reduct_eval_maybe_call(reduct, fn, chunk.handles[i]); \
                 if (_predicate) \
                 { \
-                    return REDUCT_HANDLE_FROM_INT(!(_default)); \
+                    return REDUCT_HANDLE_FROM_NUMBER((double)!(_default)); \
                 } \
             } \
         } \
-        return REDUCT_HANDLE_FROM_INT(_default); \
+        return REDUCT_HANDLE_FROM_NUMBER((double)_default); \
     }
 
 REDUCT_ANY_ALL_IMPL(reduct_any, REDUCT_HANDLE_IS_TRUTHY(result), false)
@@ -403,7 +403,7 @@ REDUCT_API reduct_handle_t reduct_len(reduct_t* reduct, size_t argc, reduct_hand
     {
         total += reduct_handle_len(reduct, argv[i]);
     }
-    return REDUCT_HANDLE_FROM_INT(total);
+    return REDUCT_HANDLE_FROM_NUMBER((double)total);
 }
 
 REDUCT_API reduct_handle_t reduct_range(struct reduct* reduct, reduct_handle_t start, reduct_handle_t end,
@@ -439,7 +439,7 @@ REDUCT_API reduct_handle_t reduct_range(struct reduct* reduct, reduct_handle_t s
     int64_t current = startVal;
     for (size_t i = 0; i < count; i++)
     {
-        reduct_list_push(reduct, list, REDUCT_HANDLE_FROM_INT(current));
+        reduct_list_push(reduct, list, REDUCT_HANDLE_FROM_NUMBER((double)current));
         current += stepVal;
     }
 
@@ -839,7 +839,7 @@ REDUCT_API reduct_handle_t reduct_index_of(reduct_t* reduct, reduct_handle_t han
             {
                 if (reduct_handle_compare(reduct, &chunk.handles[i], &target) == 0)
                 {
-                    return REDUCT_HANDLE_FROM_INT(baseIdx + i);
+                    return REDUCT_HANDLE_FROM_NUMBER((double)baseIdx + i);
                 }
             }
         }
@@ -863,7 +863,7 @@ REDUCT_API reduct_handle_t reduct_index_of(reduct_t* reduct, reduct_handle_t han
             {
                 if (memcmp(str + i, targetStr, targetLen) == 0)
                 {
-                    return REDUCT_HANDLE_FROM_INT(i);
+                    return REDUCT_HANDLE_FROM_NUMBER((double)i);
                 }
             }
         }
@@ -982,7 +982,7 @@ REDUCT_API reduct_handle_t reduct_flatten(struct reduct* reduct, reduct_handle_t
             reduct_handle_t current = chunk.handles[i];
             if (REDUCT_HANDLE_IS_LIST(current))
             {
-                reduct_handle_t flattened = reduct_flatten(reduct, current, REDUCT_HANDLE_FROM_INT(depthVal - 1));
+                reduct_handle_t flattened = reduct_flatten(reduct, current, REDUCT_HANDLE_FROM_NUMBER((double)depthVal - 1));
 
                 if (REDUCT_HANDLE_IS_LIST(flattened))
                 {
@@ -1470,7 +1470,7 @@ REDUCT_API reduct_handle_t reduct_explode(reduct_t* reduct, size_t argc, reduct_
         reduct_handle_atom_string(reduct, &argv[i], &str, &len);
         for (size_t j = 0; j < len; j++)
         {
-            reduct_list_push(reduct, list, REDUCT_HANDLE_FROM_INT((int64_t)(unsigned char)str[j]));
+            reduct_list_push(reduct, list, REDUCT_HANDLE_FROM_NUMBER((double)(int64_t)(unsigned char)str[j]));
         }
     }
 
@@ -1765,8 +1765,6 @@ REDUCT_API reduct_handle_t reduct_trim(reduct_t* reduct, reduct_handle_t srcHand
     }
 
 REDUCT_INTROSPECTION_IMPL(reduct_is_atom, REDUCT_HANDLE_IS_ATOM_LIKE)
-REDUCT_INTROSPECTION_IMPL(reduct_is_int, REDUCT_HANDLE_IS_INT_SHAPED)
-REDUCT_INTROSPECTION_IMPL(reduct_is_float, REDUCT_HANDLE_IS_FLOAT_SHAPED)
 REDUCT_INTROSPECTION_IMPL(reduct_is_number, REDUCT_HANDLE_IS_NUMBER_SHAPED)
 REDUCT_INTROSPECTION_IMPL(reduct_is_lambda, REDUCT_HANDLE_IS_LAMBDA)
 REDUCT_INTROSPECTION_IMPL(reduct_is_list, REDUCT_HANDLE_IS_LIST)
@@ -2257,15 +2255,9 @@ REDUCT_API reduct_handle_t reduct_print(reduct_t* reduct, size_t argc, reduct_ha
 
     for (size_t i = 0; i < argc; i++)
     {
-        if (REDUCT_HANDLE_IS_INT(argv[i]))
+        if (REDUCT_HANDLE_IS_NUMBER(argv[i]))
         {
-            int64_t val = REDUCT_HANDLE_TO_INT(argv[i]);
-            fprintf(stdout, "%lld", (long long)val);
-        }
-        else if (REDUCT_HANDLE_IS_FLOAT(argv[i]))
-        {
-            double val = REDUCT_HANDLE_TO_FLOAT(argv[i]);
-            fprintf(stdout, "%f", val);
+            fprintf(stdout, "%g", REDUCT_HANDLE_TO_NUMBER(argv[i]));
         }
         else if (REDUCT_HANDLE_IS_ATOM(argv[i]) && REDUCT_HANDLE_TO_ATOM(argv[i])->flags & REDUCT_ATOM_FLAG_QUOTED)
         {
@@ -2310,7 +2302,7 @@ REDUCT_API reduct_handle_t reduct_ord(struct reduct* reduct, reduct_handle_t han
 
     REDUCT_ERROR_ASSERT(reduct, len > 0, "ord: expected a non-empty atom");
 
-    return REDUCT_HANDLE_FROM_INT((int64_t)(uint8_t)str[0]);
+    return REDUCT_HANDLE_FROM_NUMBER((double)(int64_t)(uint8_t)str[0]);
 }
 
 REDUCT_API reduct_handle_t reduct_chr(struct reduct* reduct, reduct_handle_t handle)
@@ -2472,7 +2464,7 @@ REDUCT_API reduct_handle_t reduct_now(reduct_t* reduct)
 
     assert(reduct != NULL);
 
-    return REDUCT_HANDLE_FROM_FLOAT((double)time(NULL));
+    return REDUCT_HANDLE_FROM_NUMBER((double)time(NULL));
 }
 
 REDUCT_API reduct_handle_t reduct_uptime(reduct_t* reduct)
@@ -2481,7 +2473,7 @@ REDUCT_API reduct_handle_t reduct_uptime(reduct_t* reduct)
 
     assert(reduct != NULL);
 
-    return REDUCT_HANDLE_FROM_FLOAT((double)clock());
+    return REDUCT_HANDLE_FROM_NUMBER((double)clock());
 }
 
 REDUCT_API reduct_handle_t reduct_env(struct reduct* reduct)
@@ -2545,17 +2537,9 @@ REDUCT_API reduct_handle_t reduct_args(struct reduct* reduct)
         reduct_handle_t current = argv[0]; \
         for (size_t i = 1; i < argc; i++) \
         { \
-            reduct_promotion_t prom; \
-            reduct_handle_promote(reduct, &current, &argv[i], &prom); \
-            if (prom.type == REDUCT_PROMOTION_TYPE_INT) \
-            { \
-                current = REDUCT_HANDLE_FROM_INT(prom.a.intVal _op prom.b.intVal ? prom.a.intVal : prom.b.intVal); \
-            } \
-            else \
-            { \
-                current = \
-                    REDUCT_HANDLE_FROM_FLOAT(prom.a.floatVal _op prom.b.floatVal ? prom.a.floatVal : prom.b.floatVal); \
-            } \
+            double cv = reduct_handle_as_number(reduct, current); \
+            double av = reduct_handle_as_number(reduct, argv[i]); \
+            current = REDUCT_HANDLE_FROM_NUMBER(cv _op av ? cv : av); \
         } \
         return current; \
     }
@@ -2568,43 +2552,27 @@ REDUCT_API reduct_handle_t reduct_clamp(reduct_t* reduct, reduct_handle_t val, r
 {
     assert(reduct != NULL);
 
-    reduct_handle_t current = val;
-    reduct_promotion_t prom;
-
-    reduct_handle_promote(reduct, &current, &minVal, &prom);
-    if (prom.type == REDUCT_PROMOTION_TYPE_INT)
+    double cv = reduct_handle_as_number(reduct, val);
+    double mn = reduct_handle_as_number(reduct, minVal);
+    double mx = reduct_handle_as_number(reduct, maxVal);
+    if (cv < mn)
     {
-        current = REDUCT_HANDLE_FROM_INT(prom.a.intVal < prom.b.intVal ? prom.b.intVal : prom.a.intVal);
+        cv = mn;
     }
-    else
+    if (cv > mx)
     {
-        current = REDUCT_HANDLE_FROM_FLOAT(prom.a.floatVal < prom.b.floatVal ? prom.b.floatVal : prom.a.floatVal);
-    }
-
-    reduct_handle_promote(reduct, &current, &maxVal, &prom);
-    if (prom.type == REDUCT_PROMOTION_TYPE_INT)
-    {
-        current = REDUCT_HANDLE_FROM_INT(prom.a.intVal > prom.b.intVal ? prom.b.intVal : prom.a.intVal);
-    }
-    else
-    {
-        current = REDUCT_HANDLE_FROM_FLOAT(prom.a.floatVal > prom.b.floatVal ? prom.b.floatVal : prom.a.floatVal);
+        cv = mx;
     }
 
-    return current;
+    return REDUCT_HANDLE_FROM_NUMBER(cv);
 }
 
 #define REDUCT_MATH_UNARY_IMPL(_name, _intFunc, _floatFunc) \
     REDUCT_API reduct_handle_t _name(reduct_t* reduct, reduct_handle_t val) \
     { \
         assert(reduct != NULL); \
-        if (REDUCT_HANDLE_IS_INT_SHAPED(val)) \
-        { \
-            int64_t i = reduct_handle_as_int(reduct, val); \
-            return REDUCT_HANDLE_FROM_INT((int64_t)_intFunc(i)); \
-        } \
-        double f = reduct_handle_as_float(reduct, val); \
-        return REDUCT_HANDLE_FROM_FLOAT((double)_floatFunc(f)); \
+        double f = reduct_handle_as_number(reduct, val); \
+        return REDUCT_HANDLE_FROM_NUMBER((double)_floatFunc(f)); \
     }
 
 #define REDUCT_INT_ABS(_x) ((_x) < 0 ? -(_x) : (_x))
@@ -2616,13 +2584,8 @@ REDUCT_MATH_UNARY_IMPL(reduct_sqrt, sqrt, sqrt)
     REDUCT_API reduct_handle_t _name(struct reduct* reduct, reduct_handle_t val) \
     { \
         assert(reduct != NULL); \
-        if (REDUCT_HANDLE_IS_INT_SHAPED(val)) \
-        { \
-            int64_t i = reduct_handle_as_int(reduct, val); \
-            return REDUCT_HANDLE_FROM_INT(i); \
-        } \
-        double f = reduct_handle_as_float(reduct, val); \
-        return REDUCT_HANDLE_FROM_INT((int64_t)_float_func(f)); \
+        double f = reduct_handle_as_number(reduct, val); \
+        return REDUCT_HANDLE_FROM_NUMBER((double)(int64_t)_float_func(f)); \
     }
 
 REDUCT_MATH_UNARY_TO_INT_IMPL(reduct_floor, floor)
@@ -2633,51 +2596,31 @@ REDUCT_API reduct_handle_t reduct_pow(reduct_t* reduct, reduct_handle_t base, re
 {
     assert(reduct != NULL);
 
-    reduct_promotion_t prom;
-    reduct_handle_promote(reduct, &base, &exp, &prom);
-
-    if (prom.type == REDUCT_PROMOTION_TYPE_INT)
-    {
-        return REDUCT_HANDLE_FROM_INT((int64_t)pow((double)prom.a.intVal, (double)prom.b.intVal));
-    }
-    return REDUCT_HANDLE_FROM_FLOAT((double)pow(prom.a.floatVal, prom.b.floatVal));
+    double bv = reduct_handle_as_number(reduct, base);
+    double ev = reduct_handle_as_number(reduct, exp);
+    return REDUCT_HANDLE_FROM_NUMBER(pow(bv, ev));
 }
 
 REDUCT_API reduct_handle_t reduct_log(struct reduct* reduct, reduct_handle_t val, reduct_handle_t base)
 {
     assert(reduct != NULL);
 
+    double vv = reduct_handle_as_number(reduct, val);
     if (REDUCT_HANDLE_IS_NIL(base))
     {
-        if (REDUCT_HANDLE_IS_INT_SHAPED(val))
-        {
-            int64_t i = reduct_handle_as_int(reduct, val);
-            return REDUCT_HANDLE_FROM_INT((int64_t)log(i));
-        }
-
-        double f = reduct_handle_as_float(reduct, val);
-        return REDUCT_HANDLE_FROM_FLOAT((double)log(f));
+        return REDUCT_HANDLE_FROM_NUMBER(log(vv));
     }
 
-    reduct_promotion_t prom;
-    reduct_handle_promote(reduct, &val, &base, &prom);
-
-    if (prom.type == REDUCT_PROMOTION_TYPE_INT)
-    {
-        double res = log((double)prom.a.intVal) / log((double)prom.b.intVal);
-        return REDUCT_HANDLE_FROM_INT((int64_t)res);
-    }
-
-    double res = log(prom.a.floatVal) / log(prom.b.floatVal);
-    return REDUCT_HANDLE_FROM_FLOAT((double)res);
+    double bv = reduct_handle_as_number(reduct, base);
+    return REDUCT_HANDLE_FROM_NUMBER(log(vv) / log(bv));
 }
 
 #define REDUCT_MATH_UNARY_FLOAT_IMPL(_name, _func) \
     REDUCT_API reduct_handle_t _name(struct reduct* reduct, reduct_handle_t val) \
     { \
         assert(reduct != NULL); \
-        double f = reduct_handle_as_float(reduct, val); \
-        return REDUCT_HANDLE_FROM_FLOAT((double)_func(f)); \
+        double f = reduct_handle_as_number(reduct, val); \
+        return REDUCT_HANDLE_FROM_NUMBER((double)_func(f)); \
     }
 
 REDUCT_MATH_UNARY_FLOAT_IMPL(reduct_sin, sin)
@@ -2696,27 +2639,19 @@ REDUCT_MATH_UNARY_FLOAT_IMPL(reduct_atanh, atanh)
 REDUCT_API reduct_handle_t reduct_atan2(struct reduct* reduct, reduct_handle_t y, reduct_handle_t x)
 {
     assert(reduct != NULL);
-    double yf = reduct_handle_as_float(reduct, y);
-    double xf = reduct_handle_as_float(reduct, x);
-    return REDUCT_HANDLE_FROM_FLOAT((double)atan2(yf, xf));
+    double yf = reduct_handle_as_number(reduct, y);
+    double xf = reduct_handle_as_number(reduct, x);
+    return REDUCT_HANDLE_FROM_NUMBER((double)atan2(yf, xf));
 }
 
 REDUCT_API reduct_handle_t reduct_rand(struct reduct* reduct, reduct_handle_t minVal, reduct_handle_t maxVal)
 {
     assert(reduct != NULL);
 
-    reduct_promotion_t prom;
-    reduct_handle_promote(reduct, &minVal, &maxVal, &prom);
-
+    double mn = reduct_handle_as_number(reduct, minVal);
+    double mx = reduct_handle_as_number(reduct, maxVal);
     double r = (double)rand() / (double)RAND_MAX;
-
-    if (prom.type == REDUCT_PROMOTION_TYPE_INT)
-    {
-        int64_t res = prom.a.intVal + (int64_t)(r * (prom.b.intVal - prom.a.intVal));
-        return REDUCT_HANDLE_FROM_INT(res);
-    }
-    double res = prom.a.floatVal + (r * (prom.b.floatVal - prom.a.floatVal));
-    return REDUCT_HANDLE_FROM_FLOAT(res);
+    return REDUCT_HANDLE_FROM_NUMBER(mn + r * (mx - mn));
 }
 
 REDUCT_API reduct_handle_t reduct_seed(struct reduct* reduct, reduct_handle_t val)
@@ -2802,8 +2737,6 @@ REDUCT_STDLIB_WRAPPER_2(filter, reduct_filter)
 REDUCT_STDLIB_WRAPPER_2(apply, reduct_apply)
 REDUCT_STDLIB_WRAPPER_V1(len, reduct_len)
 REDUCT_STDLIB_WRAPPER_V1(is_atom, reduct_is_atom)
-REDUCT_STDLIB_WRAPPER_V1(is_int, reduct_is_int)
-REDUCT_STDLIB_WRAPPER_V1(is_float, reduct_is_float)
 REDUCT_STDLIB_WRAPPER_V1(is_number, reduct_is_number)
 REDUCT_STDLIB_WRAPPER_V1(is_lambda, reduct_is_lambda)
 REDUCT_STDLIB_WRAPPER_V1(is_native, reduct_is_native)
@@ -2871,7 +2804,7 @@ static reduct_handle_t reduct_stdlib_range(reduct_t* reduct, size_t argc, reduct
 
     if (argc == 1)
     {
-        reduct_handle_t zero = REDUCT_HANDLE_FROM_INT(0);
+        reduct_handle_t zero = REDUCT_HANDLE_FROM_NUMBER((double)0);
         return reduct_range(reduct, zero, end, REDUCT_HANDLE_NIL(reduct));
     }
 
@@ -2936,18 +2869,12 @@ REDUCT_STDLIB_WRAPPER_1(upper, reduct_upper)
 REDUCT_STDLIB_WRAPPER_1(lower, reduct_lower)
 REDUCT_STDLIB_WRAPPER_1(trim, reduct_trim)
 
-static reduct_handle_t reduct_stdlib_int_impl(reduct_t* reduct, reduct_handle_t arg)
+static reduct_handle_t reduct_stdlib_number_impl(reduct_t* reduct, reduct_handle_t arg)
 {
-    return REDUCT_HANDLE_FROM_INT(reduct_handle_as_int(reduct, arg));
+    return REDUCT_HANDLE_FROM_NUMBER(reduct_handle_as_number(reduct, arg));
 }
 
-static reduct_handle_t reduct_stdlib_float_impl(reduct_t* reduct, reduct_handle_t arg)
-{
-    return REDUCT_HANDLE_FROM_FLOAT(reduct_handle_as_float(reduct, arg));
-}
-
-REDUCT_STDLIB_WRAPPER_1(int, reduct_stdlib_int_impl)
-REDUCT_STDLIB_WRAPPER_1(float, reduct_stdlib_float_impl)
+REDUCT_STDLIB_WRAPPER_1(number, reduct_stdlib_number_impl)
 
 static reduct_handle_t reduct_stdlib_eval_impl(reduct_t* reduct, reduct_handle_t arg)
 {
@@ -3112,8 +3039,6 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
     {
         static reduct_native_t natives[] = {
             {"atom?", reduct_stdlib_is_atom, NULL},
-            {"int?", reduct_stdlib_is_int, NULL},
-            {"float?", reduct_stdlib_is_float, NULL},
             {"number?", reduct_stdlib_is_number, NULL},
             {"lambda?", reduct_stdlib_is_lambda, NULL},
             {"native?", reduct_stdlib_is_native, NULL},
@@ -3129,8 +3054,7 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
     if (sets & REDUCT_STDLIB_TYPE_CASTING)
     {
         static reduct_native_t natives[] = {
-            {"int", reduct_stdlib_int, NULL},
-            {"float", reduct_stdlib_float, NULL},
+            {"number", reduct_stdlib_number, NULL},
         };
         reduct_native_register(reduct, natives, sizeof(natives) / sizeof(reduct_native_t));
     }

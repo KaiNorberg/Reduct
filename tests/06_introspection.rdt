@@ -11,17 +11,6 @@
     (assert! (== (atom? text num-int num-float) true) "atom? should return true if all items are atoms")
     (assert! (== (atom? text my-list) false) "atom? should return false if any item is not an atom")
 
-    (assert! (== (int? num-int) true) "int? should return true for integer shaped atoms")
-    (assert! (== (int? num-float) false) "int? should return false for float shaped atoms")
-    (assert! (== (int? text) false) "int? should return false for non-integer shaped atoms")
-    (assert! (== (int? num-int 100) true) "int? should return true if all items are integers")
-    (assert! (== (int? num-int num-float) false) "int? should return false if any item is not an integer")
-
-    (assert! (== (float? num-float) true) "float? should return true for float shaped atoms")
-    (assert! (== (float? num-int) false) "float? should return false for integer shaped atoms")
-    (assert! (== (float? num-float 1.5) true) "float? should return true if all items are floats")
-    (assert! (== (float? num-float num-int) false) "float? should return false if any item is not a float")
-
     (assert! (== (number? num-int) true) "number? should return true for integers")
     (assert! (== (number? num-float) true) "number? should return true for floats")
     (assert! (== (number? text) false) "number? should return false for strings")

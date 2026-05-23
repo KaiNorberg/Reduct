@@ -33,14 +33,9 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
         if (REDUCT_HANDLE_IS_ATOM(handle))
         {
             reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(handle);
-            if (reduct_atom_is_int(atom))
+            if (reduct_atom_is_number(atom))
             {
-                closure->constants[i] = REDUCT_HANDLE_FROM_INT(reduct_atom_get_int(atom));
-                continue;
-            }
-            else if (reduct_atom_is_float(atom))
-            {
-                closure->constants[i] = REDUCT_HANDLE_FROM_FLOAT(reduct_atom_get_float(atom));
+                closure->constants[i] = REDUCT_HANDLE_FROM_NUMBER(reduct_atom_get_number(atom));
                 continue;
             }
         }

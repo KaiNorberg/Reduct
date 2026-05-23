@@ -3,7 +3,8 @@
 #include "reduct/function.h"
 #include "reduct/handle.h"
 #include "reduct/inst.h"
-
+#include "reduct/list.h"
+ 
 #include <string.h>
 
 #define REDUCT_OPT_INDEX_NONE ((size_t)-1)
@@ -179,104 +180,79 @@ static bool reduct_optimize_constant_fold(reduct_t* reduct, reduct_opcode_t op, 
         return false;
     }
 
-    bool isFloat = REDUCT_HANDLE_IS_FLOAT_SHAPED(left) || REDUCT_HANDLE_IS_FLOAT_SHAPED(right);
+    double lv = reduct_handle_as_number(reduct, left);
+    double rv = reduct_handle_as_number(reduct, right);
 
-    double lf = reduct_handle_as_float(reduct, left);
-    double rf = reduct_handle_as_float(reduct, right);
-    int64_t li = reduct_handle_as_int(reduct, left);
-    int64_t ri = reduct_handle_as_int(reduct, right);
-
-    if (isFloat)
+    switch (op)
     {
-        switch (op)
+    case REDUCT_OPCODE_ADD:
+    case REDUCT_OPCODE_ADD_CONST:
+        *out = REDUCT_HANDLE_FROM_NUMBER(lv + rv);
+        return true;
+    case REDUCT_OPCODE_SUB:
+    case REDUCT_OPCODE_SUB_CONST:
+        *out = REDUCT_HANDLE_FROM_NUMBER(lv - rv);
+        return true;
+    case REDUCT_OPCODE_MUL:
+    case REDUCT_OPCODE_MUL_CONST:
+        *out = REDUCT_HANDLE_FROM_NUMBER(lv * rv);
+        return true;
+    case REDUCT_OPCODE_DIV:
+    case REDUCT_OPCODE_DIV_CONST:
+        if (REDUCT_UNLIKELY(rv == 0.0))
         {
-        case REDUCT_OPCODE_ADD:
-        case REDUCT_OPCODE_ADD_CONST:
-            *out = REDUCT_HANDLE_FROM_FLOAT(lf + rf);
-            return true;
-        case REDUCT_OPCODE_SUB:
-        case REDUCT_OPCODE_SUB_CONST:
-            *out = REDUCT_HANDLE_FROM_FLOAT(lf - rf);
-            return true;
-        case REDUCT_OPCODE_MUL:
-        case REDUCT_OPCODE_MUL_CONST:
-            *out = REDUCT_HANDLE_FROM_FLOAT(lf * rf);
-            return true;
-        case REDUCT_OPCODE_DIV:
-        case REDUCT_OPCODE_DIV_CONST:
-            if (REDUCT_UNLIKELY(rf == 0.0))
-            {
-                return false;
-            }
-            *out = REDUCT_HANDLE_FROM_FLOAT(lf / rf);
-            return true;
-        default:
-            break;
+            return false;
         }
+        *out = REDUCT_HANDLE_FROM_NUMBER(lv / rv);
+        return true;
+    case REDUCT_OPCODE_MOD:
+    case REDUCT_OPCODE_MOD_CONST:
+    {
+        int64_t li = (int64_t)lv;
+        int64_t ri = (int64_t)rv;
+        if (REDUCT_UNLIKELY(ri == 0))
+        {
+            return false;
+        }
+        *out = REDUCT_HANDLE_FROM_NUMBER((double)(li % ri));
+        return true;
     }
-    else
+    case REDUCT_OPCODE_BAND:
+    case REDUCT_OPCODE_BAND_CONST:
+        *out = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)lv & (int64_t)rv));
+        return true;
+    case REDUCT_OPCODE_BOR:
+    case REDUCT_OPCODE_BOR_CONST:
+        *out = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)lv | (int64_t)rv));
+        return true;
+    case REDUCT_OPCODE_BXOR:
+    case REDUCT_OPCODE_BXOR_CONST:
+        *out = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)lv ^ (int64_t)rv));
+        return true;
+    case REDUCT_OPCODE_SHL:
+    case REDUCT_OPCODE_SHL_CONST:
     {
-        switch (op)
+        int64_t ri = (int64_t)rv;
+        if (REDUCT_UNLIKELY(ri < 0 || ri >= REDUCT_HANDLE_NUMBER_WIDTH))
         {
-        case REDUCT_OPCODE_ADD:
-        case REDUCT_OPCODE_ADD_CONST:
-            *out = REDUCT_HANDLE_FROM_INT(li + ri);
-            return true;
-        case REDUCT_OPCODE_SUB:
-        case REDUCT_OPCODE_SUB_CONST:
-            *out = REDUCT_HANDLE_FROM_INT(li - ri);
-            return true;
-        case REDUCT_OPCODE_MUL:
-        case REDUCT_OPCODE_MUL_CONST:
-            *out = REDUCT_HANDLE_FROM_INT(li * ri);
-            return true;
-        case REDUCT_OPCODE_DIV:
-        case REDUCT_OPCODE_DIV_CONST:
-            if (REDUCT_UNLIKELY(ri == 0))
-            {
-                return false;
-            }
-            *out = REDUCT_HANDLE_FROM_INT(li / ri);
-            return true;
-        case REDUCT_OPCODE_MOD:
-        case REDUCT_OPCODE_MOD_CONST:
-            if (REDUCT_UNLIKELY(ri == 0))
-            {
-                return false;
-            }
-            *out = REDUCT_HANDLE_FROM_INT(li % ri);
-            return true;
-        case REDUCT_OPCODE_BAND:
-        case REDUCT_OPCODE_BAND_CONST:
-            *out = REDUCT_HANDLE_FROM_INT(li & ri);
-            return true;
-        case REDUCT_OPCODE_BOR:
-        case REDUCT_OPCODE_BOR_CONST:
-            *out = REDUCT_HANDLE_FROM_INT(li | ri);
-            return true;
-        case REDUCT_OPCODE_BXOR:
-        case REDUCT_OPCODE_BXOR_CONST:
-            *out = REDUCT_HANDLE_FROM_INT(li ^ ri);
-            return true;
-        case REDUCT_OPCODE_SHL:
-        case REDUCT_OPCODE_SHL_CONST:
-            if (REDUCT_UNLIKELY(ri < 0 || ri >= REDUCT_HANDLE_INT_WIDTH))
-            {
-                return false;
-            }
-            *out = REDUCT_HANDLE_FROM_INT(li << ri);
-            return true;
-        case REDUCT_OPCODE_SHR:
-        case REDUCT_OPCODE_SHR_CONST:
-            if (REDUCT_UNLIKELY(ri < 0 || ri >= REDUCT_HANDLE_INT_WIDTH))
-            {
-                return false;
-            }
-            *out = REDUCT_HANDLE_FROM_INT(li >> ri);
-            return true;
-        default:
-            break;
+            return false;
         }
+        *out = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)lv << ri));
+        return true;
+    }
+    case REDUCT_OPCODE_SHR:
+    case REDUCT_OPCODE_SHR_CONST:
+    {
+        int64_t ri = (int64_t)rv;
+        if (REDUCT_UNLIKELY(ri < 0 || ri >= REDUCT_HANDLE_NUMBER_WIDTH))
+        {
+            return false;
+        }
+        *out = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)lv >> ri));
+        return true;
+    }
+    default:
+        break;
     }
 
     int64_t cmp = reduct_handle_compare(reduct, &left, &right);
@@ -371,6 +347,59 @@ static bool reduct_optimize_constant_folding(reduct_t* reduct, reduct_function_t
 
         switch (op)
         {
+        case REDUCT_OPCODE_LIST:
+        {
+            reduct_reg_t a = REDUCT_INST_GET_A(*inst);
+            uint8_t count = REDUCT_INST_GET_B(*inst);
+
+            if (count == 0)
+            {
+                reduct_handle_t nil = REDUCT_HANDLE_NIL(reduct);
+                reduct_const_slot_t slot = REDUCT_CONST_SLOT_HANDLE(nil);
+                reduct_const_t constIdx = reduct_function_lookup_constant(reduct, func, &slot);
+                *inst = REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_MOV_CONST, a, 0, constIdx);
+                changed = true;
+                break;
+            }
+
+            bool allConst = true;
+            for (uint8_t r = 0; r < count; r++)
+            {
+                if ((a + r) >= REDUCT_REGISTER_MAX || REDUCT_INST_GET_OP(lastInstByReg[a + r]) != REDUCT_OPCODE_MOV_CONST)
+                {
+                    allConst = false;
+                    break;
+                }
+            }
+
+            if (!allConst)
+            {
+                break;
+            }
+
+            REDUCT_SCRATCH(reduct, elements, reduct_handle_t, count);
+            for (uint8_t r = 0; r < count; r++)
+            {
+                if (!reduct_optimize_get_constant(func, lastInstByReg[a + r], &elements[r]))
+                {
+                    allConst = false;
+                    break;
+                }
+            }
+
+            if (allConst)
+            {
+                reduct_handle_t listHandle = REDUCT_HANDLE_CREATE_HANDLES(reduct, count, elements);
+                reduct_const_slot_t slot = REDUCT_CONST_SLOT_HANDLE(listHandle);
+                reduct_const_t constIdx = reduct_function_lookup_constant(reduct, func, &slot);
+
+                *inst = REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_MOV_CONST, a, 0, constIdx);
+                changed = true;
+            }
+
+            REDUCT_SCRATCH_FREE(reduct, elements);
+        }
+        break;
         case REDUCT_OPCODE_ADD_CONST:
         case REDUCT_OPCODE_SUB_CONST:
         case REDUCT_OPCODE_MUL_CONST:
@@ -520,6 +549,19 @@ static bool reduct_optimize_dead_store(reduct_t* reduct, reduct_function_t* func
             for (size_t r = 0; r < REDUCT_REGISTER_MAX; r++)
             {
                 lastWrite[r] = REDUCT_OPT_INDEX_NONE;
+            }
+        }
+        
+        if (op == REDUCT_OPCODE_RET || op == REDUCT_OPCODE_RET_CONST)
+        {
+            for (size_t r = 0; r < REDUCT_REGISTER_MAX; r++)
+            {
+                if (lastWrite[r] != REDUCT_OPT_INDEX_NONE)
+                {
+                    func->insts[lastWrite[r]] = REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_NOP, 0, 0, 0);
+                    lastWrite[r] = REDUCT_OPT_INDEX_NONE;
+                    changed = true;
+                }
             }
         }
     }
@@ -678,7 +720,7 @@ static bool reduct_optimize_algebraic(reduct_t* reduct, reduct_function_t* func)
         // Probably does not matter if we are checking by int or float, will be the same either way.
         if (REDUCT_HANDLE_IS_NUMBER_SHAPED(constVal))
         {
-            double val = reduct_handle_as_float(reduct, constVal);
+            double val = reduct_handle_as_number(reduct, constVal);
             uint8_t a = REDUCT_INST_GET_A(*inst);
             uint8_t b = REDUCT_INST_GET_B(*inst);
 
@@ -705,6 +747,47 @@ static bool reduct_optimize_algebraic(reduct_t* reduct, reduct_function_t* func)
             /// @todo Could probably add more algebraic simplifications.
         }
     }
+    return changed;
+}
+
+static bool reduct_optimize_register_reduction(reduct_t* reduct, reduct_function_t* func)
+{
+    bool changed = false;
+
+    int64_t maxRegister = 0;
+    for (size_t i = 0; i < func->instCount; i++)
+    {
+        reduct_inst_t* inst = &func->insts[i];
+        reduct_opcode_t op = REDUCT_INST_GET_OP(*inst);
+
+        if (op == REDUCT_OPCODE_NOP)
+        {
+            continue;
+        }
+
+        if (REDUCT_OPCODE_HAS_TARGET(op) || REDUCT_OPCODE_READS_A(op))
+        {
+            uint32_t count = REDUCT_OPCODE_READS_RANGE(op) ? REDUCT_INST_GET_B(*inst) : 1;
+            maxRegister = REDUCT_MAX(maxRegister, (int64_t)REDUCT_INST_GET_A(*inst) + count);
+        }
+
+        if (REDUCT_OPCODE_READS_B(op))
+        {
+            maxRegister = REDUCT_MAX(maxRegister, (int64_t)REDUCT_INST_GET_B(*inst) + 1);
+        }
+
+        if (REDUCT_OPCODE_READS_C(op) && !(op & REDUCT_MODE_CONST))
+        {
+            maxRegister = REDUCT_MAX(maxRegister, (int64_t)REDUCT_INST_GET_C(*inst) + 1);
+        }
+    }
+
+    if (func->registerCount != maxRegister)
+    {
+        func->registerCount = maxRegister;
+        changed = true;
+    }
+
     return changed;
 }
 
@@ -926,6 +1009,10 @@ REDUCT_API void reduct_optimize(reduct_t* reduct, reduct_handle_t handle, reduct
             changed = true;
         }
         if (flags & REDUCT_OPTIMIZE_ALGEBRAIC && reduct_optimize_algebraic(reduct, func))
+        {
+            changed = true;
+        }
+        if (flags & REDUCT_OPTIMIZE_REGISTER_REDUCTION && reduct_optimize_register_reduction(reduct, func))
         {
             changed = true;
         }

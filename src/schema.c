@@ -77,7 +77,7 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
         reduct_atom_t* atom =
             reduct_atom_lookup(reduct, schema->fields[i].key, strlen(schema->fields[i].key), REDUCT_ATOM_LOOKUP_QUOTED);
 
-        REDUCT_ERROR_ASSERT(reduct, !(atom->flags & (REDUCT_ATOM_FLAG_INTEGER | REDUCT_ATOM_FLAG_FLOAT)),
+        REDUCT_ERROR_ASSERT(reduct, !(atom->flags & REDUCT_ATOM_FLAG_NUMBER),
             "schema key cannot be a number");
 
         if (!(atom->flags & REDUCT_ATOM_FLAG_SCHEMA))
@@ -162,10 +162,10 @@ static void reduct_schema_apply_primitive(struct reduct* reduct, reduct_schema_t
         switch (size)
         {
         case 4:
-            *(float*)target = (float)reduct_handle_as_float(reduct, valueHandle);
+            *(float*)target = (float)reduct_handle_as_number(reduct, valueHandle);
             break;
         case 8:
-            *(double*)target = (double)reduct_handle_as_float(reduct, valueHandle);
+            *(double*)target = (double)reduct_handle_as_number(reduct, valueHandle);
             break;
         }
     }
@@ -207,13 +207,13 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
         switch (size)
         {
         case 1:
-            return REDUCT_HANDLE_FROM_INT(*(uint8_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(uint8_t*)val);
         case 2:
-            return REDUCT_HANDLE_FROM_INT(*(uint16_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(uint16_t*)val);
         case 4:
-            return REDUCT_HANDLE_FROM_INT(*(uint32_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(uint32_t*)val);
         case 8:
-            return REDUCT_HANDLE_FROM_INT(*(uint64_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(uint64_t*)val);
         }
     }
     break;
@@ -222,13 +222,13 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
         switch (size)
         {
         case 1:
-            return REDUCT_HANDLE_FROM_INT(*(int8_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(int8_t*)val);
         case 2:
-            return REDUCT_HANDLE_FROM_INT(*(int16_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(int16_t*)val);
         case 4:
-            return REDUCT_HANDLE_FROM_INT(*(int32_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(int32_t*)val);
         case 8:
-            return REDUCT_HANDLE_FROM_INT(*(int64_t*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(int64_t*)val);
         }
     }
     break;
@@ -237,15 +237,15 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
         switch (size)
         {
         case 4:
-            return REDUCT_HANDLE_FROM_FLOAT((double)*(float*)val);
+            return REDUCT_HANDLE_FROM_NUMBER((double)*(float*)val);
         case 8:
-            return REDUCT_HANDLE_FROM_FLOAT(*(double*)val);
+            return REDUCT_HANDLE_FROM_NUMBER(*(double*)val);
         }
     }
     break;
     case REDUCT_SCHEMA_TYPE_BOOL:
     {
-        return *(bool*)val ? REDUCT_HANDLE_FROM_INT(1) : REDUCT_HANDLE_FROM_INT(0);
+        return *(bool*)val ? REDUCT_HANDLE_FROM_NUMBER(1.0) : REDUCT_HANDLE_FROM_NUMBER(0.0);
     }
     break;
     case REDUCT_SCHEMA_TYPE_STRING:

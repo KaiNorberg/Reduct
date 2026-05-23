@@ -162,13 +162,9 @@ REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)
     case REDUCT_ITEM_TYPE_NONE:
         return "none";
     case REDUCT_ITEM_TYPE_ATOM:
-        if (reduct_atom_is_int(&item->atom))
+        if (reduct_atom_is_number(&item->atom))
         {
-            return "int";
-        }
-        if (reduct_atom_is_float(&item->atom))
-        {
-            return "float";
+            return "number";
         }
         return "atom";
     case REDUCT_ITEM_TYPE_ATOM_STACK:

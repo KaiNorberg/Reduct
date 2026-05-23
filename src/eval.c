@@ -151,23 +151,18 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
     /// @todo Write some macro magic to turn this into a switch case if not using GCC or Clang.
 
 #define DISPATCH() \
-    do \
-    { \
-        inst = *ip++; \
-        frame->ip = ip; \
-        reduct_opcode_t op = REDUCT_INST_GET_OP(inst); \
-        goto* dispatchTable[op]; \
-    } while (0)
+    inst = *ip++; \
+    frame->ip = ip; \
+    goto* dispatchTable[REDUCT_INST_GET_OP(inst)]
 
 #define UPDATE_STATE() \
-    do { \
-        frame = &reduct->frames[reduct->frameCount - 1]; \
-        ip = frame->ip; \
-        base = regs + frame->base; \
-        constants = frame->closure->constants; \
-    } while (0)
+    frame = &reduct->frames[reduct->frameCount - 1]; \
+    ip = frame->ip; \
+    base = regs + frame->base; \
+    constants = frame->closure->constants
 
-#define UPDATE_BASE() (base = regs + frame->base)
+#define UPDATE_BASE() \
+    base = regs + frame->base
 
 #define PREPARE_CALLABLE() \
     REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), NULL, "cannot call value of type %s", \
@@ -214,8 +209,8 @@ LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
     int64_t amount = reduct_handle_as_int(reduct, valC); \
-    REDUCT_ERROR_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_INT_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_INT_WIDTH - 1, amount); \
-    base[a] = REDUCT_HANDLE_FROM_INT(reduct_handle_as_int(reduct, base[b]) _op amount); \
+    REDUCT_ERROR_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_NUMBER_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_NUMBER_WIDTH - 1, amount); \
+    base[a] = REDUCT_HANDLE_FROM_NUMBER((double)(reduct_handle_as_int(reduct, base[b]) _op amount)); \
     DISPATCH(); \
 })
 
@@ -292,8 +287,6 @@ LABEL_C_OP(_label, { \
     }
 
     DISPATCH();
-/*label_invalid:
-    REDUCT_ERROR_THROW(reduct, "invalid opcode %u at instruction %zu", inst, (size_t)(ip - frame->closure->function->insts - 1));*/
 label_list:
 {
     DECODE_A();
@@ -342,7 +335,6 @@ LABEL_C_OP(label_call, {
         regs = reduct->regs;
 
         UPDATE_STATE();
-
         DISPATCH();
     }
     if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_native(reduct, &item->atom)))
@@ -353,7 +345,6 @@ LABEL_C_OP(label_call, {
         base[a] = result;
 
         reduct_gc_if_needed(reduct);
-
         DISPATCH();
     }
 
@@ -400,9 +391,7 @@ LABEL_C_OP(label_tailcall, {
         }
 
         UPDATE_STATE();
-
         reduct_gc_if_needed(reduct);
-
         DISPATCH();
     }
 
@@ -419,7 +408,6 @@ label_recur:
     regs = reduct->regs;
 
     UPDATE_STATE();
-    reduct_gc_if_needed(reduct);
     DISPATCH();
 }
 label_tailrecur:
@@ -437,8 +425,7 @@ label_tailrecur:
         }
     }
     frame->ip = closure->function->insts;
-    UPDATE_STATE();
-    reduct_gc_if_needed(reduct);
+    ip = frame->ip;
     DISPATCH();
 }
 LABEL_C_OP(label_mov, {
@@ -490,7 +477,7 @@ OP_BITWISE(label_bxor, ^)
 LABEL_C_OP(label_bnot, {
     DECODE_A();
     int64_t val = reduct_handle_as_int(reduct, valC);
-    base[a] = REDUCT_HANDLE_FROM_INT(~val);
+    base[a] = REDUCT_HANDLE_FROM_NUMBER((double)(~val));
     DISPATCH();
 })
 OP_SHIFT(label_shl, <<, "left")
@@ -499,7 +486,7 @@ label_closure:
 {
     DECODE_A();
     DECODE_C();
-    reduct_handle_t protoHandle = frame->closure->constants[c];
+    reduct_handle_t protoHandle = constants[c];
     assert(REDUCT_HANDLE_IS_ITEM(protoHandle));
 
     reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(protoHandle);
@@ -608,7 +595,7 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
 
         if (argc > 0)
         {
-            memcpy(reduct->regs + target, argv, argc * sizeof(reduct_handle_t));
+            memmove(reduct->regs + target, argv, argc * sizeof(reduct_handle_t));
         }
         reduct_eval_bundle_args(reduct, func, (uint32_t)argc, &reduct->regs[target]);
 

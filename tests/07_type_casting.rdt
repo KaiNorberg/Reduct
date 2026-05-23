@@ -1,10 +1,9 @@
 (do
-    (assert! (== (int "42") 42) "int should convert string to integer")
-    (assert! (== (int 3.14) 3) "int should convert float to integer")
-    (assert! (== (int "0x10") 16) "int should convert hex string to integer")
-    (assert! (== (int "0b1010") 10) "int should convert binary string to integer")
-
-    (assert! (== (float "3.14") 3.14) "float should convert string to float")
-    (assert! (== (float 42) 42.0) "float should convert integer to float")
-    (assert! (== (float "1e3") 1000.0) "float should convert scientific notation string to float")
+    (assert! (== (number "42") 42) "number should convert string to number")
+    (assert! (== (number 3.14) 3.14) "number should pass through number types")
+    (assert! (== (number "0x10") 16) "number should convert hex string to number")
+    (assert! (== (number "0b1010") 10) "number should convert binary string to number")
+    (assert! (== (number "3.14") 3.14) "number should convert float string to number")
+    (assert! (== (number 42) 42) "number should pass through integer types")
+    (assert! (== (number "1e3") 1000) "number should convert scientific notation to number")
 )

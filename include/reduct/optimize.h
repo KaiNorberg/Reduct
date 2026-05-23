@@ -26,6 +26,7 @@ typedef enum reduct_optimize_flags
     REDUCT_OPTIMIZE_MOV_PROPAGATE = 1 << 3,    ///< Enable move propagation optimizations.
     REDUCT_OPTIMIZE_DEAD_CODE = 1 << 4,        ///< Enable dead/unreachable code elimination.
     REDUCT_OPTIMIZE_ALGEBRAIC = 1 << 5,        ///< Enable algebraic optimizations.
+    REDUCT_OPTIMIZE_REGISTER_REDUCTION = 1 << 6, ///< Enable register reduction optimizations.
     REDUCT_OPTIMIZE_ALL = 0xFFFFFFFF,          ///< Enable all optimizations.
 
     REDUCT_OPTIMIZE_O1 = REDUCT_OPTIMIZE_PEEPHOLE | REDUCT_OPTIMIZE_CONSTANT_FOLDING |

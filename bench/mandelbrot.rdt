@@ -1,5 +1,5 @@
 (def mandelbrot (lambda (width height max-iter)
-    (def check (lambda (zr zi i c-re c-im) 
+    (def check (lambda (zr zi i c-re c-im)
         (if {i >= max-iter or zr * zr + zi * zi > 4.0}
             i
             (check {zr * zr - zi * zi + c-re} {2.0 * zr * zi + c-im} (++ i) c-re c-im)
@@ -11,7 +11,7 @@
             row
             (iter-x (++ x) y (concat row 
                 (if {(check 0.0 0.0 0 {x / width * 3.5 - 2.5} {y / height * 2.0 - 1.0}) == max-iter} 
-                    "*" 
+                    "*"
                     " "
                 )
             ))
@@ -21,7 +21,7 @@
     (def iter-y (lambda (y output)
         (if {y >= height}
             output
-            (iter-y (++ y) (concat output (concat (iter-x 0.0 y "") "\n")))
+            (iter-y (++ y) (concat output (iter-x 0.0 y "") "\n"))
         )
     ))
 

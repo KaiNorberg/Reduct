@@ -100,14 +100,14 @@ Atoms are the most basic building blocks of Reduct. They are sequences of charac
 
 ```lisp
 "This is a string atom"
-12345 // An integer-shaped atom
-3.14159 // A float-shaped atom
+12345 // A number-shaped atom
+3.14159 // A number-shaped atom
 my-variable // A symbol-shaped atom
 ```
 
 There are no explicit integers or floats within Reduct, only atoms with different "shapes".
 
-An atom can be either string-shaped, integer-shaped or float-shaped, for convenience an atom that is integer-shaped or float-shaped is also considered number-shaped.
+An atom can be either string-shaped or number-shaped.
 
 ### Callables
 
@@ -264,7 +264,7 @@ Comments are ignored by the parser and can be used to document your code.
 
 ### Association Lists
 
-The parser provides syntax sugar around the `get-in` native such that any atom followed by a `.` and another atom or list (e.g., `a.b`), that does not evaluate to a float-shaped atom, will be expanded into a `get-in` call.
+The parser provides syntax sugar around the `get-in` native such that any atom followed by a `.` and another atom or list (e.g., `a.b`), that does not evaluate to a number-shaped atom, will be expanded into a `get-in` call.
 
 For example:
 
@@ -346,24 +346,6 @@ This system can also be used to implement more complex logic, such as emulating 
 
 ## Additional Concepts
 
-### Type Coercion
-
-For any math intrinsic that takes in multiple arguments, C-like type promotion rules are used.
-
-This means that if any of the atoms provided to the operation are float-shaped, the others will also be converted to floats. Otherwise, they will be converted to integers.
-
-If one or more of the atoms are neither integer-shaped nor float-shaped, the evaluation will fail.
-
-For example:
-
-```lisp
-(+ 1 2.5) // Evaluates to "3.5"
-(* 2 3) // Evaluates to "6"
-(/ 10 3) // Evaluates to "3"
-(/ 10 3.0) // Evaluates to "3.333333"
-(+ "1" 2) // Error
-```
-
 ### Truthiness
 
 A truthy item is any item that is not falsy. Falsy items include `nil` (an empty list), an empty atom, the constant `false` (which evaluates to `0`), or any number-shaped atom that evaluates to zero.
@@ -391,7 +373,7 @@ number < string < list
 
 The following rules apply:
 
-- **number:** Compared by value, a greater value is considered larger. If both values are equal, but one is float-shaped and the other is integer-shaped, the float-shaped atom is considered larger.
+- **number:** Compared by numeric value, a greater value is considered larger.
 - **string:** Compared lexicographically by their ASCII characters, or by their length if one is a prefix of the other.
 - **list:** Compared item by item. A list is considered "less than" another if its first non-equal item is lesser than the other list's first non-equal item, or by their length if one is a prefix of the other.
 
@@ -479,7 +461,7 @@ To create a C module, define a function named `reduct_module_init` that returns 
 
 reduct_handle_t my_native(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
 {
-    return REDUCT_HANDLE_FROM_INT(52);
+    return REDUCT_HANDLE_FROM_NUMBER(52.0);
 }
 
 reduct_handle_t reduct_module_init(reduct_t* reduct)
@@ -778,8 +760,8 @@ atom = string | symbol | number ;
 string = '"', { character | white_space | escape_sequence }, '"' ;
 symbol = character, { character } ;
 
-number = integer | float ;
-integer = decimal_integer | hex_integer | octal_integer | binary_integer ;
+number = decimal_integer | hex_integer | octal_integer | binary_integer | float ;
+float = float_number | float_naked_decimal | float_trailing_decimal | scientific_number | special_float ;
 
 truthy = true | expression - falsy_item ;
 falsy  = nil | '""' | false | zero ;
@@ -1293,17 +1275,9 @@ Returns a new atom with leading and trailing whitespace removed.
 
 Returns `true` if all items are atoms, otherwise `false`.
 
-**`(int? <item> {item}) -> <true|false>`**
-
-Returns `true` if all items are integer shaped atoms, otherwise `false`.
-
-**`(float? <item> {item}) -> <true|false>`**
-
-Returns `true` if all items are float shaped atoms, otherwise `false`.
-
 **`(number? <item> {item}) -> <true|false>`**
 
-Returns `true` if all items are integer or float shaped atoms, otherwise `false`.
+Returns `true` if all items are number shaped atoms, otherwise `false`.
 
 **`(lambda? <item> {item}) -> <true|false>`**
 
@@ -1345,13 +1319,9 @@ Will stop evaluating arguments as soon as one is equal.
 
 #### Type Casting
 
-**`(int <atom>) -> <number>`**
+**`(number <atom>) -> <number>`**
 
-Returns the integer shaped representation of the atom.
-
-**`(float <atom>) -> <number>`**
-
-Returns the float shaped representation of the atom.
+Returns the number representation of the atom.
 
 ---
 
