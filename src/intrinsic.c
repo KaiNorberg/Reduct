@@ -4,7 +4,6 @@
 #include "reduct/defs.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
-#include "reduct/optimize.h"
 #include "reduct/standard.h"
 
 void reduct_intrinsic_quote(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out)
@@ -302,25 +301,6 @@ void reduct_intrinsic_def(reduct_compiler_t* compiler, reduct_list_t* list, redu
     *out = valExpr;
 }
 
-static inline bool reduct_expr_get_handle(reduct_compiler_t* compiler, reduct_expr_t* expr, reduct_handle_t* out)
-{
-    assert(compiler != NULL);
-    assert(expr != NULL);
-    assert(out != NULL);
-
-    if (expr->mode == REDUCT_MODE_CONST)
-    {
-        if (compiler->function->constants[expr->constant].type != REDUCT_CONST_SLOT_TYPE_HANDLE)
-        {
-            return false;
-        }
-
-        *out = compiler->function->constants[expr->constant].handle;
-        return true;
-    }
-    return false;
-}
-
 static reduct_list_t* reduct_intrinsic_get_pair(reduct_compiler_t* compiler, reduct_handle_t handle, const char* name)
 {
     assert(compiler != NULL);
@@ -363,78 +343,8 @@ void reduct_intrinsic_greater_equal(reduct_compiler_t* compiler, reduct_list_t* 
 void reduct_intrinsic_equal(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out);
 void reduct_intrinsic_not_equal(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out);
 
-static reduct_opcode_t reduct_get_comparison_op(reduct_compiler_t* compiler, reduct_handle_t head)
-{
-    if (!REDUCT_HANDLE_IS_INTRINSIC(compiler->reduct, head))
-    {
-        return (reduct_opcode_t)-1;
-    }
-
-    reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(head);
-    if (atom->intrinsic == reduct_intrinsic_less)
-    {
-        return REDUCT_OPCODE_LT;
-    }
-    if (atom->intrinsic == reduct_intrinsic_less_equal)
-    {
-        return REDUCT_OPCODE_LE;
-    }
-    if (atom->intrinsic == reduct_intrinsic_greater)
-    {
-        return REDUCT_OPCODE_GT;
-    }
-    if (atom->intrinsic == reduct_intrinsic_greater_equal)
-    {
-        return REDUCT_OPCODE_GE;
-    }
-    if (atom->intrinsic == reduct_intrinsic_equal)
-    {
-        return REDUCT_OPCODE_EQ;
-    }
-    if (atom->intrinsic == reduct_intrinsic_not_equal)
-    {
-        return REDUCT_OPCODE_NEQ;
-    }
-
-    return (reduct_opcode_t)-1;
-}
-
 static size_t reduct_compile_branch(reduct_compiler_t* compiler, reduct_handle_t cond)
 {
-    if (REDUCT_HANDLE_IS_LIST(cond))
-    {
-        reduct_list_t* list = REDUCT_HANDLE_TO_LIST(cond);
-        if (list->length == 3)
-        {
-            reduct_handle_t head = reduct_list_first(compiler->reduct, list);
-            reduct_opcode_t cmpOp = reduct_get_comparison_op(compiler, head);
-
-            if (cmpOp != (reduct_opcode_t)-1)
-            {
-                reduct_handle_t left = reduct_list_nth(compiler->reduct, list, 1);
-                reduct_handle_t right = reduct_list_nth(compiler->reduct, list, 2);
-
-                reduct_expr_t leftExpr = REDUCT_EXPR_NONE();
-                reduct_expr_build(compiler, left, &leftExpr);
-
-                reduct_expr_t rightExpr = REDUCT_EXPR_NONE();
-                reduct_expr_build(compiler, right, &rightExpr);
-
-                reduct_reg_t leftReg = reduct_compile_move_or_alloc(compiler, &leftExpr);
-                reduct_opcode_t skipOp = reduct_cmp_to_skip_op(cmpOp);
-
-                reduct_compile_skip(compiler, skipOp, leftReg, &rightExpr);
-
-                size_t jumpElse = reduct_compile_jump(compiler, REDUCT_OPCODE_JMP, 0);
-
-                reduct_expr_done(compiler, &leftExpr);
-                reduct_expr_done(compiler, &rightExpr);
-
-                return jumpElse;
-            }
-        }
-    }
-
     reduct_expr_t condExpr = REDUCT_EXPR_NONE();
     reduct_expr_build(compiler, cond, &condExpr);
 
@@ -791,13 +701,6 @@ void reduct_intrinsic_binary_generic(reduct_compiler_t* compiler, reduct_list_t*
 
             if (!hasAccumulator)
             {
-                if (leftExpr.mode == REDUCT_MODE_CONST && (opBase == REDUCT_OPCODE_ADD || opBase == REDUCT_OPCODE_MUL))
-                {
-                    reduct_expr_t temp = leftExpr;
-                    leftExpr = rightExpr;
-                    rightExpr = temp;
-                }
-
                 if (leftExpr.mode != REDUCT_MODE_REG)
                 {
                     reduct_compile_move_or_alloc(compiler, &leftExpr);
@@ -903,22 +806,6 @@ void reduct_intrinsic_bit_not(reduct_compiler_t* compiler, reduct_list_t* list, 
     reduct_handle_t arg = reduct_list_nth(compiler->reduct, list, 1);
     reduct_expr_t argExpr = REDUCT_EXPR_NONE();
     reduct_expr_build(compiler, arg, &argExpr);
-
-    if (argExpr.mode == REDUCT_MODE_CONST)
-    {
-        reduct_handle_t argHandle;
-        if (reduct_expr_get_handle(compiler, &argExpr, &argHandle))
-        {
-            if (REDUCT_HANDLE_IS_NUMBER_SHAPED(argHandle))
-            {
-                reduct_atom_t* result =
-                    reduct_atom_new_number(compiler->reduct, (double)(~reduct_handle_as_int(compiler->reduct, argHandle)));
-                reduct_expr_done(compiler, &argExpr);
-                *out = REDUCT_EXPR_ATOM(compiler, result);
-                return;
-            }
-        }
-    }
 
     reduct_reg_t target = reduct_expr_get_reg(compiler, out);
     reduct_compile_inst(compiler,
@@ -1200,8 +1087,8 @@ static reduct_handle_t reduct_intrinsic_native_shl(reduct_t* reduct, size_t argc
     int64_t right = reduct_handle_as_int(reduct, argv[1]);
     if (right < 0 || right >= REDUCT_HANDLE_NUMBER_WIDTH)
     {
-        REDUCT_ERROR_THROW(reduct, "<<: shift amount must be 0-%lu, got %lld", (unsigned long)REDUCT_HANDLE_NUMBER_WIDTH,
-            (long long)right);
+        REDUCT_ERROR_THROW(reduct, "<<: shift amount must be 0-%lu, got %lld",
+            (unsigned long)REDUCT_HANDLE_NUMBER_WIDTH, (long long)right);
     }
     return REDUCT_HANDLE_FROM_NUMBER((double)(left << right));
 }

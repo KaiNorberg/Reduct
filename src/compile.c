@@ -7,7 +7,6 @@
 #include "reduct/intrinsic.h"
 #include "reduct/item.h"
 #include "reduct/list.h"
-#include "reduct/optimize.h"
 #include <string.h>
 
 REDUCT_API reduct_handle_t reduct_compile(reduct_t* reduct, reduct_handle_t ast)
@@ -244,38 +243,6 @@ static inline bool reduct_compiler_is_data(reduct_compiler_t* compiler, reduct_h
     return false;
 }
 
-static bool reduct_compiler_is_self_call(reduct_compiler_t* compiler, reduct_expr_t* callable)
-{
-    if (callable->mode != REDUCT_MODE_CONST)
-    {
-        return false;
-    }
-
-    reduct_const_slot_t* slot = &compiler->function->constants[callable->constant];
-    if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE && REDUCT_HANDLE_IS_FUNCTION(slot->handle))
-    {
-        return REDUCT_HANDLE_TO_FUNCTION(slot->handle) == compiler->function;
-    }
-
-    if (slot->type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
-    {
-        reduct_atom_t* name = slot->capture;
-        reduct_compiler_t* current = compiler->enclosing;
-        while (current != NULL)
-        {
-            for (int16_t i = (int16_t)current->localCount - 1; i >= 0; i--)
-            {
-                if (current->locals[i].name == name)
-                {
-                    return !REDUCT_LOCAL_IS_DEFINED(&current->locals[i]);
-                }
-            }
-            current = current->enclosing;
-        }
-    }
-    return false;
-}
-
 static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out)
 {
     assert(compiler != NULL);
@@ -340,14 +307,7 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_li
         }
     }
 
-    if (reduct_compiler_is_self_call(compiler, &callable))
-    {
-        reduct_compile_recur(compiler, base, arity);
-    }
-    else
-    {
-        reduct_compile_call(compiler, base, &callable, arity);
-    }
+    reduct_compile_call(compiler, base, &callable, arity);
 
     reduct_expr_done(compiler, &callable);
 

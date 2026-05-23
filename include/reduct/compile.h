@@ -290,7 +290,8 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @param _compiler The compiler context.
  * @param _val The number value.
  */
-#define REDUCT_EXPR_NUMBER(_compiler, _val) REDUCT_EXPR_ATOM(_compiler, reduct_atom_new_number((_compiler)->reduct, (_val)))
+#define REDUCT_EXPR_NUMBER(_compiler, _val) \
+    REDUCT_EXPR_ATOM(_compiler, reduct_atom_new_number((_compiler)->reduct, (_val)))
 
 /**
  * @brief Get the target register index from an expression, or -1 if no target is specified.

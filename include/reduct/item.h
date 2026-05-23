@@ -23,13 +23,15 @@
  * @brief Item type enumeration.
  */
 typedef uint8_t reduct_item_type_t;
-#define REDUCT_ITEM_TYPE_NONE 0       ///< No type.
-#define REDUCT_ITEM_TYPE_ATOM 1       ///< An atom.
-#define REDUCT_ITEM_TYPE_ATOM_STACK 2 ///< An atom stack.
-#define REDUCT_ITEM_TYPE_LIST 3       ///< A list.
-#define REDUCT_ITEM_TYPE_LIST_NODE 4  ///< A list node.
-#define REDUCT_ITEM_TYPE_FUNCTION 5   ///< A function.
-#define REDUCT_ITEM_TYPE_CLOSURE 6    ///< A closure.
+#define REDUCT_ITEM_TYPE_NONE 0            ///< No type.
+#define REDUCT_ITEM_TYPE_ATOM 1            ///< An atom.
+#define REDUCT_ITEM_TYPE_ATOM_STACK 2      ///< An atom stack.
+#define REDUCT_ITEM_TYPE_LIST 3            ///< A list.
+#define REDUCT_ITEM_TYPE_LIST_NODE 4       ///< A list node.
+#define REDUCT_ITEM_TYPE_FUNCTION 5        ///< A function.
+#define REDUCT_ITEM_TYPE_CLOSURE 6         ///< A closure.
+#define REDUCT_ITEM_TYPE_OPTIMIZE_NODE 7   ///< An optimization node.
+#define REDUCT_ITEM_TYPE_OPTIMIZE_EDGE 8  ///< An optimization edge.
 
 /**
  * @brief Item flags enumeration.
@@ -60,10 +62,13 @@ typedef struct reduct_item
         reduct_atom_t atom;            ///< An atom.
         reduct_atom_stack_t atomStack; ///< An atom stack.
         reduct_list_t list;            ///< A list.
-        reduct_list_node_t node;       ///< A list node.
+        reduct_list_node_t listNode;   ///< A list node.
         reduct_function_t function;    ///< A function.
         reduct_closure_t closure;      ///< A closure.
-        struct reduct_item* free;      ///< The next free item in the free list.
+        reduct_optimize_region_t optimizationRegion; ///< An optimization region.
+        reduct_optimize_node_t optimizationNode;     ///< An optimization node.
+        reduct_optimize_edge_t optimizationEdge;     ///< An optimization edge.
+        struct reduct_item* free;                    ///< The next free item in the free list.
         uint8_t _raw[REDUCT_ITEM_PAYLOAD_MAX];
     };
 } reduct_item_t;

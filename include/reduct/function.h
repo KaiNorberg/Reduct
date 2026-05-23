@@ -91,12 +91,6 @@ typedef struct reduct_const_slot
     ((reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_CAPTURE, .capture = (_capture)})
 
 /**
- * @brief Constant index type.
- * @typedef reduct_const_t
- */
-typedef uint16_t reduct_const_t;
-
-/**
  * @brief Function flags.
  * @typedef reduct_function_flags_t
  */

@@ -269,8 +269,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @param _handle Pointer to the handle.
  * @return Non-zero if the handle is atom-like, zero otherwise.
  */
-#define REDUCT_HANDLE_IS_ATOM_LIKE(_handle) \
-    (REDUCT_HANDLE_IS_NUMBER(_handle) || REDUCT_HANDLE_IS_ATOM(_handle))
+#define REDUCT_HANDLE_IS_ATOM_LIKE(_handle) (REDUCT_HANDLE_IS_NUMBER(_handle) || REDUCT_HANDLE_IS_ATOM(_handle))
 
 /**
  * @brief Get the number value of a handle.
@@ -561,8 +560,8 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
 #define REDUCT_HANDLE_BITWISE_FAST(_reduct, _a, _b, _c, _op) \
     do \
     { \
-        *(_a) = REDUCT_HANDLE_FROM_NUMBER( \
-            (double)((int64_t)reduct_handle_as_number(_reduct, (_b)) _op (int64_t)reduct_handle_as_number(_reduct, (_c)))); \
+        *(_a) = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)reduct_handle_as_number(_reduct, (_b)) _op(int64_t) \
+                reduct_handle_as_number(_reduct, (_c)))); \
     } while (0)
 
 /**
@@ -574,8 +573,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
 #define REDUCT_HANDLE_IS_TRUTHY(_handle) \
     ((_handle)._value >= REDUCT_HANDLE_OFFSET_NUMBER \
             ? (REDUCT_HANDLE_TO_NUMBER(_handle) != 0.0) \
-            : (REDUCT_HANDLE_IS_ITEM(_handle) && \
-                    !(REDUCT_HANDLE_GET_FLAGS(_handle) & REDUCT_ITEM_FLAG_FALSY)))
+            : (REDUCT_HANDLE_IS_ITEM(_handle) && !(REDUCT_HANDLE_GET_FLAGS(_handle) & REDUCT_ITEM_FLAG_FALSY)))
 
 /**
  * @brief Retain a handle, preventing its referenced item from being collected by the garbage collector.

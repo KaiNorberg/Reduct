@@ -236,14 +236,20 @@ LABEL_C_OP(_label, { \
         DISPATCH(); \
     }
 
-    static const void* dispatchTable[64] = {
+    static const void* dispatchTable[256] = {
+        [REDUCT_OPCODE_NOP] = &&label_nop,
+        [REDUCT_OPCODE_MOV] = &&label_mov, [REDUCT_OPCODE_MOV_CONST] = &&label_mov_k,
         [REDUCT_OPCODE_LIST] = &&label_list,
+        [REDUCT_OPCODE_CLOSURE] = &&label_closure,
+        [REDUCT_OPCODE_CAPTURE] = &&label_capture, [REDUCT_OPCODE_CAPTURE_CONST] = &&label_capture_k,
         [REDUCT_OPCODE_JMP] = &&label_jmp,
         [REDUCT_OPCODE_JMPF] = &&label_jmpf,
         [REDUCT_OPCODE_JMPT] = &&label_jmpt,
         [REDUCT_OPCODE_CALL] = &&label_call, [REDUCT_OPCODE_CALL_CONST] = &&label_call_k,
-        [REDUCT_OPCODE_MOV] = &&label_mov, [REDUCT_OPCODE_MOV_CONST] = &&label_mov_k,
         [REDUCT_OPCODE_RET] = &&label_ret, [REDUCT_OPCODE_RET_CONST] = &&label_ret_k,
+        [REDUCT_OPCODE_TAILCALL] = &&label_tailcall, [REDUCT_OPCODE_TAILCALL_CONST] = &&label_tailcall_k,
+        [REDUCT_OPCODE_RECUR] = &&label_recur,
+        [REDUCT_OPCODE_TAILRECUR] = &&label_tailrecur,
         [REDUCT_OPCODE_EQ] = &&label_eq, [REDUCT_OPCODE_EQ_CONST] = &&label_eq_k,
         [REDUCT_OPCODE_NEQ] = &&label_neq, [REDUCT_OPCODE_NEQ_CONST] = &&label_neq_k,
         [REDUCT_OPCODE_LT] = &&label_lt, [REDUCT_OPCODE_LT_CONST] = &&label_lt_k,
@@ -261,17 +267,12 @@ LABEL_C_OP(_label, { \
         [REDUCT_OPCODE_BNOT] = &&label_bnot, [REDUCT_OPCODE_BNOT_CONST] = &&label_bnot_k,
         [REDUCT_OPCODE_SHL] = &&label_shl, [REDUCT_OPCODE_SHL_CONST] = &&label_shl_k,
         [REDUCT_OPCODE_SHR] = &&label_shr, [REDUCT_OPCODE_SHR_CONST] = &&label_shr_k,
-        [REDUCT_OPCODE_CLOSURE] = &&label_closure, [REDUCT_OPCODE_NOP] = &&label_nop,
-        [REDUCT_OPCODE_CAPTURE] = &&label_capture, [REDUCT_OPCODE_CAPTURE_CONST] = &&label_capture_k,
-        [REDUCT_OPCODE_TAILCALL] = &&label_tailcall, [REDUCT_OPCODE_TAILCALL_CONST] = &&label_tailcall_k,
         [REDUCT_OPCODE_JEQ] = &&label_jeq, [REDUCT_OPCODE_JEQ_CONST] = &&label_jeq_k,
         [REDUCT_OPCODE_JNEQ] = &&label_jneq, [REDUCT_OPCODE_JNEQ_CONST] = &&label_jneq_k,
         [REDUCT_OPCODE_JLT] = &&label_jlt, [REDUCT_OPCODE_JLT_CONST] = &&label_jlt_k,
         [REDUCT_OPCODE_JLE] = &&label_jle, [REDUCT_OPCODE_JLE_CONST] = &&label_jle_k,
         [REDUCT_OPCODE_JGT] = &&label_jgt, [REDUCT_OPCODE_JGT_CONST] = &&label_jgt_k,
         [REDUCT_OPCODE_JGE] = &&label_jge, [REDUCT_OPCODE_JGE_CONST] = &&label_jge_k,
-        [REDUCT_OPCODE_RECUR] = &&label_recur,
-        [REDUCT_OPCODE_TAILRECUR] = &&label_tailrecur,
     };
 
 #define LABEL_C_OP(_label, ...) \

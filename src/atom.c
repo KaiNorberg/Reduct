@@ -5,14 +5,13 @@
 #include "reduct/gc.h"
 #include "reduct/item.h"
 
+#include <assert.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <inttypes.h>
 
 #define REDUCT_ATOM_TOMBSTONE ((reduct_atom_t*)(uintptr_t)1)
 

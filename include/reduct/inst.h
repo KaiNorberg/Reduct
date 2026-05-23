@@ -37,7 +37,7 @@ typedef enum
     REDUCT_MODE_NONE = -1,      ///< Invalid mode.
     REDUCT_MODE_TARGET = -2,    ///< Compilation target hint mode.
     REDUCT_MODE_REG = 0,        ///< Register operand mode.
-    REDUCT_MODE_CONST = 1 << 5, ///< Constant operand mode.
+    REDUCT_MODE_CONST = 1 << 7, ///< Constant operand mode.
 } reduct_mode_t;
 
 /**
@@ -46,76 +46,70 @@ typedef enum
  */
 typedef enum
 {
-    REDUCT_OPCODE_LIST = 0b000000,                               ///< (A, B) R(A) = (R(A) R(A + 1) ... R(A + B - 1))
-    REDUCT_OPCODE_JMP = REDUCT_OPCODE_LIST | REDUCT_MODE_CONST,  ///< (sBx) Unconditional jump by relative offset sBx.
-    REDUCT_OPCODE_JMPF = 0b000001,                               ///< (A, sBx) Jump by sBx if R(A) is falsy.
-    REDUCT_OPCODE_JMPT = REDUCT_OPCODE_JMPF | REDUCT_MODE_CONST, ///< (A, sBx) Jump by sBx if R(A) is truthy.
-    REDUCT_OPCODE_CALL =
-        0b000010, ///< (A, B, C) Call callable in R/K(C) with B args starting from R(A). Result in R(A).
-    REDUCT_OPCODE_CALL_CONST = REDUCT_OPCODE_CALL | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_CALL`.
-    REDUCT_OPCODE_MOV = 0b000011,                                      ///< (A, C) Move value in R/K(C) to R(A).
-    REDUCT_OPCODE_MOV_CONST = REDUCT_OPCODE_MOV | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_MOV`.
-    REDUCT_OPCODE_RET = 0b000100,                                      ///< (C) Return value in R/K(C).
-    REDUCT_OPCODE_RET_CONST = REDUCT_OPCODE_RET | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_RET`.
-    REDUCT_OPCODE_EQ = 0b000101, ///< (A, B, C) If R(B) == R/K(C) store true in R(A), else false.
-    REDUCT_OPCODE_EQ_CONST = REDUCT_OPCODE_EQ | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_EQ`.
-    REDUCT_OPCODE_NEQ = 0b000110, ///< (A, B, C) If R(B) != R/K(C) store true in R(A), else false.
-    REDUCT_OPCODE_NEQ_CONST = REDUCT_OPCODE_NEQ | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_NEQ`.
-    REDUCT_OPCODE_LT = 0b000111, ///< (A, B, C) If R(B) < R/K(C) store true in R(A), else false.
-    REDUCT_OPCODE_LT_CONST = REDUCT_OPCODE_LT | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_LT`.
-    REDUCT_OPCODE_LE = 0b001000, ///< (A, B, C) If R(B) <= R/K(C) store true in R(A), else false.
-    REDUCT_OPCODE_LE_CONST = REDUCT_OPCODE_LE | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_LE`.
-    REDUCT_OPCODE_GT = 0b001001, ///< (A, B, C) If R(B) > R/K(C) store true in R(A), else false.
-    REDUCT_OPCODE_GT_CONST = REDUCT_OPCODE_GT | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_GT`.
-    REDUCT_OPCODE_GE = 0b001010, ///< (A, B, C) If R(B) >= R/K(C) store true in R(A), else false.
-    REDUCT_OPCODE_GE_CONST = REDUCT_OPCODE_GE | REDUCT_MODE_CONST,     ///< Constant version of `REDUCT_OPCODE_GE`.
-    REDUCT_OPCODE_ADD = 0b001011,                                      ///< (A, B, C) R(A) = R(B) + R/K(C)
-    REDUCT_OPCODE_ADD_CONST = REDUCT_OPCODE_ADD | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_ADD`.
-    REDUCT_OPCODE_SUB = 0b001100,                                      ///< (A, B, C) R(A) = R(B) - R/K(C)
-    REDUCT_OPCODE_SUB_CONST = REDUCT_OPCODE_SUB | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_SUB`.
-    REDUCT_OPCODE_MUL = 0b001101,                                      ///< (A, B, C) R(A) = R(B) * R/K(C)
-    REDUCT_OPCODE_MUL_CONST = REDUCT_OPCODE_MUL | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_MUL`.
-    REDUCT_OPCODE_DIV = 0b001110,                                      ///< (A, B, C) R(A) = R(B) / R/K(C)
-    REDUCT_OPCODE_DIV_CONST = REDUCT_OPCODE_DIV | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_DIV`.
-    REDUCT_OPCODE_MOD = 0b001111,                                      ///< (A, B, C) R(A) = R(B) % R/K(C)
-    REDUCT_OPCODE_MOD_CONST = REDUCT_OPCODE_MOD | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_MOD`.
-    REDUCT_OPCODE_BAND = 0b010000,                                     ///< (A, B, C) R(A) = R(B) & R/K(C)
-    REDUCT_OPCODE_BAND_CONST = REDUCT_OPCODE_BAND | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_BAND`.
-    REDUCT_OPCODE_BOR = 0b010001,                                      ///< (A, B, C) R(A) = R(B) | R/K(C)
-    REDUCT_OPCODE_BOR_CONST = REDUCT_OPCODE_BOR | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_BOR`.
-    REDUCT_OPCODE_BXOR = 0b010010,                                     ///< (A, B, C) R(A) = R(B) ^ R/K(C)
-    REDUCT_OPCODE_BXOR_CONST = REDUCT_OPCODE_BXOR | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_BXOR`.
-    REDUCT_OPCODE_BNOT = 0b010011,                                     ///< (A, C) R(A) = ~R/K(C)
-    REDUCT_OPCODE_BNOT_CONST = REDUCT_OPCODE_BNOT | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_BNOT`.
-    REDUCT_OPCODE_SHL = 0b010100,                                      ///< (A, B, C) R(A) = R(B) << R/K(C)
-    REDUCT_OPCODE_SHL_CONST = REDUCT_OPCODE_SHL | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_SHL`.
-    REDUCT_OPCODE_SHR = 0b010101,                                      ///< (A, B, C) R(A) = R(B) >> R/K(C)
-    REDUCT_OPCODE_SHR_CONST = REDUCT_OPCODE_SHR | REDUCT_MODE_CONST,   ///< Constant version of `REDUCT_OPCODE_SHR`.
-    REDUCT_OPCODE_CLOSURE = 0b010110, ///< (A, C) Wrap the function prototype in K(C) in a closure and store in R(A).
-    REDUCT_OPCODE_NOP = REDUCT_OPCODE_CLOSURE | REDUCT_MODE_CONST, ///< No operation.
-    REDUCT_OPCODE_CAPTURE = 0b010111, ///< (A, B, C) Capture R/K(C) into constant slot B in closure R(A).
-    REDUCT_OPCODE_CAPTURE_CONST =
-        REDUCT_OPCODE_CAPTURE | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_CAPTURE`.
-    REDUCT_OPCODE_TAILCALL = 0b011000, ///< (A, B, C) Tail call callable in R/K(C) with B args starting from R(A).
-    REDUCT_OPCODE_TAILCALL_CONST =
-        REDUCT_OPCODE_TAILCALL | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_TAILCALL`.
-    REDUCT_OPCODE_JEQ = 0b011001, ///< (A, C) Skip the next instruction if R(A) == R/K(C), else continue.
-    REDUCT_OPCODE_JEQ_CONST = REDUCT_OPCODE_JEQ | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JEQ`.
-    REDUCT_OPCODE_JNEQ = 0b011010, ///< (A, C) Skip the next instruction if R(A) != R/K(C), else continue.
-    REDUCT_OPCODE_JNEQ_CONST = REDUCT_OPCODE_JNEQ | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JNEQ`.
-    REDUCT_OPCODE_JLT = 0b011011, ///< (A, C) Skip the next instruction if R(A) < R/K(C), else continue.
-    REDUCT_OPCODE_JLT_CONST = REDUCT_OPCODE_JLT | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JLT`.
-    REDUCT_OPCODE_JLE = 0b011100, ///< (A, C) Skip the next instruction if R(A) <= R/K(C), else continue.
-    REDUCT_OPCODE_JLE_CONST = REDUCT_OPCODE_JLE | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JLE`.
-    REDUCT_OPCODE_JGT = 0b011101, ///< (A, C) Skip the next instruction if R(A) > R/K(C), else continue.
-    REDUCT_OPCODE_JGT_CONST = REDUCT_OPCODE_JGT | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JGT`.
-    REDUCT_OPCODE_JGE = 0b011110, ///< (A, C) Skip the next instruction if R(A) >= R/K(C), else continue.
-    REDUCT_OPCODE_JGE_CONST = REDUCT_OPCODE_JGE | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JGE`.
-    REDUCT_OPCODE_RECUR =
-        0b011111, ///< (A, B) Recursively call the current function with B args starting from R(A). Result in R(A).
-    REDUCT_OPCODE_TAILRECUR =
-        REDUCT_OPCODE_RECUR | REDUCT_MODE_CONST, ///< (A, B) Recursively tail call the current function with B args
-                                                 ///< starting from R(A). Result in R(A).
+    REDUCT_OPCODE_NOP = 0,     ///< No operation.
+    REDUCT_OPCODE_MOV,         ///< (A, C) Move value in R/K(C) to R(A).
+    REDUCT_OPCODE_LIST,        ///< (A, B) R(A) = (R(A) R(A + 1) ... R(A + B - 1))
+    REDUCT_OPCODE_CLOSURE,     ///< (A, C) Wrap the function prototype in K(C) in a closure and store in R(A).
+    REDUCT_OPCODE_CAPTURE,     ///< (A, B, C) Capture R/K(C) into constant slot B in closure R(A).
+    REDUCT_OPCODE_JMP,         ///< (sBx) Unconditional jump by relative offset sBx.
+    REDUCT_OPCODE_JMPF,        ///< (A, sBx) Jump by sBx if R(A) is falsy.
+    REDUCT_OPCODE_JMPT,        ///< (A, sBx) Jump by sBx if R(A) is truthy.
+    REDUCT_OPCODE_CALL,        ///< (A, B, C) Call callable in R/K(C) with B args starting from R(A). Result in R(A).
+    REDUCT_OPCODE_RET,         ///< (C) Return value in R/K(C).
+    REDUCT_OPCODE_TAILCALL,    ///< (A, B, C) Tail call callable in R/K(C) with B args starting from R(A).
+    REDUCT_OPCODE_RECUR,       ///< (A, B) Recursively call the current function with B args starting from R(A). Result in R(A).
+    REDUCT_OPCODE_TAILRECUR,   ///< (A, B) Recursively tail call the current function with B args starting from R(A). Result in R(A).
+    REDUCT_OPCODE_EQ,          ///< (A, B, C) If R(B) == R/K(C) store true in R(A), else false.
+    REDUCT_OPCODE_NEQ,         ///< (A, B, C) If R(B) != R/K(C) store true in R(A), else false.
+    REDUCT_OPCODE_LT,          ///< (A, B, C) If R(B) < R/K(C) store true in R(A), else false.
+    REDUCT_OPCODE_LE,          ///< (A, B, C) If R(B) <= R/K(C) store true in R(A), else false.
+    REDUCT_OPCODE_GT,          ///< (A, B, C) If R(B) > R/K(C) store true in R(A), else false.
+    REDUCT_OPCODE_GE,          ///< (A, B, C) If R(B) >= R/K(C) store true in R(A), else false.
+    REDUCT_OPCODE_ADD,         ///< (A, B, C) R(A) = R(B) + R/K(C)
+    REDUCT_OPCODE_SUB,         ///< (A, B, C) R(A) = R(B) - R/K(C)
+    REDUCT_OPCODE_MUL,         ///< (A, B, C) R(A) = R(B) * R/K(C)
+    REDUCT_OPCODE_DIV,         ///< (A, B, C) R(A) = R(B) / R/K(C)
+    REDUCT_OPCODE_MOD,         ///< (A, B, C) R(A) = R(B) % R/K(C)
+    REDUCT_OPCODE_BAND,        ///< (A, B, C) R(A) = R(B) & R/K(C)
+    REDUCT_OPCODE_BOR,         ///< (A, B, C) R(A) = R(B) | R/K(C)
+    REDUCT_OPCODE_BXOR,        ///< (A, B, C) R(A) = R(B) ^ R/K(C)
+    REDUCT_OPCODE_BNOT,        ///< (A, C) R(A) = ~R/K(C)
+    REDUCT_OPCODE_SHL,         ///< (A, B, C) R(A) = R(B) << R/K(C)
+    REDUCT_OPCODE_SHR,         ///< (A, B, C) R(A) = R(B) >> R/K(C)
+    REDUCT_OPCODE_JEQ,         ///< (A, C) Skip the next instruction if R(A) == R/K(C), else continue.
+    REDUCT_OPCODE_JNEQ,        ///< (A, C) Skip the next instruction if R(A) != R/K(C), else continue.
+    REDUCT_OPCODE_JLT,         ///< (A, C) Skip the next instruction if R(A) < R/K(C), else continue.
+    REDUCT_OPCODE_JLE,         ///< (A, C) Skip the next instruction if R(A) <= R/K(C), else continue.
+    REDUCT_OPCODE_JGT,         ///< (A, C) Skip the next instruction if R(A) > R/K(C), else continue.
+    REDUCT_OPCODE_JGE,         ///< (A, C) Skip the next instruction if R(A) >= R/K(C), else continue.
+    REDUCT_OPCODE_MOV_CONST      = REDUCT_OPCODE_MOV      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_MOV`.
+    REDUCT_OPCODE_CALL_CONST     = REDUCT_OPCODE_CALL     | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_CALL`.
+    REDUCT_OPCODE_RET_CONST      = REDUCT_OPCODE_RET      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_RET`.
+    REDUCT_OPCODE_CAPTURE_CONST  = REDUCT_OPCODE_CAPTURE  | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_CAPTURE`.
+    REDUCT_OPCODE_TAILCALL_CONST = REDUCT_OPCODE_TAILCALL | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_TAILCALL`.
+    REDUCT_OPCODE_EQ_CONST       = REDUCT_OPCODE_EQ       | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_EQ`.
+    REDUCT_OPCODE_NEQ_CONST      = REDUCT_OPCODE_NEQ      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_NEQ`.
+    REDUCT_OPCODE_LT_CONST       = REDUCT_OPCODE_LT       | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_LT`.
+    REDUCT_OPCODE_LE_CONST       = REDUCT_OPCODE_LE       | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_LE`.
+    REDUCT_OPCODE_GT_CONST       = REDUCT_OPCODE_GT       | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_GT`.
+    REDUCT_OPCODE_GE_CONST       = REDUCT_OPCODE_GE       | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_GE`.
+    REDUCT_OPCODE_ADD_CONST      = REDUCT_OPCODE_ADD      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_ADD`.
+    REDUCT_OPCODE_SUB_CONST      = REDUCT_OPCODE_SUB      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_SUB`.
+    REDUCT_OPCODE_MUL_CONST      = REDUCT_OPCODE_MUL      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_MUL`.
+    REDUCT_OPCODE_DIV_CONST      = REDUCT_OPCODE_DIV      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_DIV`.
+    REDUCT_OPCODE_MOD_CONST      = REDUCT_OPCODE_MOD      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_MOD`.
+    REDUCT_OPCODE_BAND_CONST     = REDUCT_OPCODE_BAND     | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_BAND`.
+    REDUCT_OPCODE_BOR_CONST      = REDUCT_OPCODE_BOR      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_BOR`.
+    REDUCT_OPCODE_BXOR_CONST     = REDUCT_OPCODE_BXOR     | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_BXOR`.
+    REDUCT_OPCODE_BNOT_CONST     = REDUCT_OPCODE_BNOT     | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_BNOT`.
+    REDUCT_OPCODE_SHL_CONST      = REDUCT_OPCODE_SHL      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_SHL`.
+    REDUCT_OPCODE_SHR_CONST      = REDUCT_OPCODE_SHR      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_SHR`.
+    REDUCT_OPCODE_JEQ_CONST      = REDUCT_OPCODE_JEQ      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JEQ`.
+    REDUCT_OPCODE_JNEQ_CONST     = REDUCT_OPCODE_JNEQ     | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JNEQ`.
+    REDUCT_OPCODE_JLT_CONST      = REDUCT_OPCODE_JLT      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JLT`.
+    REDUCT_OPCODE_JLE_CONST      = REDUCT_OPCODE_JLE      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JLE`.
+    REDUCT_OPCODE_JGT_CONST      = REDUCT_OPCODE_JGT      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JGT`.
+    REDUCT_OPCODE_JGE_CONST      = REDUCT_OPCODE_JGE      | REDUCT_MODE_CONST, ///< Constant version of `REDUCT_OPCODE_JGE`.
 } reduct_opcode_t;
 
 #define REDUCT_OP_FLAG_HAS_TARGET (1 << 0)     ///< Opcode modifies target register A.
@@ -246,6 +240,12 @@ REDUCT_API extern const uint16_t reductOpcodeFlags[UINT8_MAX + 1];
     (REDUCT_OPCODE_HAS_TARGET(REDUCT_INST_GET_OP(_inst)) && (_reg) == REDUCT_INST_GET_A(_inst))
 
 /**
+ * @brief Constant index type.
+ * @typedef reduct_const_t
+ */
+typedef uint16_t reduct_const_t;
+
+/**
  * @brief Register type.
  */
 typedef uint16_t reduct_reg_t;
@@ -257,6 +257,7 @@ typedef uint16_t reduct_reg_t;
 
 /**
  * @brief Instruction type.
+ * @typedef reduct_inst_t
  */
 typedef uint32_t reduct_inst_t;
 

@@ -77,8 +77,7 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
         reduct_atom_t* atom =
             reduct_atom_lookup(reduct, schema->fields[i].key, strlen(schema->fields[i].key), REDUCT_ATOM_LOOKUP_QUOTED);
 
-        REDUCT_ERROR_ASSERT(reduct, !(atom->flags & REDUCT_ATOM_FLAG_NUMBER),
-            "schema key cannot be a number");
+        REDUCT_ERROR_ASSERT(reduct, !(atom->flags & REDUCT_ATOM_FLAG_NUMBER), "schema key cannot be a number");
 
         if (!(atom->flags & REDUCT_ATOM_FLAG_SCHEMA))
         {

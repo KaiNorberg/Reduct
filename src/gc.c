@@ -38,7 +38,7 @@ static void reduct_gc_mark_node(reduct_t* reduct, uint32_t shift, reduct_list_no
         return;
     }
 
-    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, node);
+    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, listNode);
     if (item->flags & REDUCT_ITEM_FLAG_GC_MARK)
     {
         return;

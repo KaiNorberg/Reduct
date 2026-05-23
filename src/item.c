@@ -78,8 +78,8 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
                 free(atom->schema);
             }
         }
-        break;
     }
+    break;
     case REDUCT_ITEM_TYPE_ATOM_STACK:
     {
         reduct_atom_stack_t* stack = &item->atomStack;
@@ -99,8 +99,8 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         {
             free(stack->data);
         }
-        break;
     }
+    break;
     case REDUCT_ITEM_TYPE_FUNCTION:
     {
         reduct_function_t* func = &item->function;
@@ -116,8 +116,8 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         {
             free(func->constants);
         }
-        break;
     }
+    break;
     case REDUCT_ITEM_TYPE_CLOSURE:
     {
         reduct_closure_t* closure = &item->closure;
@@ -125,8 +125,34 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         {
             free(closure->constants);
         }
-        break;
     }
+    break;
+    case REDUCT_ITEM_TYPE_OPTIMIZE_NODE:
+    {
+        reduct_optimize_node_t* node = &item->optimizationNode;
+        if (node->inputs != NULL)
+        {
+            free(node->inputs);
+        }
+        if (node->outputs != NULL)
+        {
+            free(node->outputs);
+        }
+
+        for (size_t i = 0; i < node->regionCount; i++)
+        {
+            reduct_optimize_region_t* region = &node->regions[i];
+            if (region->arguments != NULL)
+            {
+                free(region->arguments);
+            }
+            if (region->results != NULL)
+            {
+                free(region->results);
+            }        
+        }
+    }
+        break;
     default:
         break;
     }

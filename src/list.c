@@ -10,14 +10,14 @@ static reduct_list_node_t* reduct_list_node_new(struct reduct* reduct)
 {
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_LIST_NODE;
-    return &item->node;
+    return &item->listNode;
 }
 
 static reduct_list_node_t* reduct_list_node_copy(reduct_t* reduct, reduct_list_node_t* node)
 {
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_LIST_NODE;
-    reduct_list_node_t* newNode = &item->node;
+    reduct_list_node_t* newNode = &item->listNode;
     memcpy(newNode, node, sizeof(reduct_list_node_t));
     return newNode;
 }

@@ -982,7 +982,8 @@ REDUCT_API reduct_handle_t reduct_flatten(struct reduct* reduct, reduct_handle_t
             reduct_handle_t current = chunk.handles[i];
             if (REDUCT_HANDLE_IS_LIST(current))
             {
-                reduct_handle_t flattened = reduct_flatten(reduct, current, REDUCT_HANDLE_FROM_NUMBER((double)depthVal - 1));
+                reduct_handle_t flattened =
+                    reduct_flatten(reduct, current, REDUCT_HANDLE_FROM_NUMBER((double)depthVal - 1));
 
                 if (REDUCT_HANDLE_IS_LIST(flattened))
                 {

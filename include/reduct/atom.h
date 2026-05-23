@@ -76,8 +76,8 @@ typedef uint16_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NUMBER_CHECKED (1 << 4) ///< Atom has been checked for number shaping.
 #define REDUCT_ATOM_FLAG_NATIVE_CHECKED (1 << 5) ///< Atom has been checked for a native function.
 #define REDUCT_ATOM_FLAG_LARGE (1 << 6)          ///< Atom has an allocated buffer within a stack.
-#define REDUCT_ATOM_FLAG_SCHEMA (1 << 8) ///< Atom is a schema field.
-#define REDUCT_ATOM_FLAG_QUOTED (1 << 9) ///< Atom is quoted.
+#define REDUCT_ATOM_FLAG_SCHEMA (1 << 8)         ///< Atom is a schema field.
+#define REDUCT_ATOM_FLAG_QUOTED (1 << 9)         ///< Atom is quoted.
 
 #define REDUCT_ATOM_STACK_MIN 1024 ///< The minimum size of an atom stack.
 #define REDUCT_ATOM_STACK_GROWTH \
