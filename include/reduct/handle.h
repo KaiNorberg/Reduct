@@ -1,11 +1,11 @@
 #ifndef REDUCT_HANDLE_H
 #define REDUCT_HANDLE_H 1
 
-#include "reduct/atom.h"
-#include "reduct/defs.h"
-#include "reduct/error.h"
-#include "reduct/item.h"
-#include "reduct/standard.h"
+#include <reduct/atom.h>
+#include <reduct/defs.h>
+#include <reduct/error.h>
+#include <reduct/item.h>
+#include <reduct/standard.h>
 
 #include <math.h>
 
@@ -48,6 +48,8 @@ typedef enum
     REDUCT_HANDLE_TYPE_CLOSURE,    ///< Handle is a reference to a closure.
     REDUCT_HANDLE_TYPE_ATOM_STACK, ///< Handle is a reference to an atom stack.
     REDUCT_HANDLE_TYPE_LIST_NODE,  ///< Handle is a reference to a list node.
+    REDUCT_HANDLE_TYPE_RVSDG_NODE, ///< Handle is a reference to an IR node.
+    REDUCT_HANDLE_TYPE_RVSDG_EDGE, ///< Handle is a reference to an IR edge.
     REDUCT_HANDLE_TYPE_UNKNOWN     ///< Handle is corrupt or otherwise invalid.
 } reduct_handle_type_t;
 
@@ -116,6 +118,24 @@ typedef enum
  */
 #define REDUCT_HANDLE_FROM_CLOSURE(_closure) \
     REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_closure, reduct_item_t, closure))
+
+/**
+ * @brief Create a handle from an IR node pointer.
+ *
+ * @param _node The pointer to the reduct_rvsdg_node_t.
+ * @return The handle.
+ */
+#define REDUCT_HANDLE_FROM_RVSDG_NODE(_node) \
+    REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_node, reduct_item_t, rvsdgNode))
+
+/**
+ * @brief Create a handle from an IR edge pointer.
+ *
+ * @param _edge The pointer to the reduct_rvsdg_edge_t.
+ * @return The handle.
+ */
+#define REDUCT_HANDLE_FROM_RVSDG_EDGE(_edge) \
+    REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_edge, reduct_item_t, rvsdgEdge))
 
 /**
  * @brief Create a boolean handle from a C condition.
@@ -228,6 +248,24 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
     (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_CLOSURE)
 
 /**
+ * @brief Check if a handle is an IR node.
+ *
+ * @param _handle Pointer to the handle.
+ * @return Non-zero if the handle is an IR node, zero otherwise.
+ */
+#define REDUCT_HANDLE_IS_RVSDG_NODE(_handle) \
+    (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_RVSDG_NODE)
+
+/**
+ * @brief Check if a handle is an IR edge.
+ *
+ * @param _handle Pointer to the handle.
+ * @return Non-zero if the handle is an IR edge, zero otherwise.
+ */
+#define REDUCT_HANDLE_IS_RVSDG_EDGE(_handle) \
+    (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_RVSDG_EDGE)
+
+/**
  * @brief Check if a handle is a lambda.
  *
  * @param _handle Pointer to the handle.
@@ -323,6 +361,22 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @return The closure pointer.
  */
 #define REDUCT_HANDLE_TO_CLOSURE(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->closure)
+
+/**
+ * @brief Get the IR node pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The IR node pointer.
+ */
+#define REDUCT_HANDLE_TO_RVSDG_NODE(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->rvsdgNode)
+
+/**
+ * @brief Get the IR edge pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The IR edge pointer.
+ */
+#define REDUCT_HANDLE_TO_RVSDG_EDGE(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->rvsdgEdge)
 
 /**
  * @brief Get the boolean value of a handle.

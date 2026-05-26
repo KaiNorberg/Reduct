@@ -1,8 +1,8 @@
-#include "reduct/schema.h"
-#include "reduct/atom.h"
-#include "reduct/core.h"
-#include "reduct/gc.h"
-#include "reduct/standard.h"
+#include <reduct/atom.h>
+#include <reduct/core.h>
+#include <reduct/gc.h>
+#include <reduct/schema.h>
+#include <reduct/standard.h>
 
 #include <assert.h>
 #include <stdarg.h>

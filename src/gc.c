@@ -1,9 +1,9 @@
-#include "reduct/gc.h"
-#include "reduct/atom.h"
-#include "reduct/core.h"
-#include "reduct/eval.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
+#include <reduct/atom.h>
+#include <reduct/core.h>
+#include <reduct/eval.h>
+#include <reduct/gc.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
 
 static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item);
 

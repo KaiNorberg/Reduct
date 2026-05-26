@@ -1,7 +1,7 @@
 #ifndef REDUCT_SCHEMA_H
 #define REDUCT_SCHEMA_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
 
 #include <stdbool.h>
 

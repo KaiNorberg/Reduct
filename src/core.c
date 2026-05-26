@@ -1,8 +1,8 @@
-#include "reduct/core.h"
-#include "reduct/atom.h"
-#include "reduct/eval.h"
-#include "reduct/gc.h"
-#include "reduct/item.h"
+#include <reduct/atom.h>
+#include <reduct/core.h>
+#include <reduct/eval.h>
+#include <reduct/gc.h>
+#include <reduct/item.h>
 
 REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
 {
@@ -13,8 +13,6 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
     }
     reduct->error = error;
     error->reduct = reduct;
-
-    reduct_intrinsic_register_all(reduct);
 
     reduct->argc = 0;
     reduct->argv = NULL;

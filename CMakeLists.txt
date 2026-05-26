@@ -44,16 +44,16 @@ set(REDUCT_SOURCES
     src/atom.c
     src/char.c
     src/closure.c
-    src/compile.c
+    src/emit.c
+    src/build.c
     src/core.c
-    src/disasm.c
+    src/dump.c
     src/error.c
     src/eval.c
     src/function.c
     src/gc.c
     src/handle.c
-    src/inst.c
-    src/intrinsic.c
+    src/opcode.c
     src/item.c
     src/list.c
     src/native.c
@@ -62,6 +62,7 @@ set(REDUCT_SOURCES
     src/schema.c
     src/standard.c
     src/stringify.c
+    src/rvsdg.c
 )
 
 add_library(reduct SHARED ${REDUCT_SOURCES})

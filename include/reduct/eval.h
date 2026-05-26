@@ -1,9 +1,9 @@
 #ifndef REDUCT_EVAL_H
 #define REDUCT_EVAL_H 1
 
-#include "reduct/function.h"
-#include "reduct/handle.h"
-#include "reduct/optimize.h"
+#include <reduct/function.h>
+#include <reduct/handle.h>
+#include <reduct/optimize.h>
 
 struct reduct_closure;
 

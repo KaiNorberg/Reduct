@@ -1,13 +1,13 @@
 #ifndef REDUCT_CORE_H
 #define REDUCT_CORE_H 1
 
-#include "reduct/atom.h"
-#include "reduct/defs.h"
-#include "reduct/error.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
-#include "reduct/native.h"
-#include "reduct/schema.h"
+#include <reduct/atom.h>
+#include <reduct/defs.h>
+#include <reduct/error.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
+#include <reduct/native.h>
+#include <reduct/schema.h>
 
 struct reduct_item;
 struct reduct_eval_frame;
@@ -121,6 +121,7 @@ typedef struct reduct
     void* userdata;
     int argc;
     char** argv;
+    bool hasRegisteredIntrinsics;
 } reduct_t;
 
 /**

@@ -1,10 +1,11 @@
 #ifndef REDUCT_NATIVE_H
 #define REDUCT_NATIVE_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
+#include <reduct/rvsdg.h>
 
 struct reduct;
-struct reduct_compiler;
+struct reduct_builder;
 struct reduct_item;
 struct reduct_expr;
 
@@ -36,12 +37,11 @@ typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, 
 /**
  * @brief Intrinsic handler function type.
  *
- * @param compiler Pointer to the compiler context.
+ * @param builder Pointer to the builder context.
  * @param expr The expression being compiled.
- * @param out The output expression.
+ * @return The origin representing the result of the intrinsic.
  */
-typedef void (
-    *reduct_native_intrinsic_fn)(struct reduct_compiler* compiler, struct reduct_list* expr, struct reduct_expr* out);
+typedef reduct_rvsdg_origin_t* (*reduct_native_intrinsic_fn)(struct reduct_builder* builder, struct reduct_list* expr);
 
 /**
  * @brief Native function definition structure.

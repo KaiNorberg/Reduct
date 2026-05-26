@@ -1,11 +1,11 @@
 #ifndef REDUCT_GC_H
 #define REDUCT_GC_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
 
-#include "reduct/core.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
+#include <reduct/core.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
 
 /**
  * @file gc.h

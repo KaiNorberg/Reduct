@@ -1,10 +1,9 @@
-#include "reduct/intrinsic.h"
-#include "reduct/atom.h"
-#include "reduct/compile.h"
-#include "reduct/defs.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
-#include "reduct/standard.h"
+#include <reduct/intrinsic.h>
+#include <reduct/atom.h>
+#include <reduct/defs.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
+#include <reduct/standard.h>
 
 void reduct_intrinsic_quote(reduct_compiler_t* compiler, reduct_list_t* list, reduct_expr_t* out)
 {
@@ -28,12 +27,12 @@ static inline void reduct_compile_build_into_target(reduct_compiler_t* compiler,
 {
     reduct_expr_t expr = REDUCT_EXPR_TARGET(target);
     reduct_expr_build(compiler, handle, &expr);
-    if (expr.mode == REDUCT_MODE_NONE)
+    if (expr.mode == REDUCT_OPCODE_MODE_NONE)
     {
         reduct_expr_t nil = REDUCT_EXPR_NIL(compiler);
         reduct_compile_move(compiler, target, &nil);
     }
-    else if (expr.mode != REDUCT_MODE_REG || expr.reg != target)
+    else if (expr.mode != REDUCT_OPCODE_MODE_REG || expr.reg != target)
     {
         reduct_compile_move(compiler, target, &expr);
         reduct_expr_done(compiler, &expr);
@@ -73,7 +72,7 @@ void reduct_intrinsic_recur(reduct_compiler_t* compiler, reduct_list_t* list, re
             reduct_expr_t argExpr = REDUCT_EXPR_TARGET(target);
             reduct_expr_build(compiler, argH, &argExpr);
 
-            if (argExpr.mode != REDUCT_MODE_REG || argExpr.reg != target)
+            if (argExpr.mode != REDUCT_OPCODE_MODE_REG || argExpr.reg != target)
             {
                 reduct_compile_move(compiler, target, &argExpr);
                 reduct_expr_done(compiler, &argExpr);
@@ -251,7 +250,7 @@ void reduct_intrinsic_thread(reduct_compiler_t* compiler, reduct_list_t* list, r
                         reduct_expr_t argExpr = REDUCT_EXPR_TARGET(argReg);
                         reduct_expr_build(compiler, stepChunk.handles[j], &argExpr);
 
-                        if (argExpr.mode != REDUCT_MODE_REG || argExpr.reg != argReg)
+                        if (argExpr.mode != REDUCT_OPCODE_MODE_REG || argExpr.reg != argReg)
                         {
                             reduct_compile_move(compiler, argReg, &argExpr);
                             reduct_expr_done(compiler, &argExpr);
@@ -573,7 +572,7 @@ static void reduct_intrinsic_and_or(reduct_compiler_t* compiler, reduct_list_t* 
                 target = (targetHint != REDUCT_REG_INVALID) ? targetHint : reduct_reg_alloc(compiler);
             }
 
-            if (argExpr.mode != REDUCT_MODE_REG || argExpr.reg != target)
+            if (argExpr.mode != REDUCT_OPCODE_MODE_REG || argExpr.reg != target)
             {
                 reduct_compile_move(compiler, target, &argExpr);
                 reduct_expr_done(compiler, &argExpr);
@@ -701,7 +700,7 @@ void reduct_intrinsic_binary_generic(reduct_compiler_t* compiler, reduct_list_t*
 
             if (!hasAccumulator)
             {
-                if (leftExpr.mode != REDUCT_MODE_REG)
+                if (leftExpr.mode != REDUCT_OPCODE_MODE_REG)
                 {
                     reduct_compile_move_or_alloc(compiler, &leftExpr);
                 }
@@ -859,7 +858,7 @@ static void reduct_intrinsic_comparison_generic(reduct_compiler_t* compiler, red
                 target = targetHint;
             }
 
-            if (leftExpr.mode != REDUCT_MODE_REG)
+            if (leftExpr.mode != REDUCT_OPCODE_MODE_REG)
             {
                 reduct_compile_move_or_alloc(compiler, &leftExpr);
             }
@@ -1237,7 +1236,7 @@ REDUCT_API void reduct_intrinsic_list_generic(reduct_compiler_t* compiler, reduc
             size_t index = baseIdx + i - startIdx;
             reduct_expr_t elemExpr = REDUCT_EXPR_TARGET((reduct_reg_t)(base + index));
             reduct_expr_build(compiler, chunk.handles[i], &elemExpr);
-            if (elemExpr.mode != REDUCT_MODE_REG || elemExpr.reg != (reduct_reg_t)(base + index))
+            if (elemExpr.mode != REDUCT_OPCODE_MODE_REG || elemExpr.reg != (reduct_reg_t)(base + index))
             {
                 reduct_compile_move(compiler, (reduct_reg_t)(base + index), &elemExpr);
                 reduct_expr_done(compiler, &elemExpr);

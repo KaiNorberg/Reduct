@@ -1,11 +1,13 @@
-#include "reduct/eval.h"
-#include "reduct/closure.h"
-#include "reduct/compile.h"
-#include "reduct/defs.h"
-#include "reduct/item.h"
-#include "reduct/optimize.h"
-#include "reduct/parse.h"
-#include "reduct/standard.h"
+#include <reduct/build.h>
+#include <reduct/closure.h>
+#include <reduct/emit.h>
+#include <reduct/defs.h>
+#include <reduct/eval.h>
+#include <reduct/gc.h>
+#include <reduct/item.h>
+#include <reduct/optimize.h>
+#include <reduct/parse.h>
+#include <reduct/standard.h>
 #include <stdarg.h>
 
 static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct, uint32_t neededRegs)
@@ -537,9 +539,10 @@ REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path, 
     assert(reduct != NULL);
     assert(path != NULL);
 
-    reduct_handle_t parsed = reduct_parse_file(reduct, path);
-    reduct_handle_t function = reduct_compile(reduct, parsed);
-    reduct_optimize(reduct, function, optimize);
+    reduct_handle_t ast = reduct_parse_file(reduct, path);
+    reduct_handle_t node = reduct_build(reduct, ast);
+    reduct_optimize(reduct, node, optimize);
+    reduct_handle_t function = reduct_emit(reduct, node);
     return reduct_eval(reduct, function);
 }
 
@@ -549,9 +552,10 @@ REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str,
     assert(reduct != NULL);
     assert(str != NULL);
 
-    reduct_handle_t parsed = reduct_parse(reduct, str, len, "<eval>");
-    reduct_handle_t function = reduct_compile(reduct, parsed);
-    reduct_optimize(reduct, function, optimize);
+    reduct_handle_t ast = reduct_parse(reduct, str, len, "<eval>");
+    reduct_handle_t node = reduct_build(reduct, ast);
+    reduct_optimize(reduct, node, optimize);
+    reduct_handle_t function = reduct_emit(reduct, node);
     return reduct_eval(reduct, function);
 }
 

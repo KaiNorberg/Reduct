@@ -56,7 +56,9 @@ tools/reduct-cli/build*
 tools/reduct-cli/reduct_version.h
 tests/build*
 tests/fuzz*
-build*
+bench/build*
+build/
+build_san/
 temp*
 .cache
 meta/docs

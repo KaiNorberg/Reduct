@@ -1,9 +1,9 @@
 #ifndef REDUCT_FUNCTION_H
 #define REDUCT_FUNCTION_H 1
 
-#include "reduct/defs.h"
-#include "reduct/inst.h"
-#include "reduct/optimize.h"
+#include <reduct/defs.h>
+#include <reduct/inst.h>
+#include <reduct/optimize.h>
 
 #include <assert.h>
 #include <stdlib.h>

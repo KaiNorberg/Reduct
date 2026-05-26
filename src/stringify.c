@@ -1,7 +1,7 @@
-#include "reduct/stringify.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
+#include <reduct/handle.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
+#include <reduct/stringify.h>
 
 REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, char* buffer, size_t size)
 {

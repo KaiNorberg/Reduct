@@ -1,8 +1,8 @@
 #ifndef REDUCT_PARSE_H
 #define REDUCT_PARSE_H 1
 
-#include "reduct/core.h"
-#include "reduct/handle.h"
+#include <reduct/core.h>
+#include <reduct/handle.h>
 
 /**
  * @file parse.h

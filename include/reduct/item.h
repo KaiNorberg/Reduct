@@ -1,11 +1,12 @@
 #ifndef REDUCT_ITEM_H
 #define REDUCT_ITEM_H 1
 
-#include "reduct/atom.h"
-#include "reduct/closure.h"
-#include "reduct/defs.h"
-#include "reduct/function.h"
-#include "reduct/list.h"
+#include <reduct/atom.h>
+#include <reduct/closure.h>
+#include <reduct/defs.h>
+#include <reduct/function.h>
+#include <reduct/list.h>
+#include <reduct/rvsdg.h>
 
 /**
  * @file item.h
@@ -23,15 +24,18 @@
  * @brief Item type enumeration.
  */
 typedef uint8_t reduct_item_type_t;
-#define REDUCT_ITEM_TYPE_NONE 0            ///< No type.
-#define REDUCT_ITEM_TYPE_ATOM 1            ///< An atom.
-#define REDUCT_ITEM_TYPE_ATOM_STACK 2      ///< An atom stack.
-#define REDUCT_ITEM_TYPE_LIST 3            ///< A list.
-#define REDUCT_ITEM_TYPE_LIST_NODE 4       ///< A list node.
-#define REDUCT_ITEM_TYPE_FUNCTION 5        ///< A function.
-#define REDUCT_ITEM_TYPE_CLOSURE 6         ///< A closure.
-#define REDUCT_ITEM_TYPE_OPTIMIZE_NODE 7   ///< An optimization node.
-#define REDUCT_ITEM_TYPE_OPTIMIZE_EDGE 8  ///< An optimization edge.
+#define REDUCT_ITEM_TYPE_NONE 0          ///< No type.
+#define REDUCT_ITEM_TYPE_ATOM 1          ///< An atom.
+#define REDUCT_ITEM_TYPE_ATOM_STACK 2    ///< An atom stack.
+#define REDUCT_ITEM_TYPE_LIST 3          ///< A list.
+#define REDUCT_ITEM_TYPE_LIST_NODE 4     ///< A list node.
+#define REDUCT_ITEM_TYPE_FUNCTION 5      ///< A function.
+#define REDUCT_ITEM_TYPE_CLOSURE 6       ///< A closure.
+#define REDUCT_ITEM_TYPE_RVSDG_NODE 7    ///< An IR node.
+#define REDUCT_ITEM_TYPE_RVSDG_EDGE 8    ///< An IR edge.
+#define REDUCT_ITEM_TYPE_RVSDG_REGION 9  ///< An IR region.
+#define REDUCT_ITEM_TYPE_RVSDG_USER 10   ///< An IR user (input/result).
+#define REDUCT_ITEM_TYPE_RVSDG_ORIGIN 11 ///< An IR origin (output/argument).
 
 /**
  * @brief Item flags enumeration.
@@ -58,17 +62,19 @@ typedef struct reduct_item
     reduct_item_type_t type;   ///< The type of the item.
     reduct_input_id_t inputId; ///< The input ID of the item.
     union {
-        uint32_t length;               ///< Common length for the item. (Stored in the union due to padding rules.)
-        reduct_atom_t atom;            ///< An atom.
-        reduct_atom_stack_t atomStack; ///< An atom stack.
-        reduct_list_t list;            ///< A list.
-        reduct_list_node_t listNode;   ///< A list node.
-        reduct_function_t function;    ///< A function.
-        reduct_closure_t closure;      ///< A closure.
-        reduct_optimize_region_t optimizationRegion; ///< An optimization region.
-        reduct_optimize_node_t optimizationNode;     ///< An optimization node.
-        reduct_optimize_edge_t optimizationEdge;     ///< An optimization edge.
-        struct reduct_item* free;                    ///< The next free item in the free list.
+        uint32_t length;                   ///< Common length for the item. (Stored in the union due to padding rules.)
+        reduct_atom_t atom;                ///< An atom.
+        reduct_atom_stack_t atomStack;     ///< An atom stack.
+        reduct_list_t list;                ///< A list.
+        reduct_list_node_t listNode;       ///< A list node.
+        reduct_function_t function;        ///< A function.
+        reduct_closure_t closure;          ///< A closure.
+        reduct_rvsdg_node_t rvsdgNode;     ///< An ir node.
+        reduct_rvsdg_edge_t rvsdgEdge;     ///< An ir edge.
+        reduct_rvsdg_region_t rvsdgRegion; ///< An ir region.
+        reduct_rvsdg_user_t rvsdgUser;     ///< An ir user.
+        reduct_rvsdg_origin_t rvsdgOrigin; ///< An ir origin.
+        struct reduct_item* free;          ///< The next free item in the free list.
         uint8_t _raw[REDUCT_ITEM_PAYLOAD_MAX];
     };
 } reduct_item_t;

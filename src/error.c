@@ -1,7 +1,7 @@
-#include "reduct/error.h"
-#include "reduct/eval.h"
-#include "reduct/item.h"
-#include "reduct/reduct.h"
+#include <reduct/error.h>
+#include <reduct/eval.h>
+#include <reduct/item.h>
+#include <reduct/reduct.h>
 
 #include <setjmp.h>
 #include <stdarg.h>

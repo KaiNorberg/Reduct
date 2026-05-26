@@ -10,7 +10,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/reduct",
             "args": [
-                "${workspaceFolder}/examples/importer.rdt"
+                "${workspaceFolder}/temp.rdt",
+                "-O3",
+                "--ir"
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

@@ -1,7 +1,7 @@
-#include "reduct/native.h"
-#include "reduct/atom.h"
-#include "reduct/core.h"
-#include "reduct/intrinsic.h"
+#include <reduct/atom.h>
+#include <reduct/core.h>
+#include <reduct/intrinsic.h>
+#include <reduct/native.h>
 
 static inline bool reduct_native_map_grow(reduct_t* reduct)
 {

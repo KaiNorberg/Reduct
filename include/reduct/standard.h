@@ -1,8 +1,8 @@
 #ifndef REDUCT_STANDARD_H
 #define REDUCT_STANDARD_H 1
 
-#include "reduct/defs.h"
-#include "reduct/item.h"
+#include <reduct/defs.h>
+#include <reduct/item.h>
 
 struct reduct;
 

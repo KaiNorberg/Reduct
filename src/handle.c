@@ -1,12 +1,12 @@
-#include "reduct/handle.h"
-#include "reduct/atom.h"
-#include "reduct/char.h"
-#include "reduct/core.h"
-#include "reduct/defs.h"
-#include "reduct/eval.h"
-#include "reduct/gc.h"
-#include "reduct/item.h"
-#include "reduct/stringify.h"
+#include <reduct/atom.h>
+#include <reduct/char.h>
+#include <reduct/core.h>
+#include <reduct/defs.h>
+#include <reduct/eval.h>
+#include <reduct/gc.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
+#include <reduct/stringify.h>
 
 REDUCT_API reduct_handle_type_t reduct_handle_get_type(reduct_handle_t handle)
 {
@@ -60,6 +60,14 @@ REDUCT_API reduct_handle_type_t reduct_handle_get_type(reduct_handle_t handle)
     {
         return REDUCT_HANDLE_TYPE_LIST_NODE;
     }
+    case REDUCT_ITEM_TYPE_RVSDG_NODE:
+    {
+        return REDUCT_HANDLE_TYPE_RVSDG_NODE;
+    }
+    case REDUCT_ITEM_TYPE_RVSDG_EDGE:
+    {
+        return REDUCT_HANDLE_TYPE_RVSDG_EDGE;
+    }
     default:
     {
         return REDUCT_HANDLE_TYPE_UNKNOWN;
@@ -87,6 +95,10 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type)
         return "atom stack";
     case REDUCT_HANDLE_TYPE_LIST_NODE:
         return "list node";
+    case REDUCT_HANDLE_TYPE_RVSDG_NODE:
+        return "ir node";
+    case REDUCT_HANDLE_TYPE_RVSDG_EDGE:
+        return "ir edge";
     default:
         return "unknown";
     }

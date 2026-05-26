@@ -1,8 +1,8 @@
 #ifndef REDUCT_STRINGIFY_H
 #define REDUCT_STRINGIFY_H 1
 
-#include "reduct/core.h"
-#include "reduct/handle.h"
+#include <reduct/core.h>
+#include <reduct/handle.h>
 
 /**
  * @file stringify.h

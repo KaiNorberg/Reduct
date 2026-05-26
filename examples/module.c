@@ -1,4 +1,4 @@
-#include "reduct/reduct.h"
+#include <reduct/reduct.h>
 
 reduct_handle_t my_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {

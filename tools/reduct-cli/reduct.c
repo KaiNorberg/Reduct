@@ -1,5 +1,5 @@
 #define REDUCT_INLINE
-#include "reduct/reduct.h"
+#include <reduct/reduct.h>
 #include "reduct_version.h"
 
 #include <stdio.h>
@@ -11,6 +11,7 @@ int main(int argc, char **argv)
     static int result = 0;
 
     static reduct_t* reduct = NULL;
+    const char* irOutputFile = NULL;
 
     reduct_error_t error = REDUCT_ERROR();
     if (REDUCT_ERROR_CATCH(&error))
@@ -60,6 +61,18 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "-d") == 0)
         {
             shouldDump = 1;
+        }
+        else if (strcmp(argv[i], "--ir") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                irOutputFile = argv[++i];
+            }
+            else
+            {
+                fprintf(stderr, "error: --ir requires an output file argument\n");
+                return 1;
+            }
         }
         else if (strncmp(argv[i], "-O", 2) == 0)
         {
@@ -119,6 +132,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "  -s, --silent   Do not print the evaluation result\n");
         fprintf(stderr, "  -I <path>      Add a directory to the import search path\n");
         fprintf(stderr, "  -d             Output the compiled bytecode (disassemble)\n");
+        fprintf(stderr, "  --ir <file>    Output the IR graph (RVSDG) to a .dot file\n");
         fprintf(stderr, "  -O<level>      Set optimization level (0-3, default 3)\n");
         fprintf(stderr, "  -v, --version  Output version information\n");        
         fprintf(stderr, "Environment Variables:\n");
@@ -133,6 +147,10 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "-I") == 0 && i + 1 < argc)
         {
             reduct_add_import_path(reduct, argv[++i]);
+        }
+        else if ((strcmp(argv[i], "-e") == 0 || strcmp(argv[i], "--ir") == 0) && i + 1 < argc)
+        {
+            i++;
         }
     }
 
@@ -166,12 +184,27 @@ int main(int argc, char **argv)
 
     reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
 
-    reduct_handle_t function = reduct_compile(reduct, ast);
-    reduct_optimize(reduct, function, optimizeFlags);
+    reduct_handle_t node = reduct_build(reduct, ast);
+    reduct_optimize(reduct, node, optimizeFlags);
+    reduct_handle_t function = reduct_emit(reduct, node);
+
+    if (irOutputFile != NULL)
+    {
+        FILE* out = fopen(irOutputFile, "w");
+        if (out == NULL)
+        {
+            fprintf(stderr, "error: could not open '%s' for writing\n", irOutputFile);
+            result = 1;
+            goto cleanup;
+        }
+        reduct_dump_rvsdg(reduct, node, out);
+        fclose(out);
+        goto cleanup;
+    }
 
     if (shouldDump)
     {
-        reduct_disasm(reduct, function, stdout);
+        reduct_dump_function(reduct, function, stdout);
         goto cleanup;
     }
 

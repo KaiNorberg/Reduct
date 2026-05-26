@@ -1,17 +1,17 @@
 #ifndef REDUCT_COMPILE_H
 #define REDUCT_COMPILE_H 1
 
-#include "reduct/bitmap.h"
-#include "reduct/core.h"
-#include "reduct/defs.h"
-#include "reduct/function.h"
-#include "reduct/gc.h"
-#include "reduct/inst.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
+#include <reduct/bitmap.h>
+#include <reduct/core.h>
+#include <reduct/defs.h>
+#include <reduct/function.h>
+#include <reduct/gc.h>
+#include <reduct/inst.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
 
 /**
- * @file compile.h
+ * @file emit.h
  * @brief Bytecode compilation.
  * @defgroup compile Compilation
  *
@@ -183,26 +183,26 @@ REDUCT_API void reduct_reg_free(reduct_compiler_t* compiler, reduct_reg_t reg);
 REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t start, uint32_t count);
 
 /**
- * @brief Create a `REDUCT_MODE_NONE` mode expression.
+ * @brief Create a `REDUCT_OPCODE_MODE_NONE` mode expression.
  */
-#define REDUCT_EXPR_NONE() ((reduct_expr_t){.mode = REDUCT_MODE_NONE})
+#define REDUCT_EXPR_NONE() ((reduct_expr_t){.mode = REDUCT_OPCODE_MODE_NONE})
 
 /**
- * @brief Create a `REDUCT_MODE_REG` mode expression.
+ * @brief Create a `REDUCT_OPCODE_MODE_REG` mode expression.
  *
  * @param _reg The register index.
  */
-#define REDUCT_EXPR_REG(_reg) ((reduct_expr_t){.mode = REDUCT_MODE_REG, .reg = (_reg)})
+#define REDUCT_EXPR_REG(_reg) ((reduct_expr_t){.mode = REDUCT_OPCODE_MODE_REG, .reg = (_reg)})
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression.
  *
  * @param _const The constant index.
  */
-#define REDUCT_EXPR_CONST(_const) ((reduct_expr_t){.mode = REDUCT_MODE_CONST, .constant = (_const)})
+#define REDUCT_EXPR_CONST(_const) ((reduct_expr_t){.mode = REDUCT_OPCODE_MODE_CONST, .constant = (_const)})
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for a specific item.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for a specific item.
  *
  * @param _compiler The compiler context.
  * @param _item The item to look up.
@@ -212,7 +212,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
         &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_FROM_ITEM(_item)}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for a specific handle.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for a specific handle.
  *
  * @param _compiler The compiler context.
  * @param _handle The handle to look up.
@@ -222,7 +222,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
         &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = (_handle)}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for a specific atom.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for a specific atom.
  *
  * @param _compiler The compiler context.
  * @param _atom The atom to look up.
@@ -232,14 +232,14 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
         &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_FROM_ATOM(_atom)}))
 
 /**
- * @brief Create a `REDUCT_MODE_TARGET` mode expression.
+ * @brief Create a `REDUCT_OPCODE_MODE_TARGET` mode expression.
  *
  * @param _reg The target register hint.
  */
-#define REDUCT_EXPR_TARGET(_reg) ((reduct_expr_t){.mode = REDUCT_MODE_TARGET, .reg = (_reg)})
+#define REDUCT_EXPR_TARGET(_reg) ((reduct_expr_t){.mode = REDUCT_OPCODE_MODE_TARGET, .reg = (_reg)})
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for the true constant.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for the true constant.
  *
  * @param _compiler The compiler context.
  */
@@ -248,7 +248,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
         &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_TRUE()}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for the false constant.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for the false constant.
  *
  * @param _compiler The compiler context.
  */
@@ -257,7 +257,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
         &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_FALSE()}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for the PI constant.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for the PI constant.
  *
  * @param _compiler The compiler context.
  */
@@ -266,7 +266,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
         &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_PI()}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for the E constant.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for the E constant.
  *
  * @param _compiler The compiler context.
  */
@@ -275,7 +275,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
         &(reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = REDUCT_HANDLE_E()}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for the nil constant.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for the nil constant.
  *
  * @param _compiler The compiler context.
  */
@@ -285,7 +285,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
             .handle = REDUCT_HANDLE_NIL((_compiler)->reduct)}))
 
 /**
- * @brief Create a `REDUCT_MODE_CONST` mode expression for a number.
+ * @brief Create a `REDUCT_OPCODE_MODE_CONST` mode expression for a number.
  *
  * @param _compiler The compiler context.
  * @param _val The number value.
@@ -297,7 +297,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @brief Get the target register index from an expression, or -1 if no target is specified.
  * @param _expr The expression to check.
  */
-#define REDUCT_EXPR_GET_TARGET(_expr) (((_expr)->mode == REDUCT_MODE_TARGET) ? (_expr)->reg : REDUCT_REG_INVALID)
+#define REDUCT_EXPR_GET_TARGET(_expr) (((_expr)->mode == REDUCT_OPCODE_MODE_TARGET) ? (_expr)->reg : REDUCT_REG_INVALID)
 
 /**
  * @brief Compiles a single Reduct handle into an expression descriptor.
@@ -318,7 +318,7 @@ static inline void reduct_expr_done(reduct_compiler_t* compiler, reduct_expr_t* 
 {
     assert(compiler != NULL);
     assert(expr != NULL);
-    if (expr->mode == REDUCT_MODE_REG)
+    if (expr->mode == REDUCT_OPCODE_MODE_REG)
     {
         reduct_reg_free(compiler, expr->reg);
     }
@@ -334,7 +334,7 @@ static inline void reduct_expr_done(reduct_compiler_t* compiler, reduct_expr_t* 
 static inline reduct_reg_t reduct_expr_get_reg(reduct_compiler_t* compiler, reduct_expr_t* out)
 {
     assert(compiler != NULL);
-    if (out != NULL && out->mode == REDUCT_MODE_TARGET)
+    if (out != NULL && out->mode == REDUCT_OPCODE_MODE_TARGET)
     {
         return out->reg;
     }
@@ -366,7 +366,7 @@ static inline reduct_reg_t reduct_reg_get_base(reduct_compiler_t* compiler)
  *
  * @param _local The local variable descriptor.
  */
-#define REDUCT_LOCAL_IS_DEFINED(_local) ((_local)->expr.mode != REDUCT_MODE_NONE)
+#define REDUCT_LOCAL_IS_DEFINED(_local) ((_local)->expr.mode != REDUCT_OPCODE_MODE_NONE)
 
 /**
  * @brief Define a new local variable.
@@ -454,7 +454,7 @@ static inline void reduct_compile_call(reduct_compiler_t* compiler, reduct_reg_t
 {
     assert(compiler != NULL);
     assert(callable != NULL);
-    assert(callable->mode == REDUCT_MODE_REG || callable->mode == REDUCT_MODE_CONST);
+    assert(callable->mode == REDUCT_OPCODE_MODE_REG || callable->mode == REDUCT_OPCODE_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_CALL | callable->mode), target, arity, callable->value));
 }
@@ -484,9 +484,9 @@ static inline void reduct_compile_move(reduct_compiler_t* compiler, reduct_reg_t
 {
     assert(compiler != NULL);
     assert(expr != NULL);
-    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(expr->mode == REDUCT_OPCODE_MODE_REG || expr->mode == REDUCT_OPCODE_MODE_CONST);
     assert(target < REDUCT_REGISTER_MAX);
-    assert(expr->mode != REDUCT_MODE_REG || expr->reg < REDUCT_REGISTER_MAX);
+    assert(expr->mode != REDUCT_OPCODE_MODE_REG || expr->reg < REDUCT_REGISTER_MAX);
 
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_MOV | (reduct_opcode_t)expr->mode), target, 0,
@@ -548,9 +548,9 @@ static inline reduct_reg_t reduct_compile_move_or_alloc(reduct_compiler_t* compi
 {
     assert(compiler != NULL);
     assert(expr != NULL);
-    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(expr->mode == REDUCT_OPCODE_MODE_REG || expr->mode == REDUCT_OPCODE_MODE_CONST);
 
-    if (expr->mode == REDUCT_MODE_REG)
+    if (expr->mode == REDUCT_OPCODE_MODE_REG)
     {
         return expr->reg;
     }
@@ -583,7 +583,7 @@ static inline void reduct_compile_binary(reduct_compiler_t* compiler, reduct_opc
 {
     assert(compiler != NULL);
     assert(right != NULL);
-    assert(right->mode == REDUCT_MODE_REG || right->mode == REDUCT_MODE_CONST);
+    assert(right->mode == REDUCT_OPCODE_MODE_REG || right->mode == REDUCT_OPCODE_MODE_CONST);
 
     if (*target == REDUCT_REG_INVALID)
     {
@@ -608,7 +608,7 @@ static inline void reduct_compile_skip(reduct_compiler_t* compiler, reduct_opcod
 {
     assert(compiler != NULL);
     assert(right != NULL);
-    assert(right->mode == REDUCT_MODE_REG || right->mode == REDUCT_MODE_CONST);
+    assert(right->mode == REDUCT_OPCODE_MODE_REG || right->mode == REDUCT_OPCODE_MODE_CONST);
     reduct_compile_inst(compiler, REDUCT_INST_MAKE_ABC((reduct_opcode_t)(opBase | right->mode), left, 0, right->value));
 }
 
@@ -638,7 +638,7 @@ static inline void reduct_compile_capture(reduct_compiler_t* compiler, reduct_re
 {
     assert(compiler != NULL);
     assert(expr != NULL);
-    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(expr->mode == REDUCT_OPCODE_MODE_REG || expr->mode == REDUCT_OPCODE_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_CAPTURE | (reduct_opcode_t)expr->mode), closureReg, slot,
             expr->value));

@@ -1,7 +1,7 @@
 #ifndef REDUCT_LIST_H
 #define REDUCT_LIST_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
 
 #include <stdbool.h>
 #include <stddef.h>

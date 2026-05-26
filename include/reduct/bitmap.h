@@ -1,7 +1,7 @@
 #ifndef REDUCT_BITMAP_H
 #define REDUCT_BITMAP_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
 
 /**
  * @file bitmap.h

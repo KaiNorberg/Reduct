@@ -1,16 +1,16 @@
-#include "reduct/standard.h"
-#include "reduct/atom.h"
-#include "reduct/char.h"
-#include "reduct/compile.h"
-#include "reduct/core.h"
-#include "reduct/defs.h"
-#include "reduct/eval.h"
-#include "reduct/gc.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
-#include "reduct/native.h"
-#include "reduct/parse.h"
-#include "reduct/stringify.h"
+#include <reduct/atom.h>
+#include <reduct/char.h>
+#include <reduct/emit.h>
+#include <reduct/core.h>
+#include <reduct/defs.h>
+#include <reduct/eval.h>
+#include <reduct/gc.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
+#include <reduct/native.h>
+#include <reduct/parse.h>
+#include <reduct/standard.h>
+#include <reduct/stringify.h>
 
 #include <assert.h>
 #include <math.h>
@@ -2012,7 +2012,7 @@ REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t han
     reduct_handle_atom_string(reduct, &handle, &str, &len);
 
     reduct_handle_t ast = reduct_parse(reduct, str, len, "<run>");
-    reduct_handle_t function = reduct_compile(reduct, ast);
+    reduct_handle_t function = reduct_emit(reduct, ast);
     reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
     return reduct_eval(reduct, function);
 }
@@ -2140,7 +2140,7 @@ load_shared_lib:
     }
 
     reduct_handle_t ast = reduct_parse_file(reduct, pathString);
-    reduct_handle_t function = reduct_compile(reduct, ast);
+    reduct_handle_t function = reduct_emit(reduct, ast);
     reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
     return reduct_eval(reduct, function);
 }
@@ -2879,7 +2879,7 @@ REDUCT_STDLIB_WRAPPER_1(number, reduct_stdlib_number_impl)
 
 static reduct_handle_t reduct_stdlib_eval_impl(reduct_t* reduct, reduct_handle_t arg)
 {
-    reduct_handle_t function = reduct_compile(reduct, arg);
+    reduct_handle_t function = reduct_emit(reduct, arg);
     reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
     return reduct_eval(reduct, function);
 }

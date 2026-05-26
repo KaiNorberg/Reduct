@@ -1,12 +1,12 @@
-#include "reduct/compile.h"
-#include "reduct/atom.h"
-#include "reduct/core.h"
-#include "reduct/defs.h"
-#include "reduct/gc.h"
-#include "reduct/inst.h"
-#include "reduct/intrinsic.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
+#include <reduct/emit.h>
+#include <reduct/atom.h>
+#include <reduct/core.h>
+#include <reduct/defs.h>
+#include <reduct/gc.h>
+#include <reduct/inst.h>
+#include <reduct/intrinsic.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
 #include <string.h>
 
 REDUCT_API reduct_handle_t reduct_compile(reduct_t* reduct, reduct_handle_t ast)
@@ -299,7 +299,7 @@ static inline void reduct_expr_build_list(reduct_compiler_t* compiler, reduct_li
             reduct_expr_t argExpr = REDUCT_EXPR_TARGET(target);
             reduct_expr_build(compiler, argH, &argExpr);
 
-            if (argExpr.mode != REDUCT_MODE_REG || argExpr.reg != target)
+            if (argExpr.mode != REDUCT_OPCODE_MODE_REG || argExpr.reg != target)
             {
                 reduct_compile_move(compiler, target, &argExpr);
                 reduct_expr_done(compiler, &argExpr);
@@ -371,12 +371,12 @@ REDUCT_API void reduct_local_def_done(reduct_compiler_t* compiler, reduct_local_
     assert(local != NULL);
     assert(expr != NULL);
 
-    if (local->expr.mode != REDUCT_MODE_NONE)
+    if (local->expr.mode != REDUCT_OPCODE_MODE_NONE)
     {
         return;
     }
 
-    if (expr->mode == REDUCT_MODE_REG)
+    if (expr->mode == REDUCT_OPCODE_MODE_REG)
     {
         REDUCT_REG_SET_LOCAL(compiler, expr->reg);
     }
@@ -405,18 +405,18 @@ REDUCT_API reduct_local_t* reduct_local_add_arg(reduct_compiler_t* compiler, red
 REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, uint16_t toCount, reduct_expr_t* result)
 {
     assert(compiler != NULL);
-    reduct_reg_t resultReg = (result != NULL && result->mode == REDUCT_MODE_REG) ? result->reg : REDUCT_REG_INVALID;
+    reduct_reg_t resultReg = (result != NULL && result->mode == REDUCT_OPCODE_MODE_REG) ? result->reg : REDUCT_REG_INVALID;
 
     for (uint32_t i = compiler->localCount; i > (uint32_t)toCount; i--)
     {
         reduct_local_t* local = &compiler->locals[i - 1];
-        if (local->expr.mode == REDUCT_MODE_REG)
+        if (local->expr.mode == REDUCT_OPCODE_MODE_REG)
         {
             bool isResult = (local->expr.reg == resultReg);
             bool isOuterLocal = false;
             for (uint32_t j = 0; j < (uint32_t)toCount; j++)
             {
-                if (compiler->locals[j].expr.mode == REDUCT_MODE_REG && compiler->locals[j].expr.reg == local->expr.reg)
+                if (compiler->locals[j].expr.mode == REDUCT_OPCODE_MODE_REG && compiler->locals[j].expr.reg == local->expr.reg)
                 {
                     isOuterLocal = true;
                     break;
@@ -461,7 +461,7 @@ REDUCT_API reduct_local_t* reduct_local_lookup(reduct_compiler_t* compiler, redu
                 continue;
             }
 
-            if (current->locals[i].expr.mode == REDUCT_MODE_CONST)
+            if (current->locals[i].expr.mode == REDUCT_OPCODE_MODE_CONST)
             {
                 reduct_const_t constant = reduct_function_lookup_constant(compiler->reduct, compiler->function,
                     &current->function->constants[current->locals[i].expr.constant]);
@@ -491,16 +491,16 @@ REDUCT_API void reduct_compile_return(reduct_compiler_t* compiler, reduct_expr_t
     assert(compiler != NULL);
     assert(expr != NULL);
 
-    if (expr->mode == REDUCT_MODE_NONE)
+    if (expr->mode == REDUCT_OPCODE_MODE_NONE)
     {
         reduct_expr_t nilExpr = REDUCT_EXPR_NIL(compiler);
         uint32_t pos = compiler->lastItem != NULL ? compiler->lastItem->position : 0;
         reduct_function_emit(compiler->reduct, compiler->function,
-            REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_RET | REDUCT_MODE_CONST, 0, 0, nilExpr.constant), pos);
+            REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_RET | REDUCT_OPCODE_MODE_CONST, 0, 0, nilExpr.constant), pos);
         return;
     }
 
-    assert(expr->mode == REDUCT_MODE_REG || expr->mode == REDUCT_MODE_CONST);
+    assert(expr->mode == REDUCT_OPCODE_MODE_REG || expr->mode == REDUCT_OPCODE_MODE_CONST);
     reduct_compile_inst(compiler,
         REDUCT_INST_MAKE_ABC((reduct_opcode_t)(REDUCT_OPCODE_RET | (reduct_opcode_t)expr->mode), 0, 0, expr->value));
 }

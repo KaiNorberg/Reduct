@@ -457,7 +457,7 @@ To create a C module, define a function named `reduct_module_init` that returns 
 ```c
 // my_module.c
 
-#include "reduct/reduct.h"
+#include <reduct/reduct.h>
 
 reduct_handle_t my_native(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
 {
@@ -502,7 +502,7 @@ Included is an example of using Reduct as a library:
 
 ```c
 // my_file.c
-#include "reduct/reduct.h"
+#include <reduct/reduct.h>
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,10 +1,10 @@
-#include "reduct/item.h"
-#include "reduct/atom.h"
-#include "reduct/closure.h"
-#include "reduct/core.h"
-#include "reduct/defs.h"
-#include "reduct/function.h"
-#include "reduct/gc.h"
+#include <reduct/atom.h>
+#include <reduct/closure.h>
+#include <reduct/core.h>
+#include <reduct/defs.h>
+#include <reduct/function.h>
+#include <reduct/gc.h>
+#include <reduct/item.h>
 
 static inline void reduct_item_init(reduct_item_t* item)
 {
@@ -127,31 +127,11 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         }
     }
     break;
-    case REDUCT_ITEM_TYPE_OPTIMIZE_NODE:
-    {
-        reduct_optimize_node_t* node = &item->optimizationNode;
-        if (node->inputs != NULL)
-        {
-            free(node->inputs);
-        }
-        if (node->outputs != NULL)
-        {
-            free(node->outputs);
-        }
-
-        for (size_t i = 0; i < node->regionCount; i++)
-        {
-            reduct_optimize_region_t* region = &node->regions[i];
-            if (region->arguments != NULL)
-            {
-                free(region->arguments);
-            }
-            if (region->results != NULL)
-            {
-                free(region->results);
-            }        
-        }
-    }
+    case REDUCT_ITEM_TYPE_RVSDG_NODE:
+    case REDUCT_ITEM_TYPE_RVSDG_EDGE:
+    case REDUCT_ITEM_TYPE_RVSDG_REGION:
+    case REDUCT_ITEM_TYPE_RVSDG_USER:
+    case REDUCT_ITEM_TYPE_RVSDG_ORIGIN:
         break;
     default:
         break;
@@ -203,6 +183,16 @@ REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)
         return "function";
     case REDUCT_ITEM_TYPE_CLOSURE:
         return "closure";
+    case REDUCT_ITEM_TYPE_RVSDG_NODE:
+        return "ir node";
+    case REDUCT_ITEM_TYPE_RVSDG_EDGE:
+        return "ir edge";
+    case REDUCT_ITEM_TYPE_RVSDG_REGION:
+        return "ir region";
+    case REDUCT_ITEM_TYPE_RVSDG_USER:
+        return "ir user";
+    case REDUCT_ITEM_TYPE_RVSDG_ORIGIN:
+        return "ir origin";
     default:
         return "unknown";
     }

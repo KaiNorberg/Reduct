@@ -1,8 +1,8 @@
-#include "reduct/function.h"
-#include "reduct/core.h"
-#include "reduct/gc.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
+#include <reduct/core.h>
+#include <reduct/function.h>
+#include <reduct/gc.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
 
 REDUCT_API void reduct_function_init(reduct_function_t* func)
 {

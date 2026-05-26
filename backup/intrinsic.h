@@ -1,8 +1,8 @@
 #ifndef REDUCT_INTRINSIC_H
 #define REDUCT_INTRINSIC_H 1
 
-#include "reduct/defs.h"
-#include "reduct/native.h"
+#include <reduct/defs.h>
+#include <reduct/native.h>
 
 struct reduct;
 struct reduct_compiler;

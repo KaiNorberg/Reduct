@@ -1,7 +1,7 @@
-#include "reduct/closure.h"
-#include "reduct/gc.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
+#include <reduct/closure.h>
+#include <reduct/gc.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
 
 REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_function_t* function)
 {

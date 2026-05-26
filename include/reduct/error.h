@@ -1,7 +1,7 @@
 #ifndef REDUCT_ERROR_H
 #define REDUCT_ERROR_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
 
 struct reduct;
 struct reduct_item;

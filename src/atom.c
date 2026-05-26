@@ -1,9 +1,9 @@
-#include "reduct/atom.h"
-#include "reduct/char.h"
-#include "reduct/core.h"
-#include "reduct/defs.h"
-#include "reduct/gc.h"
-#include "reduct/item.h"
+#include <reduct/atom.h>
+#include <reduct/char.h>
+#include <reduct/core.h>
+#include <reduct/defs.h>
+#include <reduct/gc.h>
+#include <reduct/item.h>
 
 #include <assert.h>
 #include <inttypes.h>
