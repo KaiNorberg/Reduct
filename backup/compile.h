@@ -297,7 +297,7 @@ REDUCT_API void reduct_reg_free_range(reduct_compiler_t* compiler, reduct_reg_t 
  * @brief Get the target register index from an expression, or -1 if no target is specified.
  * @param _expr The expression to check.
  */
-#define REDUCT_EXPR_GET_TARGET(_expr) (((_expr)->mode == REDUCT_OPCODE_MODE_TARGET) ? (_expr)->reg : REDUCT_REG_INVALID)
+#define REDUCT_EXPR_GET_TARGET(_expr) (((_expr)->mode == REDUCT_OPCODE_MODE_TARGET) ? (_expr)->reg : REDUCT_REGISTER_INVALID)
 
 /**
  * @brief Compiles a single Reduct handle into an expression descriptor.
@@ -574,7 +574,7 @@ REDUCT_API void reduct_compile_return(reduct_compiler_t* compiler, reduct_expr_t
  *
  * @param compiler The compiler context.
  * @param opBase The base opcode (without a mode) for the operation (e.g, `REDUCT_OPCODE_ADD`, `REDUCT_OPCODE_EQ`).
- * @param target Pointer to the target register, can be `REDUCT_REG_INVALID`, might be updated.
+ * @param target Pointer to the target register, can be `REDUCT_REGISTER_INVALID`, might be updated.
  * @param left The left operand register.
  * @param right The right operand expression.
  */
@@ -585,7 +585,7 @@ static inline void reduct_compile_binary(reduct_compiler_t* compiler, reduct_opc
     assert(right != NULL);
     assert(right->mode == REDUCT_OPCODE_MODE_REG || right->mode == REDUCT_OPCODE_MODE_CONST);
 
-    if (*target == REDUCT_REG_INVALID)
+    if (*target == REDUCT_REGISTER_INVALID)
     {
         *target = reduct_reg_alloc(compiler);
     }

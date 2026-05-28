@@ -53,6 +53,23 @@ typedef uint64_t reduct_bitmap_t; ///< A single word in a bitmap.
     (((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] & (1ULL << ((_bit) % REDUCT_BITMAP_WIDTH))) != 0)
 
 /**
+ * @brief Set a range of bits in a bitmap.
+ *
+ * @param bitmap The bitmap array.
+ * @param start The starting bit index to set.
+ * @param count The number of bits to set.
+ * @return The starting bit index that was set.
+ */
+static inline size_t reduct_bitmap_set_range(reduct_bitmap_t* bitmap, size_t start, size_t count)
+{
+    for (size_t i = 0; i < count; i++)
+    {
+        REDUCT_BITMAP_SET(bitmap, start + i);
+    }
+    return start;
+}
+
+/**
  * @brief Find the first clear bit in a bitmap.
  *
  * @param bitmap The bitmap array.

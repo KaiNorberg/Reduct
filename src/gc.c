@@ -85,16 +85,12 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
     {
         for (uint16_t i = 0; i < item->function.constantCount; i++)
         {
-            if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_HANDLE)
+            if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_STATIC)
             {
                 if (REDUCT_HANDLE_IS_ITEM(item->function.constants[i].handle))
                 {
                     reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(item->function.constants[i].handle));
                 }
-            }
-            else if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
-            {
-                reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(item->function.constants[i].capture, reduct_item_t, atom));
             }
         }
     }

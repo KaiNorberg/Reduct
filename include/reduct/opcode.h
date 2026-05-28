@@ -32,9 +32,9 @@ typedef enum
     REDUCT_OPCODE_LIST,      ///< (A, B) R(A) = (R(A) R(A + 1) ... R(A + B - 1))
     REDUCT_OPCODE_CLOSURE,   ///< (A, C) Wrap the function prototype in K(C) in a closure and store in R(A).
     REDUCT_OPCODE_CAPTURE,   ///< (A, B, C) Capture R/K(C) into constant slot B in closure R(A).
-    REDUCT_OPCODE_JMP,       ///< (sBx) Unconditional jump by relative offset sBx.
-    REDUCT_OPCODE_JMPF,      ///< (A, sBx) Jump by sBx if R(A) is falsy.
-    REDUCT_OPCODE_JMPT,      ///< (A, sBx) Jump by sBx if R(A) is truthy.
+    REDUCT_OPCODE_JMP,       ///< (sAx) Unconditional jump by relative offset sAx.
+    REDUCT_OPCODE_JMPF,      ///< (sAx, C) Jump by sAx if R(C) is falsy.
+    REDUCT_OPCODE_JMPT,      ///< (sAx, C) Jump by sAx if R(C) is truthy.
     REDUCT_OPCODE_CALL,      ///< (A, B, C) Call callable in R/K(C) with B args starting from R(A). Result in R(A).
     REDUCT_OPCODE_RET,       ///< (C) Return value in R/K(C).
     REDUCT_OPCODE_TAILCALL,  ///< (A, B, C) Tail call callable in R/K(C) with B args starting from R(A).
@@ -57,12 +57,12 @@ typedef enum
     REDUCT_OPCODE_BNOT,      ///< (A, C) R(A) = ~R/K(C)
     REDUCT_OPCODE_SHL,       ///< (A, B, C) R(A) = R(B) << R/K(C)
     REDUCT_OPCODE_SHR,       ///< (A, B, C) R(A) = R(B) >> R/K(C)
-    REDUCT_OPCODE_JEQ,       ///< (A, C) Skip the next instruction if R(A) == R/K(C), else continue.
-    REDUCT_OPCODE_JNEQ,      ///< (A, C) Skip the next instruction if R(A) != R/K(C), else continue.
-    REDUCT_OPCODE_JLT,       ///< (A, C) Skip the next instruction if R(A) < R/K(C), else continue.
-    REDUCT_OPCODE_JLE,       ///< (A, C) Skip the next instruction if R(A) <= R/K(C), else continue.
-    REDUCT_OPCODE_JGT,       ///< (A, C) Skip the next instruction if R(A) > R/K(C), else continue.
-    REDUCT_OPCODE_JGE,       ///< (A, C) Skip the next instruction if R(A) >= R/K(C), else continue.
+    REDUCT_OPCODE_JEQ,       ///< (B, C) Skip the next instruction if R(B) == R/K(C), else continue.
+    REDUCT_OPCODE_JNEQ,      ///< (B, C) Skip the next instruction if R(B) != R/K(C), else continue.
+    REDUCT_OPCODE_JLT,       ///< (B, C) Skip the next instruction if R(B) < R/K(C), else continue.
+    REDUCT_OPCODE_JLE,       ///< (B, C) Skip the next instruction if R(B) <= R/K(C), else continue.
+    REDUCT_OPCODE_JGT,       ///< (B, C) Skip the next instruction if R(B) > R/K(C), else continue.
+    REDUCT_OPCODE_JGE,       ///< (B, C) Skip the next instruction if R(B) >= R/K(C), else continue.
     REDUCT_OPCODE_MOV_CONST = REDUCT_OPCODE_MOV | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_CALL_CONST = REDUCT_OPCODE_CALL | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_RET_CONST = REDUCT_OPCODE_RET | REDUCT_OPCODE_MODE_CONST,
@@ -104,6 +104,7 @@ typedef enum
 #define REDUCT_OPCODE_FLAG_IS_SKIP (1 << 8)        ///< Opcode is a skip instruction.
 #define REDUCT_OPCODE_FLAG_IS_CALL (1 << 9)        ///< Opcode is a function call.
 #define REDUCT_OPCODE_FLAG_IS_TERMINATOR (1 << 10) ///< Opcode ends basic block reachability.
+#define REDUCT_OPCODE_FLAG_IS_RECUR (1 << 11)      ///< Opcode is a recursive call.
 
 /**
  * @brief Opcode flags lookup table.
@@ -118,11 +119,55 @@ REDUCT_API extern const uint16_t reductOpcodeFlags[UINT8_MAX + 1];
 #define REDUCT_OPCODE_BASE(_op) ((_op) & ~REDUCT_OPCODE_MODE_CONST)
 
 /**
+ * @brief Check if an opcode is a comparison instruction.
+ *
+ * @param _op The opcode.
+ */
+#define REDUCT_OPCODE_IS_COMPARE(_op) \
+    (REDUCT_OPCODE_BASE(_op) >= REDUCT_OPCODE_EQ && REDUCT_OPCODE_BASE(_op) <= REDUCT_OPCODE_GE)
+
+/**
+ * @brief Get the skip version of a comparison opcode.
+ *
+ * @param _op The comparison opcode.
+ */
+#define REDUCT_OPCODE_TO_SKIP(_op) \
+    (REDUCT_OPCODE_IS_COMPARE(_op) ? (reduct_opcode_t)((_op) + (REDUCT_OPCODE_JEQ - REDUCT_OPCODE_EQ)) : REDUCT_OPCODE_NOP)
+
+/**
+ * @brief Get the recursive version of a call opcode.
+ *
+ * @param _op The call opcode.
+ */
+#define REDUCT_OPCODE_TO_RECUR(_op) \
+    (REDUCT_OPCODE_IS_CALL(_op) \
+            ? (reduct_opcode_t)((REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_TAILCALL) ? REDUCT_OPCODE_TAILRECUR \
+                                                                                   : REDUCT_OPCODE_RECUR) \
+            : REDUCT_OPCODE_NOP)
+
+/**
+ * @brief Get the tail version of a call or return opcode.
+ *
+ * @param _op The opcode.
+ */
+#define REDUCT_OPCODE_TO_TAIL(_op) \
+    ((_op) == REDUCT_OPCODE_CALL ? REDUCT_OPCODE_TAILCALL : \
+     (_op) == REDUCT_OPCODE_CALL_CONST ? REDUCT_OPCODE_TAILCALL_CONST : \
+     (_op) == REDUCT_OPCODE_RECUR ? REDUCT_OPCODE_TAILRECUR : (_op))
+
+/**
  * @brief Check if an opcode modifies its target register (A).
  *
  * @param _op The opcode.
  */
 #define REDUCT_OPCODE_HAS_TARGET(_op) (reductOpcodeFlags[(_op) & 0xFF] & REDUCT_OPCODE_FLAG_HAS_TARGET)
+
+/**
+ * @brief Check if an opcode is a recursive call.
+ *
+ * @param _op The opcode.
+ */
+#define REDUCT_OPCODE_IS_RECUR(_op) (reductOpcodeFlags[(_op) & 0xFF] & REDUCT_OPCODE_FLAG_IS_RECUR)
 
 /**
  * @brief Check if an opcode is a jump instruction.
@@ -201,6 +246,24 @@ REDUCT_API extern const uint16_t reductOpcodeFlags[UINT8_MAX + 1];
  * @param _op The opcode.
  */
 #define REDUCT_OPCODE_IS_TERMINATOR(_op) (reductOpcodeFlags[(_op) & 0xFF] & REDUCT_OPCODE_FLAG_IS_TERMINATOR)
+
+/**
+ * @brief Check if an opcode is a binary operation (reads B and C).
+ *
+ * @param _op The opcode.
+ */
+#define REDUCT_OPCODE_IS_BINARY(_op) \
+    ((reductOpcodeFlags[(_op) & 0xFF] & (REDUCT_OPCODE_FLAG_READ_B | REDUCT_OPCODE_FLAG_READ_C)) == \
+        (REDUCT_OPCODE_FLAG_READ_B | REDUCT_OPCODE_FLAG_READ_C))
+
+/**
+ * @brief Check if an opcode is a unary operation (reads C only).
+ *
+ * @param _op The opcode.
+ */
+#define REDUCT_OPCODE_IS_UNARY(_op) \
+    ((reductOpcodeFlags[(_op) & 0xFF] & (REDUCT_OPCODE_FLAG_READ_B | REDUCT_OPCODE_FLAG_READ_C)) == \
+        REDUCT_OPCODE_FLAG_READ_C)
 
 /** @} */
 

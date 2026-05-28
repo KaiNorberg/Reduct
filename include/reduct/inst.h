@@ -12,13 +12,13 @@
  * Instructions are 32-bit words with the following formats:
  *
  * - iABC:  [ Opcode:8 | A:8 | B:8 | C:8 ]
- * - iAsBx: [ Opcode:8 | A:8 | sBx:16 ]
+ * - iSAxC: [ Opcode:8 | sAx:16 | C:8 ]
  *
  * Fields:
  * - A: Usually the target/destination register.
  * - B: Usually the first operand (register).
  * - C: Usually the second operand (register or constant).
- * - sBx: Signed offsets for jumps.
+ * - sAx: Signed offsets for jumps.
  *
  * To determine if the C field is a register or a constant the `reduct_mode_t` flags are used to modify the opcode.
  *
@@ -43,7 +43,7 @@ typedef uint16_t reduct_reg_t;
 /**
  * @brief Invalid register value.
  */
-#define REDUCT_REG_INVALID ((reduct_reg_t) - 1)
+#define REDUCT_REGISTER_INVALID ((reduct_reg_t) - 1)
 
 /**
  * @brief Instruction type.
@@ -58,14 +58,14 @@ typedef uint32_t reduct_inst_t;
  * @param _reg The register index.
  */
 #define REDUCT_INST_READS_REG(_inst, _reg) \
-    (REDUCT_OPCODE_READS_A(REDUCT_INST_GET_OP(_inst)) && (_reg) == REDUCT_INST_GET_A(REDUCT_INST_GET_OP(_inst)) || \
+    ((REDUCT_OPCODE_READS_A(REDUCT_INST_GET_OP(_inst)) && (_reg) == REDUCT_INST_GET_A(_inst)) || \
         (REDUCT_OPCODE_READS_B(REDUCT_INST_GET_OP(_inst)) && \
-            (_reg) == REDUCT_INST_GET_B(REDUCT_INST_GET_OP(_inst))) || \
+            (_reg) == REDUCT_INST_GET_B(_inst)) || \
         (REDUCT_OPCODE_READS_C(REDUCT_INST_GET_OP(_inst)) && \
-            (_reg) == REDUCT_INST_GET_C(REDUCT_INST_GET_OP(_inst))) || \
+            (_reg) == REDUCT_INST_GET_C(_inst)) || \
         (REDUCT_OPCODE_READS_RANGE(REDUCT_INST_GET_OP(_inst)) && \
-            (_reg) >= REDUCT_INST_GET_A(REDUCT_INST_GET_OP(_inst)) && \
-            (_reg) < REDUCT_INST_GET_A(REDUCT_INST_GET_OP(_inst)) + REDUCT_INST_GET_B(REDUCT_INST_GET_OP(_inst))))
+            (_reg) >= REDUCT_INST_GET_A(_inst) && \
+            (_reg) < REDUCT_INST_GET_A(_inst) + REDUCT_INST_GET_B(_inst)))
 
 /**
  * @brief Check if an instruction writes to a specific register.
@@ -80,7 +80,7 @@ typedef uint32_t reduct_inst_t;
 #define REDUCT_INST_WIDTH_A 8U                                            ///< A operand width in bits.
 #define REDUCT_INST_WIDTH_B 8U                                            ///< B operand width in bits.
 #define REDUCT_INST_WIDTH_C 8U                                            ///< C operand width in bits.
-#define REDUCT_INST_WIDTH_SBX (REDUCT_INST_WIDTH_B + REDUCT_INST_WIDTH_C) ///< SBx operand width in bits.
+#define REDUCT_INST_WIDTH_SAX (REDUCT_INST_WIDTH_A + REDUCT_INST_WIDTH_B) ///< SAx operand width in bits.
 
 /**
  * @brief The max number of registers per function frame.
@@ -95,12 +95,13 @@ typedef uint32_t reduct_inst_t;
 #define REDUCT_INST_POS_A (REDUCT_INST_POS_OPCODE + REDUCT_INST_WIDTH_OPCODE) ///< A operand position in bits.
 #define REDUCT_INST_POS_B (REDUCT_INST_POS_A + REDUCT_INST_WIDTH_A)           ///< B operand position in bits.
 #define REDUCT_INST_POS_C (REDUCT_INST_POS_B + REDUCT_INST_WIDTH_B)           ///< C operand position in bits.
+#define REDUCT_INST_POS_SAX (REDUCT_INST_POS_A)         ///< SAx operand position in bits.
 
 #define REDUCT_INST_MASK_OPCODE ((1U << REDUCT_INST_WIDTH_OPCODE) - 1U) ///< Opcode mask.
 #define REDUCT_INST_MASK_A ((1U << REDUCT_INST_WIDTH_A) - 1U)           ///< A operand mask.
 #define REDUCT_INST_MASK_B ((1U << REDUCT_INST_WIDTH_B) - 1U)           ///< B operand mask.
 #define REDUCT_INST_MASK_C ((1U << REDUCT_INST_WIDTH_C) - 1U)           ///< C operand mask.
-#define REDUCT_INST_MASK_SBX ((1U << REDUCT_INST_WIDTH_SBX) - 1U)       ///< SBx operand mask.
+#define REDUCT_INST_MASK_SAX ((1U << REDUCT_INST_WIDTH_SAX) - 1U)       ///< SAx operand mask.
 
 /**
  * @brief Create an instruction with opcode, A, B, and C operands.
@@ -117,16 +118,16 @@ typedef uint32_t reduct_inst_t;
         (((reduct_inst_t)(_c)) & REDUCT_INST_MASK_C) << REDUCT_INST_POS_C)
 
 /**
- * @brief Create an instruction with opcode and A operands, and SBx B operand.
+ * @brief Create an instruction with opcode and SAx operand, and C operand.
  *
  * @param _op Opcode operand.
- * @param _a A operand.
- * @param _sbx SBx operand.
+ * @param _sax SAx operand.
+ * @param _c C operand.
  */
-#define REDUCT_INST_MAKE_ASBX(_op, _a, _sbx) \
+#define REDUCT_INST_MAKE_SAXC(_op, _sax, _c) \
     ((((reduct_inst_t)(_op)) & REDUCT_INST_MASK_OPCODE) << REDUCT_INST_POS_OPCODE | \
-        (((reduct_inst_t)(_a)) & REDUCT_INST_MASK_A) << REDUCT_INST_POS_A | \
-        (((reduct_inst_t)(_sbx)) & REDUCT_INST_MASK_SBX) << REDUCT_INST_POS_B)
+        (((reduct_inst_t)(_sax)) & REDUCT_INST_MASK_SAX) << REDUCT_INST_POS_A | \
+        (((reduct_inst_t)(_c)) & REDUCT_INST_MASK_C) << REDUCT_INST_POS_C)
 
 /**
  * @brief Get the opcode from an instruction.
@@ -157,13 +158,22 @@ typedef uint32_t reduct_inst_t;
 #define REDUCT_INST_GET_C(_inst) (((_inst) >> REDUCT_INST_POS_C) & REDUCT_INST_MASK_C)
 
 /**
- * @brief Get the SBX operand from an instruction.
+ * @brief Get the SAX operand from an instruction.
  *
  * @param _inst Instruction.
  */
-#define REDUCT_INST_GET_SBX(_inst) \
-    ((int64_t)(((_inst) >> REDUCT_INST_POS_B) & REDUCT_INST_MASK_SBX) << (32U - REDUCT_INST_WIDTH_SBX) >> \
-        (32U - REDUCT_INST_WIDTH_SBX))
+#define REDUCT_INST_GET_SAX(_inst) \
+    ((int32_t)(int16_t)(((_inst) >> REDUCT_INST_POS_SAX) & REDUCT_INST_MASK_SAX))
+
+/**
+ * @brief Set the opcode in an instruction.
+ *
+ * @param _inst Instruction.
+ * @param _op Opcode value.
+ */
+#define REDUCT_INST_SET_OP(_inst, _op) \
+    (((_inst) & ~(REDUCT_INST_MASK_OPCODE << REDUCT_INST_POS_OPCODE)) | \
+        (((_op) & REDUCT_INST_MASK_OPCODE) << REDUCT_INST_POS_OPCODE))
 
 /**
  * @brief Set the A operand in an instruction.
@@ -193,12 +203,12 @@ typedef uint32_t reduct_inst_t;
     (((_inst) & ~(REDUCT_INST_MASK_C << REDUCT_INST_POS_C)) | (((_c) & REDUCT_INST_MASK_C) << REDUCT_INST_POS_C))
 
 /**
- * @brief Set the SBX operand in an instruction.
+ * @brief Set the SAX operand in an instruction.
  *
  * @param _inst Instruction.
- * @param _sbx SBX operand value.
+ * @param _sax SAX operand value.
  */
-#define REDUCT_INST_SET_SBX(_inst, _sbx) \
-    (((_inst) & ~(REDUCT_INST_MASK_SBX << REDUCT_INST_POS_B)) | (((_sbx) & REDUCT_INST_MASK_SBX) << REDUCT_INST_POS_B))
+#define REDUCT_INST_SET_SAX(_inst, _sax) \
+    (((_inst) & ~(REDUCT_INST_MASK_SAX << REDUCT_INST_POS_A)) | (((_sax) & REDUCT_INST_MASK_SAX) << REDUCT_INST_POS_A))
 
 #endif

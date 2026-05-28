@@ -26,10 +26,14 @@ struct reduct_rvsdg_edge;
  * branches, functions, etc.), regions represent computations (a sequence of nodes) and edges represent data
  * dependencies between nodes.
  *
- * Each node can have any number of inputs or outputs and each region can have any number of arguments or results.
+ * Each node can have any number of inputs but will always have exactly one output. Each region can have any number of
+ * arguments but will also always have exactly one result.
  *
- * The outputs of nodes and the arguments of regions are the origins of edges, while the input or results of a region
+ * The output of nodes and the arguments of regions are the origins of edges, while the input or results of a region
  * are the users of edges.
+ *
+ * @note Nodes having one output and regions having one result is a deviation from the paper, however, since Reduct is
+ * immutable, we can know that any expression will always produce exactly one output/result. So we can simply things.
  *
  * ## Structure
  *
@@ -37,9 +41,9 @@ struct reduct_rvsdg_edge;
  *
  * - A node takes in some number of inputs which get passed as arguments to the regions within the node (details depend
  * on node type, see below)
- * - A region contains some number of nodes which connect to its results and may connect to its arguments.
- * - The results of the region get passed as the outputs of the node (details depend on node type, see below).
- * - The outputs of the node can then connect to other nodes or be returned as results of the parent region.
+ * - A region contains some number of nodes which connect to its result and may connect to its arguments.
+ * - The result of the region get passed as the outputs of the node (details depend on node type, see below).
+ * - The output of the node can then connect to other nodes or be returned as results of the parent region.
  *
  * ## Node Types
  *
@@ -51,15 +55,15 @@ struct reduct_rvsdg_edge;
  * contain. Included below is a list of all such types.
  *
  * @note Since Reduct is immutable and does not have traditional global variables, some node types, for example
- * delta-nodes, will not be used.
+ * delta nodes, will not be used. Omega nodes are also replaced with lambda nodes.
  *
- * ### Gamma-Nodes
+ * ### Gamma Nodes
  *
  * A gamma node represents a branch or decision point. The first input to a gamma node is a predicate, which should
  * evaluate to a positive integer representing the index of the region to execute. The remaining inputs are passed as
- * arguments to the corresponding region with that regions outputs mapped to the gamma-nodes outputs.
+ * arguments to the corresponding region with that regions outputs mapped to the gamma nodes outputs.
  *
- * ### Lambda-Nodes
+ * ### Lambda Nodes
  *
  * A lambda node represents a function and contains a single region representing a function's body. The inputs are not
  * the arguments to the lambda but instead captured variables. The single output is the function itself, not the result
@@ -68,13 +72,15 @@ struct reduct_rvsdg_edge;
  * @note The paper describes an "apply" node to represent a function invocation. For simplicity, this is represented as
  * simple `REDUCT_OPCODE_CALL` or `REDUCT_OPCODE_CALL_CONST` node.
  *
- * ### Phi-Nodes
+ * ### Phi Nodes
  *
- * A phi node allows a function to recursively call itself. It contains a single region containing any number of lambda
- * nodes, the output of each lambda recursive node should be connected to the result of this region with the arguments
- * of this region connected to the inputs of each lambda node. The phi node itself only takes inputs for captured
- * variables and a outputs the lambdas.
+ * A phi node allows a function to recursively call itself. It contains a single region containing a lambda
+ * node, the output of the lambda node should be connected to the result of this region with the arguments
+ * of this region connected to the inputs of the lambda node. The phi node itself only takes inputs for captured
+ * variables and a outputs the lambda.
  *
+ * @note The paper describes a phi node as being able to contain multiple lambda nodes for mutual recursion. This will not be needed within Reduct.
+ * 
  * @see https://arxiv.org/abs/1912.05036 "RVSDG: An Intermediate Representation for Optimizing Compilers" (Nico
  * Reissmann et al., 2020)
  *
@@ -148,6 +154,13 @@ typedef uint8_t reduct_rvsdg_node_type_t;
 #define REDUCT_RVSDG_NODE_TYPE_PHI 5           ///< Represents a phi node.
 
 /**
+ * @brief Node flags.
+ */
+typedef uint8_t reduct_rvsdg_node_flags_t;
+#define REDUCT_RVSDG_NODE_FLAGS_NONE 0                   ///< No flags.
+#define REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC (1 << 0) ///< Lambda node is variadic.
+
+/**
  * @brief Information about a node type.
  * @struct reduct_rvsdg_node_info_t
  */
@@ -172,12 +185,13 @@ REDUCT_API const reduct_rvsdg_node_info_t* reduct_rvsdg_node_get_info(reduct_rvs
  */
 typedef struct reduct_rvsdg_node
 {
-    reduct_rvsdg_node_type_t type;           ///< The type of the node.
-    uint8_t inputCount;                      ///< Number of input edges.
-    uint8_t outputCount;                     ///< Number of output edges.
-    uint8_t regionCount;                     ///< Number of regions in the node.
+    reduct_rvsdg_node_flags_t type;  ///< The type of the node.
+    uint8_t inputCount;              ///< Number of input edges.
+    uint8_t regionCount;             ///< Number of regions in the node.
+    reduct_rvsdg_node_flags_t flags; ///< Node flags, interpretation depends on node type.
+    uint8_t _reserved[4];
     struct reduct_rvsdg_user* firstInput;    ///< List of input ports.
-    struct reduct_rvsdg_origin* firstOutput; ///< List of output ports.
+    struct reduct_rvsdg_origin* output;      ///< The output port.
     struct reduct_rvsdg_region* firstRegion; ///< List of regions in the node.
     struct reduct_rvsdg_region* parent;      ///< The region this node belongs to.
     struct reduct_rvsdg_node* next;          ///< Next node in the region's list.
@@ -193,25 +207,15 @@ typedef struct reduct_rvsdg_node
  */
 typedef struct reduct_rvsdg_region
 {
-    uint16_t argumentCount;               ///< Number of arguments to the region.
-    uint16_t resultCount;                 ///< Number of result values from the region.
+    uint16_t argumentCount; ///< Number of arguments to the region.
+    uint8_t _reserved[6];
     reduct_rvsdg_origin_t* firstArgument; ///< List of argument ports.
-    reduct_rvsdg_user_t* firstResult;     ///< List of result ports.
+    reduct_rvsdg_user_t* result;          ///< The result port.
     struct reduct_rvsdg_node* firstNode;  ///< First node in the region.
     struct reduct_rvsdg_node* lastNode;   ///< Last node in the region.
     struct reduct_rvsdg_node* parent;     ///< The node that owns this region.
     struct reduct_rvsdg_region* next;     ///< Next region in the parent node's list.
 } reduct_rvsdg_region_t;
-
-/**
- * @brief Intermediate Representation context.
- * @struct reduct_rvsdg_t
- */
-typedef struct reduct_rvsdg
-{
-    struct reduct* reduct;        ///< Pointer to the Reduct structure.
-    struct reduct_item* lastItem; ///< The last item processed during IR generation.
-} reduct_rvsdg_t;
 
 /**
  * @brief Allocate a new IR edge.
@@ -326,13 +330,13 @@ REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_gamma(struct reduct* reduc
 REDUCT_API struct reduct_rvsdg_user* reduct_rvsdg_node_get_input(reduct_rvsdg_node_t* node, uint16_t index);
 
 /**
- * @brief Get an output port of a node by index.
+ * @brief Get the node connected to an input node of a node by index.
  *
  * @param node The node to search.
- * @param index The index of the output port.
- * @return The origin port, or NULL if not found.
+ * @param index The index of the input port.
+ * @return The input node, or NULL if not found or the port is not connected to a node.
  */
-REDUCT_API struct reduct_rvsdg_origin* reduct_rvsdg_node_get_output(reduct_rvsdg_node_t* node, uint16_t index);
+REDUCT_API struct reduct_rvsdg_node* reduct_rvsdg_node_get_input_node(reduct_rvsdg_node_t* node, uint16_t index);
 
 /**
  * @brief Get an argument port of a region by index.
@@ -342,15 +346,6 @@ REDUCT_API struct reduct_rvsdg_origin* reduct_rvsdg_node_get_output(reduct_rvsdg
  * @return The origin port, or NULL if not found.
  */
 REDUCT_API struct reduct_rvsdg_origin* reduct_rvsdg_region_get_argument(reduct_rvsdg_region_t* region, uint16_t index);
-
-/**
- * @brief Get a result port of a region by index.
- *
- * @param region The region to search.
- * @param index The index of the result port.
- * @return The user port, or NULL if not found.
- */
-REDUCT_API struct reduct_rvsdg_user* reduct_rvsdg_region_get_result(reduct_rvsdg_region_t* region, uint16_t index);
 
 /**
  * @brief Check if a region is an ancestor of another, or if they are the same.
@@ -397,6 +392,39 @@ REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_call(struct reduct* reduct
     reduct_rvsdg_origin_t* callable);
 
 /**
+ * @brief Map a node input index to a region argument index.
+ *
+ * @param node The parent node.
+ * @param region The target region.
+ * @param inputIndex The input index on the node.
+ * @param outArgIndex Pointer to store the mapped argument index.
+ * @return true if the input is mapped to an argument.
+ */
+REDUCT_API bool reduct_rvsdg_node_map_input_to_argument(reduct_rvsdg_node_t* node, struct reduct_rvsdg_region* region,
+    uint16_t inputIndex, uint16_t* outArgIndex);
+
+/**
+ * @brief Map a region argument index to an input index of the parent node.
+ *
+ * @param node The parent node.
+ * @param region The region containing the argument.
+ * @param argIndex The argument index within the region.
+ * @param outInputIndex Pointer to store the mapped input index.
+ * @return true if the argument is mapped from an input.
+ */
+REDUCT_API bool reduct_rvsdg_node_map_argument_to_input(reduct_rvsdg_node_t* node, struct reduct_rvsdg_region* region,
+    uint16_t argIndex, uint16_t* outInputIndex);
+
+/**
+ * @brief Check if an origin is a recursion target for a given phi node.
+ *
+ * @param node The phi node.
+ * @param origin The origin to check.
+ * @return true if the origin is a recursion target.
+ */
+REDUCT_API bool reduct_rvsdg_node_is_recur_origin(reduct_rvsdg_node_t* node, struct reduct_rvsdg_origin* origin);
+
+/**
  * @brief Allocate a new IR region.
  *
  * @param reduct Pointer to the Reduct structure.
@@ -430,15 +458,6 @@ REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_origin_new(struct reduct* reduct)
 REDUCT_API reduct_rvsdg_user_t* reduct_rvsdg_node_add_input(struct reduct* reduct, reduct_rvsdg_node_t* node);
 
 /**
- * @brief Add a new output port to a node.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param node The node to add the output to.
- * @return The newly created origin port.
- */
-REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_node_add_output(struct reduct* reduct, reduct_rvsdg_node_t* node);
-
-/**
  * @brief Add a new region to a node.
  *
  * @param reduct Pointer to the Reduct structure.
@@ -458,15 +477,6 @@ REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_region_add_argument(struct reduct
     reduct_rvsdg_region_t* region);
 
 /**
- * @brief Add a new result port to a region.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param region The region to add the result to.
- * @return The newly created user port.
- */
-REDUCT_API reduct_rvsdg_user_t* reduct_rvsdg_region_add_result(struct reduct* reduct, reduct_rvsdg_region_t* region);
-
-/**
  * @brief Adds a node to a region.
  *
  * @param region Pointer to the region to add the node to.
@@ -481,6 +491,18 @@ REDUCT_API void reduct_rvsdg_region_add_node(reduct_rvsdg_region_t* region, redu
  * @param node Pointer to the node to remove.
  */
 REDUCT_API void reduct_rvsdg_region_remove_node(reduct_rvsdg_region_t* region, reduct_rvsdg_node_t* node);
+
+/**
+ * @brief Lift an origin from an outer region to an inner region, creating a new argument in the inner region and
+ * connecting it to the outer origin.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param region The inner region to lift the origin into.
+ * @param outerValue The origin in the outer region to lift.
+ * @return The new origin in the inner region representing the lifted value.
+ */
+REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_region_lift_origin(struct reduct* reduct, reduct_rvsdg_region_t* region,
+    reduct_rvsdg_origin_t* outerValue);
 
 /** @} */
 

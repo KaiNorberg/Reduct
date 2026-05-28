@@ -1040,6 +1040,8 @@ Will stop evaluating arguments as soon as one is not greater than or equal to th
 
 Since Reduct is a functional language, side effects should be avoided when possible. As such, any native with side effects will be suffixed with an exclamation mark `!`.
 
+> TODO: All side effects should be removed and replaced with state threading.
+
 #### Error Handling
 
 **`(assert! <cond: item> <msg: item>) -> <cond: item>`**

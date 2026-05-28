@@ -92,7 +92,7 @@ static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
 {
     if (REDUCT_HANDLE_IS_NUMBER(handle))
     {
-        fprintf(out, "%g", REDUCT_HANDLE_TO_NUMBER(handle));
+        fprintf(out, "%f", REDUCT_HANDLE_TO_NUMBER(handle));
     }
     else if (REDUCT_HANDLE_IS_ATOM(handle))
     {
@@ -123,13 +123,13 @@ static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
 
 static void reduct_dump_print_const_slot(reduct_const_slot_t* slot, FILE* out)
 {
-    if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE)
+    if (slot->type == REDUCT_CONST_SLOT_TYPE_STATIC)
     {
         reduct_dump_print_handle(slot->handle, out);
     }
     else if (slot->type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
     {
-        fprintf(out, "(capture %.*s)", (int)slot->capture->length, slot->capture->string);
+        fprintf(out, "(capture)");
     }
     else
     {
@@ -164,7 +164,7 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
         uint32_t a = REDUCT_INST_GET_A(inst);
         uint32_t b = REDUCT_INST_GET_B(inst);
         uint32_t c = REDUCT_INST_GET_C(inst);
-        int32_t sbx = REDUCT_INST_GET_SBX(inst);
+        int32_t sax = REDUCT_INST_GET_SAX(inst);
 
         const char* opName = reduct_dump_opcode_name(op);
 
@@ -176,11 +176,11 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
             fprintf(out, "R%-5u %-6u", a, b);
             break;
         case REDUCT_OPCODE_JMP:
-            fprintf(out, "%-6d %-6s %-6s", sbx, "", "");
+            fprintf(out, "%-6d %-6s %-6s", sax, "", "");
             break;
         case REDUCT_OPCODE_JMPF:
         case REDUCT_OPCODE_JMPT:
-            fprintf(out, "R%-5u %-6d %-6s", a, sbx, "");
+            fprintf(out, "%-6d %-6s R%-5u", sax, "", c);
             break;
         case REDUCT_OPCODE_TAILCALL:
         case REDUCT_OPCODE_TAILCALL_CONST:
@@ -218,7 +218,7 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
         case REDUCT_OPCODE_JGT_CONST:
         case REDUCT_OPCODE_JGE:
         case REDUCT_OPCODE_JGE_CONST:
-            fprintf(out, "R%-5u %-6s %c%-5u", a, "", isConst ? 'K' : 'R', c);
+            fprintf(out, "R%-5u %-6s %c%-5u", b, "", isConst ? 'K' : 'R', c);
             break;
         case REDUCT_OPCODE_RECUR:
         case REDUCT_OPCODE_TAILRECUR:
@@ -238,7 +238,7 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
         bool isJump = (op == REDUCT_OPCODE_JMP || op == REDUCT_OPCODE_JMPF || op == REDUCT_OPCODE_JMPT);
         if (isJump)
         {
-            int target = (int)i + 1 + sbx;
+            int target = (int)i + 1 + sax;
             fprintf(out, " ; -> [%04u]\n", target);
         }
         else if (hasInlineConst && c < function->constantCount)
@@ -269,7 +269,7 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
     for (uint16_t i = 0; i < function->constantCount; ++i)
     {
         reduct_const_slot_t* slot = &function->constants[i];
-        if (slot->type == REDUCT_CONST_SLOT_TYPE_HANDLE)
+        if (slot->type == REDUCT_CONST_SLOT_TYPE_STATIC)
         {
             reduct_handle_t handle = slot->handle;
             if (REDUCT_HANDLE_IS_FUNCTION(handle))
@@ -313,7 +313,7 @@ static void reduct_dump_gv_print_handle(reduct_handle_t handle, FILE* out)
 {
     if (REDUCT_HANDLE_IS_NUMBER(handle))
     {
-        fprintf(out, "%g", REDUCT_HANDLE_TO_NUMBER(handle));
+        fprintf(out, "%f", REDUCT_HANDLE_TO_NUMBER(handle));
     }
     else if (REDUCT_HANDLE_IS_ATOM(handle))
     {
@@ -362,36 +362,18 @@ static void reduct_dump_gv_node(reduct_t* reduct, reduct_rvsdg_node_t* node, FIL
         if (node->inputCount > 0)
         {
             fprintf(out, "    node_%p_in [shape=record, style=filled, fillcolor=\"#ffffff\", label=\"", (void*)node);
-            REDUCT_SCRATCH(reduct, inputs, reduct_rvsdg_user_t*, node->inputCount);
-            reduct_rvsdg_user_t* in = node->firstInput;
-            while (in != NULL)
-            {
-                inputs[in->index] = in;
-                in = in->next;
-            }
             for (uint16_t i = 0; i < node->inputCount; i++)
             {
                 if (i > 0)
-                {
                     fprintf(out, "|");
-                }
                 fprintf(out, "<in_%u> in %u", i, i);
             }
-            REDUCT_SCRATCH_FREE(reduct, inputs);
             fprintf(out, "\"];\n");
         }
 
-        REDUCT_SCRATCH(reduct, regions, reduct_rvsdg_region_t*, node->regionCount);
-        reduct_rvsdg_region_t* r = node->firstRegion;
-        for (int i = node->regionCount - 1; i >= 0 && r != NULL; i--)
+        reduct_rvsdg_region_t* region = node->firstRegion;
+        for (uint16_t i = 0; i < node->regionCount && region != NULL; i++, region = region->next)
         {
-            regions[i] = r;
-            r = r->next;
-        }
-
-        for (uint16_t i = 0; i < node->regionCount; i++)
-        {
-            reduct_rvsdg_region_t* region = regions[i];
             fprintf(out, "    subgraph cluster_region_%p {\n", (void*)region);
             fprintf(out, "      label=\"Region %u\";\n      style=filled; fillcolor=\"#fafafa\"; color=gray;\n", i);
 
@@ -399,137 +381,73 @@ static void reduct_dump_gv_node(reduct_t* reduct, reduct_rvsdg_node_t* node, FIL
             {
                 fprintf(out, "      region_%p_args [shape=record, style=filled, fillcolor=\"#eeeeee\", label=\"",
                     (void*)region);
-                REDUCT_SCRATCH(reduct, args, reduct_rvsdg_origin_t*, region->argumentCount);
-                reduct_rvsdg_origin_t* arg = region->firstArgument;
-                while (arg)
-                {
-                    args[arg->index] = arg;
-                    arg = arg->next;
-                }
                 for (uint16_t j = 0; j < region->argumentCount; j++)
                 {
                     if (j > 0)
-                    {
                         fprintf(out, "|");
-                    }
                     fprintf(out, "<arg_%u> arg %u", j, j);
                 }
-                REDUCT_SCRATCH_FREE(reduct, args);
                 fprintf(out, "\"];\n");
             }
 
-            reduct_rvsdg_node_t* child = region->firstNode;
-            while (child != NULL)
+            for (reduct_rvsdg_node_t* child = region->firstNode; child != NULL; child = child->next)
             {
                 reduct_dump_gv_node(reduct, child, out);
-                child = child->next;
             }
 
-            if (region->resultCount > 0)
-            {
-                fprintf(out, "      region_%p_res [shape=record, style=filled, fillcolor=\"#eeeeee\", label=\"",
-                    (void*)region);
-                REDUCT_SCRATCH(reduct, results, reduct_rvsdg_user_t*, region->resultCount);
-                reduct_rvsdg_user_t* res = region->firstResult;
-                while (res)
-                {
-                    results[res->index] = res;
-                    res = res->next;
-                }
-                for (uint16_t j = 0; j < region->resultCount; j++)
-                {
-                    if (j > 0)
-                    {
-                        fprintf(out, "|");
-                    }
-                    fprintf(out, "<res_%u> res %u", j, j);
-                }
-                REDUCT_SCRATCH_FREE(reduct, results);
-                fprintf(out, "\"];\n");
-            }
-
+            fprintf(out,
+                "      region_%p_res [shape=record, style=filled, fillcolor=\"#eeeeee\", label=\"<res> res\"];\n",
+                (void*)region);
             fprintf(out, "    }\n");
         }
 
-        if (node->outputCount > 0)
+        fprintf(out, "    node_%p_out [shape=record, style=filled, fillcolor=\"#ffffff\", label=\"<out> out\"];\n",
+            (void*)node);
+
+        if (node->inputCount > 0 && node->firstRegion != NULL && node->firstRegion->argumentCount > 0)
         {
-            fprintf(out, "    node_%p_out [shape=record, style=filled, fillcolor=\"#ffffff\", label=\"", (void*)node);
-            REDUCT_SCRATCH(reduct, outputs, reduct_rvsdg_origin_t*, node->outputCount);
-            reduct_rvsdg_origin_t* outP = node->firstOutput;
-            while (outP != NULL)
+            fprintf(out, "    node_%p_in -> region_%p_args [style=invis];\n", (void*)node, (void*)node->firstRegion);
+        }
+
+        region = node->firstRegion;
+        while (region != NULL && region->next != NULL)
+        {
+            if (region->next->argumentCount > 0)
             {
-                outputs[outP->index] = outP;
-                outP = outP->next;
+                fprintf(out, "    region_%p_res -> region_%p_args [style=invis];\n", (void*)region,
+                    (void*)region->next);
             }
-            for (uint16_t i = 0; i < node->outputCount; i++)
-            {
-                if (i > 0)
-                {
-                    fprintf(out, "|");
-                }
-                fprintf(out, "<out_%u> out %u", i, i);
-            }
-            REDUCT_SCRATCH_FREE(reduct, outputs);
-            fprintf(out, "\"];\n");
+            region = region->next;
         }
 
-        if (node->inputCount > 0 && node->regionCount > 0 && regions[0]->argumentCount > 0)
+        reduct_rvsdg_region_t* last = node->firstRegion;
+        if (last != NULL)
         {
-            fprintf(out, "    node_%p_in -> region_%p_args [style=invis];\n", (void*)node, (void*)regions[0]);
+            while (last->next != NULL)
+                last = last->next;
+            fprintf(out, "    region_%p_res -> node_%p_out [style=invis];\n", (void*)last, (void*)node);
         }
 
-        if (node->regionCount > 1)
-        {
-            for (uint16_t i = 0; i < node->regionCount - 1; i++)
-            {
-                if (regions[i]->resultCount > 0 && regions[i + 1]->argumentCount > 0)
-                {
-                    fprintf(out, "    region_%p_res -> region_%p_args [style=invis];\n", (void*)regions[i],
-                        (void*)regions[i + 1]);
-                }
-            }
-        }
-
-        if (node->outputCount > 0 && node->regionCount > 0 && regions[node->regionCount - 1]->resultCount > 0)
-        {
-            fprintf(out, "    region_%p_res -> node_%p_out [style=invis];\n", (void*)regions[node->regionCount - 1],
-                (void*)node);
-        }
-
-        REDUCT_SCRATCH_FREE(reduct, regions);
         fprintf(out, "  }\n");
     }
     else
     {
         fprintf(out, "  node_%p [style=filled, fillcolor=\"%s\", label=\"", (void*)node, fillcolor);
 
-        bool hasIn = node->inputCount > 0;
-        bool hasOut = node->outputCount > 0;
-
-        if (hasIn || hasOut)
+        if (node->inputCount > 0 || node->output != NULL)
         {
             fprintf(out, "{");
         }
 
-        if (hasIn)
+        if (node->inputCount > 0)
         {
             fprintf(out, "{");
-            REDUCT_SCRATCH(reduct, inputs, reduct_rvsdg_user_t*, node->inputCount);
-            reduct_rvsdg_user_t* in = node->firstInput;
-            while (in)
-            {
-                inputs[in->index] = in;
-                in = in->next;
-            }
             for (uint16_t i = 0; i < node->inputCount; i++)
             {
                 if (i > 0)
-                {
                     fprintf(out, "|");
-                }
                 fprintf(out, "<in_%u> in %u", i, i);
             }
-            REDUCT_SCRATCH_FREE(reduct, inputs);
             fprintf(out, "} | ");
         }
 
@@ -547,29 +465,11 @@ static void reduct_dump_gv_node(reduct_t* reduct, reduct_rvsdg_node_t* node, FIL
             fprintf(out, "INVALID");
         }
 
-        if (hasOut)
+        if (node->output != NULL)
         {
-            fprintf(out, " | {");
-            REDUCT_SCRATCH(reduct, outputs, reduct_rvsdg_origin_t*, node->outputCount);
-            reduct_rvsdg_origin_t* outP = node->firstOutput;
-            while (outP != NULL)
-            {
-                outputs[outP->index] = outP;
-                outP = outP->next;
-            }
-            for (uint16_t i = 0; i < node->outputCount; i++)
-            {
-                if (i > 0)
-                {
-                    fprintf(out, "|");
-                }
-                fprintf(out, "<out_%u> out %u", i, i);
-            }
-            REDUCT_SCRATCH_FREE(reduct, outputs);
-            fprintf(out, "}");
+            fprintf(out, " | {<out> out}");
         }
-
-        if (hasIn || hasOut)
+        if (node->inputCount > 0 || node->output != NULL)
         {
             fprintf(out, "}");
         }
@@ -582,20 +482,17 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
     for (size_t n = 0; n < count; n++)
     {
         reduct_rvsdg_node_t* node = nodes[n];
-
-        reduct_rvsdg_origin_t* nodeOrigin = node->firstOutput;
-        while (nodeOrigin != NULL)
+        if (node->output != NULL)
         {
-            reduct_rvsdg_edge_t* edge = nodeOrigin->uses;
-            while (edge != NULL)
+            for (reduct_rvsdg_edge_t* edge = node->output->uses; edge != NULL; edge = edge->next)
             {
                 if (node->regionCount > 0)
                 {
-                    fprintf(out, "  node_%p_out:out_%u -> ", (void*)node, nodeOrigin->index);
+                    fprintf(out, "  node_%p_out:out -> ", (void*)node);
                 }
                 else
                 {
-                    fprintf(out, "  node_%p:out_%u -> ", (void*)node, nodeOrigin->index);
+                    fprintf(out, "  node_%p:out -> ", (void*)node);
                 }
 
                 if (edge->user->ownerKind == REDUCT_RVSDG_OWNER_NODE)
@@ -611,27 +508,19 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
                 }
                 else
                 {
-                    fprintf(out, "region_%p_res:res_%u", (void*)edge->user->region, edge->user->index);
+                    fprintf(out, "region_%p_res:res", (void*)edge->user->region);
                 }
-
                 fprintf(out, ";\n");
-
-                edge = edge->next;
             }
-            nodeOrigin = nodeOrigin->next;
         }
 
-        reduct_rvsdg_region_t* nodeRegion = node->firstRegion;
-        while (nodeRegion != NULL)
+        for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
         {
-            reduct_rvsdg_origin_t* regArg = nodeRegion->firstArgument;
-            while (regArg != NULL)
+            for (reduct_rvsdg_origin_t* arg = region->firstArgument; arg != NULL; arg = arg->next)
             {
-                reduct_rvsdg_edge_t* edge = regArg->uses;
-                while (edge != NULL)
+                for (reduct_rvsdg_edge_t* edge = arg->uses; edge != NULL; edge = edge->next)
                 {
-                    fprintf(out, "  region_%p_args:arg_%u -> ", (void*)nodeRegion, regArg->index);
-
+                    fprintf(out, "  region_%p_args:arg_%u -> ", (void*)region, arg->index);
                     if (edge->user->ownerKind == REDUCT_RVSDG_OWNER_NODE)
                     {
                         if (edge->user->node->regionCount > 0)
@@ -645,16 +534,11 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
                     }
                     else
                     {
-                        fprintf(out, "region_%p_res:res_%u", (void*)edge->user->region, edge->user->index);
+                        fprintf(out, "region_%p_res:res", (void*)edge->user->region);
                     }
-
                     fprintf(out, ";\n");
-
-                    edge = edge->next;
                 }
-                regArg = regArg->next;
             }
-            nodeRegion = nodeRegion->next;
         }
     }
 }

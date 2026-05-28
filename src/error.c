@@ -342,25 +342,27 @@ REDUCT_API void reduct_error_get_item_params(reduct_t* reduct, reduct_item_t* it
     if (item != NULL && item->inputId != REDUCT_INPUT_ID_NONE)
     {
         reduct_input_t* itemInput = reduct_input_lookup(reduct, item->inputId);
-        *path = itemInput->path;
-        *input = itemInput->buffer;
-        *inputLength = (size_t)(itemInput->end - itemInput->buffer);
-        *regionLength = reduct_error_get_region_length(itemInput->buffer + item->position, itemInput->end);
-        if (*regionLength == 0)
+        if (itemInput != NULL)
         {
-            *regionLength = 1;
-        }
+            *path = itemInput->path;
+            *input = itemInput->buffer;
+            *inputLength = (size_t)(itemInput->end - itemInput->buffer);
+            *regionLength = reduct_error_get_region_length(itemInput->buffer + item->position, itemInput->end);
+            if (*regionLength == 0)
+            {
+                *regionLength = 1;
+            }
 
-        *position = item->position;
+            *position = item->position;
+            return;
+        }
     }
-    else
-    {
-        *path = NULL;
-        *input = NULL;
-        *inputLength = 0;
-        *regionLength = 0;
-        *position = 0;
-    }
+
+    *path = NULL;
+    *input = NULL;
+    *inputLength = 0;
+    *regionLength = 0;
+    *position = 0;
 }
 
 REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* message, ...)
@@ -373,6 +375,7 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
 
     if (reduct != NULL && reduct->frameCount > 0)
     {
+        assert(reduct->frames != NULL);
         reduct_eval_frame_t* frame = &reduct->frames[reduct->frameCount - 1];
         if (frame->closure != NULL && frame->closure->function != NULL)
         {
@@ -387,13 +390,16 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
             if (funcItem->inputId != REDUCT_INPUT_ID_NONE)
             {
                 reduct_input_t* itemInput = reduct_input_lookup(reduct, funcItem->inputId);
-                path = itemInput->path;
-                input = itemInput->buffer;
-                inputLength = (size_t)(itemInput->end - itemInput->buffer);
-                regionLength = reduct_error_get_region_length(input + position, itemInput->end);
-                if (regionLength == 0)
+                if (itemInput != NULL)
                 {
-                    regionLength = 1;
+                    path = itemInput->path;
+                    input = itemInput->buffer;
+                    inputLength = (size_t)(itemInput->end - itemInput->buffer);
+                    regionLength = reduct_error_get_region_length(input + position, itemInput->end);
+                    if (regionLength == 0)
+                    {
+                        regionLength = 1;
+                    }
                 }
             }
         }
@@ -408,7 +414,7 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
     reduct_error_set(reduct->error, path, input, inputLength, regionLength, position, REDUCT_ERROR_TYPE_RUNTIME, "%s",
         formattedMessage);
 
-    if (reduct != NULL)
+    if (reduct != NULL && reduct->frameCount > 0)
     {
         for (uint32_t i = reduct->frameCount - 1; i > 0; i--)
         {

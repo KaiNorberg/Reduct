@@ -23,7 +23,7 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
 
     for (uint16_t i = 0; i < function->constantCount; i++)
     {
-        if (function->constants[i].type != REDUCT_CONST_SLOT_TYPE_HANDLE)
+        if (function->constants[i].type != REDUCT_CONST_SLOT_TYPE_STATIC)
         {
             closure->constants[i] = REDUCT_HANDLE_NIL(reduct);
             continue;

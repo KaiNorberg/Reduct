@@ -36,16 +36,19 @@ typedef struct reduct_eval_frame
 } reduct_eval_frame_t;
 
 /**
- * @brief Evaluates a compiled Reduct function.
+ * @brief Evaluates a handle.
+ *
+ * If the handle is a compiled function then it will be interpreted, otherwise, it will first be compiled into a
+ * function.
  *
  * @param reduct The Reduct instance.
- * @param function The function to evaluate.
+ * @param handle The handle to evaluate.
  * @return The result of the evaluation as a Reduct handle.
  */
-REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t function);
+REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t handle);
 
 /**
- * @brief Parses, compiles and evaluates a file.
+ * @brief Parses, builds, optimizes, emits and evaluates a file.
  *
  * @param reduct The Reduct instance.
  * @param path The path to the file.
@@ -55,7 +58,7 @@ REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t fu
 REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* path, reduct_optimize_flags_t optimize);
 
 /**
- * @brief Parses, compiles and evaluates a string.
+ * @brief Parses, builds, optimizes, emits and evaluates a string.
  *
  * @param reduct The Reduct instance.
  * @param str The string to evaluate.

@@ -122,6 +122,7 @@ typedef struct reduct
     int argc;
     char** argv;
     bool hasRegisteredIntrinsics;
+    reduct_optimize_flags_t optimizeFlags;
 } reduct_t;
 
 /**

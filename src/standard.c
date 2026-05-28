@@ -1,8 +1,9 @@
 #include <reduct/atom.h>
+#include <reduct/build.h>
 #include <reduct/char.h>
-#include <reduct/emit.h>
 #include <reduct/core.h>
 #include <reduct/defs.h>
+#include <reduct/emit.h>
 #include <reduct/eval.h>
 #include <reduct/gc.h>
 #include <reduct/handle.h>
@@ -2012,9 +2013,7 @@ REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t han
     reduct_handle_atom_string(reduct, &handle, &str, &len);
 
     reduct_handle_t ast = reduct_parse(reduct, str, len, "<run>");
-    reduct_handle_t function = reduct_emit(reduct, ast);
-    reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
-    return reduct_eval(reduct, function);
+    return reduct_eval(reduct, ast);
 }
 
 static void reduct_get_resolved_path(reduct_t* reduct, reduct_handle_t pathHandle, char* outBuf)
@@ -2139,10 +2138,7 @@ load_shared_lib:
         return init(reduct);
     }
 
-    reduct_handle_t ast = reduct_parse_file(reduct, pathString);
-    reduct_handle_t function = reduct_emit(reduct, ast);
-    reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
-    return reduct_eval(reduct, function);
+    return reduct_eval_file(reduct, pathString, reduct->optimizeFlags);
 }
 
 REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle_t path)
@@ -2258,7 +2254,7 @@ REDUCT_API reduct_handle_t reduct_print(reduct_t* reduct, size_t argc, reduct_ha
     {
         if (REDUCT_HANDLE_IS_NUMBER(argv[i]))
         {
-            fprintf(stdout, "%g", REDUCT_HANDLE_TO_NUMBER(argv[i]));
+            fprintf(stdout, "%f", REDUCT_HANDLE_TO_NUMBER(argv[i]));
         }
         else if (REDUCT_HANDLE_IS_ATOM(argv[i]) && REDUCT_HANDLE_TO_ATOM(argv[i])->flags & REDUCT_ATOM_FLAG_QUOTED)
         {
@@ -2877,13 +2873,7 @@ static reduct_handle_t reduct_stdlib_number_impl(reduct_t* reduct, reduct_handle
 
 REDUCT_STDLIB_WRAPPER_1(number, reduct_stdlib_number_impl)
 
-static reduct_handle_t reduct_stdlib_eval_impl(reduct_t* reduct, reduct_handle_t arg)
-{
-    reduct_handle_t function = reduct_emit(reduct, arg);
-    reduct_optimize(reduct, function, reduct->frames[reduct->frameCount - 1].closure->function->optimizeFlags);
-    return reduct_eval(reduct, function);
-}
-REDUCT_STDLIB_WRAPPER_1(eval, reduct_stdlib_eval_impl)
+REDUCT_STDLIB_WRAPPER_1(eval, reduct_eval)
 
 static reduct_handle_t reduct_stdlib_parse_impl(reduct_t* reduct, reduct_handle_t arg)
 {

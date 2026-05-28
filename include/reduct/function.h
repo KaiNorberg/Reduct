@@ -35,8 +35,8 @@ struct reduct_atom;
 typedef enum
 {
     REDUCT_CONST_SLOT_TYPE_NONE,    ///< No constant slot.
-    REDUCT_CONST_SLOT_TYPE_HANDLE,  ///< A constant slot containing an item.
-    REDUCT_CONST_SLOT_TYPE_CAPTURE, ///< A constant slot containing a variable name to be captured.
+    REDUCT_CONST_SLOT_TYPE_STATIC,  ///< A constant slot containing a static value.
+    REDUCT_CONST_SLOT_TYPE_CAPTURE, ///< A constant slot acting as a placeholder for a capture.
 } reduct_const_slot_type_t;
 
 /**
@@ -46,49 +46,8 @@ typedef enum
 typedef struct reduct_const_slot
 {
     reduct_const_slot_type_t type; ///< The type of the constant slot.
-    union {
-        uint64_t raw;
-        reduct_handle_t handle;      ///< The handle contained in the constant slot.
-        struct reduct_atom* capture; ///< The name of the variable to be captured.
-    };
+    reduct_handle_t handle;        ///< The static handle, or `NIL` for captures.
 } reduct_const_slot_t;
-
-/**
- * @brief Create a constant slot containing a handle.
- *
- * @param _handle The handle to be stored in the constant slot.
- */
-#define REDUCT_CONST_SLOT_HANDLE(_handle) \
-    ((reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_HANDLE, .handle = (_handle)})
-
-/**
- * @brief Create a constant slot containing an item.
- *
- * @param _item The item to be stored in the constant slot.
- */
-#define REDUCT_CONST_SLOT_ITEM(_item) REDUCT_CONST_SLOT_HANDLE(REDUCT_HANDLE_FROM_ITEM(_item))
-
-/**
- * @brief Create a constant slot containing an atom.
- *
- * @param _atom The atom to be stored in the constant slot.
- */
-#define REDUCT_CONST_SLOT_ATOM(_atom) REDUCT_CONST_SLOT_HANDLE(REDUCT_HANDLE_FROM_ATOM(_atom))
-
-/**
- * @brief Create a constant slot containing a function.
- *
- * @param _func The function to be stored in the constant slot.
- */
-#define REDUCT_CONST_SLOT_FUNCTION(_func) REDUCT_CONST_SLOT_HANDLE(REDUCT_HANDLE_FROM_FUNCTION(_func))
-
-/**
- * @brief Create a constant slot containing a variable name to be captured.
- *
- * @param _capture The name of the variable to be captured.
- */
-#define REDUCT_CONST_SLOT_CAPTURE(_capture) \
-    ((reduct_const_slot_t){.type = REDUCT_CONST_SLOT_TYPE_CAPTURE, .capture = (_capture)})
 
 /**
  * @brief Function flags.
@@ -107,17 +66,16 @@ typedef enum reduct_function_flags
  */
 typedef struct reduct_function
 {
-    uint32_t instCount;                    ///< Number of instructions.
-    uint32_t instCapacity;                 ///< Capacity of the instruction array.
-    reduct_inst_t* insts;                  ///< An array of instructions.
-    uint32_t* positions;                   ///< An array of source positions parallel to the instructions.
-    reduct_const_slot_t* constants;        ///< The array of constant slots forming the constant template.
-    uint16_t constantCount;                ///< Number of constants.
-    uint16_t constantCapacity;             ///< Capacity of the constant array.
-    uint16_t registerCount;                ///< The number of registers the function uses.
-    uint8_t arity;                         ///< The number of arguments the function expects.
-    reduct_function_flags_t flags;         ///< The function flags.
-    reduct_optimize_flags_t optimizeFlags; ///< The optimization flags that have been applied to the function.
+    uint32_t instCount;             ///< Number of instructions.
+    uint32_t instCapacity;          ///< Capacity of the instruction array.
+    reduct_inst_t* insts;           ///< An array of instructions.
+    uint32_t* positions;            ///< An array of source positions parallel to the instructions.
+    reduct_const_slot_t* constants; ///< The array of constant slots forming the constant template.
+    uint16_t constantCount;         ///< Number of constants.
+    uint16_t constantCapacity;      ///< Capacity of the constant array.
+    uint16_t registerCount;         ///< The number of registers the function uses.
+    uint8_t arity;                  ///< The number of arguments the function expects.
+    reduct_function_flags_t flags;  ///< The function flags.
 } reduct_function_t;
 
 /**
@@ -165,15 +123,26 @@ static inline void reduct_function_emit(struct reduct* reduct, reduct_function_t
 }
 
 /**
- * @brief Get the index of a constant in a function's constant template, adding it if it doesn't exist.
+ * @brief Add a static constant to the function's template, returning its index.
+ *
+ * Will return the index of an existing identical constant if found.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param func The function.
- * @param slot The constant slot to add or lookup.
- * @return The index of the constant in the constant template.
+ * @param handle The value to add.
+ * @return The index in the constant pool.
  */
-REDUCT_API reduct_const_t reduct_function_lookup_constant(struct reduct* reduct, reduct_function_t* func,
-    reduct_const_slot_t* slot);
+REDUCT_API reduct_const_t reduct_function_add_constant(struct reduct* reduct, reduct_function_t* func,
+    reduct_handle_t handle);
+
+/**
+ * @brief Add a capture placeholder slot to the function's template, returning its index.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param func The function.
+ * @return The index in the constant pool.
+ */
+REDUCT_API reduct_const_t reduct_function_add_capture(struct reduct* reduct, reduct_function_t* func);
 
 /**
  * @brief Retain a function, preventing it from being collected by the garbage collector.

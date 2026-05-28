@@ -3,9 +3,9 @@
 
 #include <reduct/build.h>
 #include <reduct/closure.h>
-#include <reduct/emit.h>
 #include <reduct/core.h>
 #include <reduct/dump.h>
+#include <reduct/emit.h>
 #include <reduct/error.h>
 #include <reduct/eval.h>
 #include <reduct/gc.h>

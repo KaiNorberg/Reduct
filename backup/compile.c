@@ -74,7 +74,7 @@ REDUCT_API reduct_reg_t reduct_reg_alloc(reduct_compiler_t* compiler)
     }
 
     REDUCT_ERROR_COMPILE_LAST(compiler, "too many registers in function, limit is %u", REDUCT_REGISTER_MAX);
-    return REDUCT_REG_INVALID;
+    return REDUCT_REGISTER_INVALID;
 }
 
 REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, uint32_t count)
@@ -110,7 +110,7 @@ REDUCT_API reduct_reg_t reduct_reg_alloc_range(reduct_compiler_t* compiler, uint
     }
 
     REDUCT_ERROR_COMPILE_LAST(compiler, "too many registers in function, limit is %u", REDUCT_REGISTER_MAX);
-    return REDUCT_REG_INVALID;
+    return REDUCT_REGISTER_INVALID;
 }
 
 REDUCT_API void reduct_reg_free(reduct_compiler_t* compiler, reduct_reg_t reg)
@@ -405,7 +405,7 @@ REDUCT_API reduct_local_t* reduct_local_add_arg(reduct_compiler_t* compiler, red
 REDUCT_API void reduct_local_pop(reduct_compiler_t* compiler, uint16_t toCount, reduct_expr_t* result)
 {
     assert(compiler != NULL);
-    reduct_reg_t resultReg = (result != NULL && result->mode == REDUCT_OPCODE_MODE_REG) ? result->reg : REDUCT_REG_INVALID;
+    reduct_reg_t resultReg = (result != NULL && result->mode == REDUCT_OPCODE_MODE_REG) ? result->reg : REDUCT_REGISTER_INVALID;
 
     for (uint32_t i = compiler->localCount; i > (uint32_t)toCount; i--)
     {

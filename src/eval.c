@@ -1,7 +1,7 @@
 #include <reduct/build.h>
 #include <reduct/closure.h>
-#include <reduct/emit.h>
 #include <reduct/defs.h>
+#include <reduct/emit.h>
 #include <reduct/eval.h>
 #include <reduct/gc.h>
 #include <reduct/item.h>
@@ -167,7 +167,7 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
     base = regs + frame->base
 
 #define PREPARE_CALLABLE() \
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), NULL, "cannot call value of type %s", \
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), "cannot call value of type %s", \
         REDUCT_HANDLE_GET_TYPE_STRING(valC)); \
     reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(valC)
 
@@ -180,7 +180,7 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
 #define DECODE_C_CONST() \
     uint32_t c = REDUCT_INST_GET_C(inst); \
     reduct_handle_t valC = constants[c]
-#define DECODE_SBX() int32_t sbx = REDUCT_INST_GET_SBX(inst)
+#define DECODE_SAX() int32_t sax = REDUCT_INST_GET_SAX(inst)
 
 #define OP_BITWISE(_label, _op) \
 LABEL_C_OP(_label, { \
@@ -219,9 +219,9 @@ LABEL_C_OP(_label, { \
 #define OP_SKIP_CMP(_label, _op) \
     _label: \
     { \
-        DECODE_A(); \
+        DECODE_B(); \
         DECODE_C(); \
-        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[a], base[c], _op)) \
+        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], base[c], _op)) \
         { \
             ip++; \
         } \
@@ -229,9 +229,9 @@ LABEL_C_OP(_label, { \
     } \
     _label##_k: \
     { \
-        DECODE_A(); \
+        DECODE_B(); \
         DECODE_C_CONST(); \
-        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[a], valC, _op)) \
+        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], valC, _op)) \
         { \
             ip++; \
         } \
@@ -299,29 +299,29 @@ label_list:
 }
 label_jmp:
 {
-    DECODE_SBX();
-    ip += sbx;
+    DECODE_SAX();
+    ip += sax;
     DISPATCH();
 }
 label_jmpf:
 {
-    DECODE_A();
-    DECODE_SBX();
-    reduct_handle_t val = base[a];
+    DECODE_C();
+    DECODE_SAX();
+    reduct_handle_t val = base[c];
     if (!REDUCT_HANDLE_IS_TRUTHY(val))
     {
-        ip += sbx;
+        ip += sax;
     }
     DISPATCH();
 }
 label_jmpt:
 {
-    DECODE_A();
-    DECODE_SBX();
-    reduct_handle_t val = base[a];
+    DECODE_C();
+    DECODE_SAX();
+    reduct_handle_t val = base[c];
     if (REDUCT_HANDLE_IS_TRUTHY(val))
     {
-        ip += sbx;
+        ip += sax;
     }
     DISPATCH();
 }
@@ -516,13 +516,19 @@ eval_end:
     return result;
 }
 
-REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t functionHandle)
+REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t handle)
 {
     assert(reduct != NULL);
 
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_FUNCTION(functionHandle), "eval: expected compiled function, got %s",
-        REDUCT_HANDLE_GET_TYPE_STRING(functionHandle));
-    reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(functionHandle);
+    if (!REDUCT_HANDLE_IS_FUNCTION(handle))
+    {
+        reduct_handle_t graph = reduct_build(reduct, handle);
+        reduct_optimize(reduct, graph, reduct->optimizeFlags);
+        reduct_handle_t function = reduct_emit(reduct, graph);
+        return reduct_eval(reduct, function);
+    }
+
+    reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(handle);
 
     reduct_eval_ensure_ready(reduct);
 
@@ -540,10 +546,7 @@ REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path, 
     assert(path != NULL);
 
     reduct_handle_t ast = reduct_parse_file(reduct, path);
-    reduct_handle_t node = reduct_build(reduct, ast);
-    reduct_optimize(reduct, node, optimize);
-    reduct_handle_t function = reduct_emit(reduct, node);
-    return reduct_eval(reduct, function);
+    return reduct_eval(reduct, ast);
 }
 
 REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, size_t len,
@@ -553,10 +556,7 @@ REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str,
     assert(str != NULL);
 
     reduct_handle_t ast = reduct_parse(reduct, str, len, "<eval>");
-    reduct_handle_t node = reduct_build(reduct, ast);
-    reduct_optimize(reduct, node, optimize);
-    reduct_handle_t function = reduct_emit(reduct, node);
-    return reduct_eval(reduct, function);
+    return reduct_eval(reduct, ast);
 }
 
 REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t callable, size_t argc,

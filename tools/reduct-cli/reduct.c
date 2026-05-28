@@ -184,12 +184,11 @@ int main(int argc, char **argv)
 
     reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
 
-    reduct_handle_t node = reduct_build(reduct, ast);
-    reduct_optimize(reduct, node, optimizeFlags);
-    reduct_handle_t function = reduct_emit(reduct, node);
-
     if (irOutputFile != NULL)
     {
+        reduct_handle_t node = reduct_build(reduct, ast);
+        reduct_optimize(reduct, node, optimizeFlags);
+
         FILE* out = fopen(irOutputFile, "w");
         if (out == NULL)
         {
@@ -204,11 +203,15 @@ int main(int argc, char **argv)
 
     if (shouldDump)
     {
+        reduct_handle_t node = reduct_build(reduct, ast);
+        reduct_optimize(reduct, node, optimizeFlags);
+        reduct_handle_t function = reduct_emit(reduct, node);
+
         reduct_dump_function(reduct, function, stdout);
         goto cleanup;
     }
 
-    reduct_handle_t eval = reduct_eval(reduct, function);
+    reduct_handle_t eval = reduct_eval(reduct, ast);
     if (isSilent)
     {
         goto cleanup;

@@ -5,13 +5,14 @@
 #include <reduct/handle.h>
 #include <reduct/rvsdg.h>
 
-static inline reduct_builder_local_t* reduct_builder_add_local_to_scope(reduct_builder_t* builder, reduct_builder_scope_t* scope,
-    struct reduct_atom* key, reduct_rvsdg_origin_t* value)
+static inline reduct_builder_local_t* reduct_builder_add_local_to_scope(reduct_builder_t* builder,
+    reduct_builder_scope_t* scope, struct reduct_atom* key, reduct_rvsdg_origin_t* value)
 {
     assert(builder != NULL);
     assert(key != NULL);
     assert(scope != NULL);
 
+    key = reduct_atom_ensure_interned(builder->reduct, key);
     if (scope->localAmount == REDUCT_REGISTER_MAX)
     {
         REDUCT_ERROR_COMPILE_LAST(builder, "too many local variables in scope, limit is %d", REDUCT_REGISTER_MAX);
@@ -29,73 +30,24 @@ static inline reduct_builder_local_t* reduct_builder_add_local(reduct_builder_t*
     return reduct_builder_add_local_to_scope(builder, builder->scope, key, value);
 }
 
-static reduct_rvsdg_origin_t* reduct_builder_lift_origin(reduct_builder_t* builder, reduct_builder_scope_t* scope,
-    reduct_rvsdg_origin_t* outerValue)
+static inline void reduct_builder_enter_scope(reduct_builder_t* builder, reduct_builder_scope_t* scope,
+    struct reduct_rvsdg_region* region, struct reduct_rvsdg_node* lambdaNode)
 {
     assert(builder != NULL);
     assert(scope != NULL);
-    assert(outerValue != NULL);
 
-    if (scope->region != NULL && scope->region->parent != NULL)
-    {
-        reduct_rvsdg_node_t* node = scope->region->parent;
+    memset(scope, 0, sizeof(reduct_builder_scope_t));
+    scope->region = region;
+    scope->parent = builder->scope;
+    scope->lambdaNode = lambdaNode;
+    builder->scope = scope;
+}
 
-        if (node->type == REDUCT_RVSDG_NODE_TYPE_PHI && outerValue->ownerKind == REDUCT_RVSDG_OWNER_NODE &&
-            outerValue->node == node)
-        {
-            return reduct_rvsdg_region_get_argument(scope->region, outerValue->index);
-        }
-
-        const reduct_rvsdg_node_info_t* info = reduct_rvsdg_node_get_info(node->type);
-        reduct_rvsdg_user_t* input = node->firstInput;
-        while (input != NULL)
-        {
-            if (input->use != NULL && input->use->origin == outerValue)
-            {
-                if (input->index >= info->dataInputOffset)
-                {
-                    break;
-                }
-            }
-            input = input->next;
-        }
-
-        reduct_rvsdg_origin_t* resultArg;
-        if (input == NULL)
-        {
-            input = reduct_rvsdg_node_add_input(builder->reduct, node);
-            reduct_rvsdg_edge_connect(builder->reduct, outerValue, input);
-
-            resultArg = NULL;
-            reduct_rvsdg_region_t* region = node->firstRegion;
-            while (region != NULL)
-            {
-                reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_add_argument(builder->reduct, region);
-                if (region == scope->region)
-                {
-                    resultArg = arg;
-                }
-                region = region->next;
-            }
-        }
-        else
-        {
-            uint16_t argIndex;
-            if (node->type == REDUCT_RVSDG_NODE_TYPE_GAMMA)
-            {
-                argIndex = input->index - info->dataInputOffset;
-            }
-            else
-            {
-                argIndex = (scope->region->argumentCount - node->inputCount) + input->index;
-            }
-            resultArg = reduct_rvsdg_region_get_argument(scope->region, argIndex);
-        }
-
-        return resultArg;
-    }
-
-    return outerValue;
+static inline void reduct_builder_exit_scope(reduct_builder_t* builder)
+{
+    assert(builder != NULL);
+    assert(builder->scope != NULL);
+    builder->scope = builder->scope->parent;
 }
 
 static reduct_rvsdg_origin_t* reduct_builder_resolve_origin(reduct_builder_t* builder, reduct_builder_scope_t* scope,
@@ -123,7 +75,7 @@ static reduct_rvsdg_origin_t* reduct_builder_resolve_origin(reduct_builder_t* bu
     reduct_rvsdg_origin_t* outerValue = reduct_builder_resolve_origin(builder, scope->parent, origin);
 
     reduct_rvsdg_region_t* chain[16];
-    int depth = 0;
+    int32_t depth = 0;
     reduct_rvsdg_region_t* curr = scope->region;
     reduct_rvsdg_region_t* target = scope->parent->region;
 
@@ -139,13 +91,25 @@ static reduct_rvsdg_origin_t* reduct_builder_resolve_origin(reduct_builder_t* bu
     }
 
     reduct_rvsdg_origin_t* val = outerValue;
-    for (int i = depth - 1; i >= 0; i--)
+    for (int32_t i = depth - 1; i >= 0; i--)
     {
-        reduct_builder_scope_t dummy = {.region = chain[i], .parent = NULL};
-        val = reduct_builder_lift_origin(builder, &dummy, val);
+        val = reduct_rvsdg_region_lift_origin(builder->reduct, chain[i], val);
     }
 
     return val;
+}
+
+static inline reduct_builder_scope_t* reduct_builder_find_lambda_scope(reduct_builder_scope_t* scope)
+{
+    while (scope != NULL)
+    {
+        if (scope->lambdaNode != NULL)
+        {
+            return scope;
+        }
+        scope = scope->parent;
+    }
+    return NULL;
 }
 
 static reduct_builder_local_t* reduct_builder_resolve_local(reduct_builder_t* builder, reduct_builder_scope_t* scope,
@@ -155,6 +119,7 @@ static reduct_builder_local_t* reduct_builder_resolve_local(reduct_builder_t* bu
     assert(scope != NULL);
     assert(key != NULL);
 
+    key = reduct_atom_ensure_interned(builder->reduct, key);
     for (size_t i = 0; i < scope->localAmount; i++)
     {
         if (scope->locals[i].key == key)
@@ -176,15 +141,10 @@ static reduct_builder_local_t* reduct_builder_resolve_local(reduct_builder_t* bu
 
     if (outer->value == NULL)
     {
-        reduct_builder_scope_t* scope = builder->scope;
-        while (scope != NULL && scope->lambdaNode == NULL)
+        reduct_builder_scope_t* lambdaScope = reduct_builder_find_lambda_scope(scope);
+        if (lambdaScope != NULL)
         {
-            scope = scope->parent;
-        }
-
-        if (scope != NULL)
-        {
-            reduct_rvsdg_node_t* lambda = scope->lambdaNode;
+            reduct_rvsdg_node_t* lambda = lambdaScope->lambdaNode;
 
             if (!reduct_rvsdg_node_is_inside_phi(lambda))
             {
@@ -192,15 +152,15 @@ static reduct_builder_local_t* reduct_builder_resolve_local(reduct_builder_t* bu
             }
 
             reduct_rvsdg_node_t* phi = lambda->parent->parent;
-            
-            reduct_rvsdg_origin_t* callable = reduct_builder_resolve_origin(builder, scope, phi->firstOutput);
-            return reduct_builder_add_local_to_scope(builder, scope, key, callable);
+
+            reduct_rvsdg_origin_t* callable = reduct_builder_resolve_origin(builder, lambdaScope, phi->output);
+            return reduct_builder_add_local_to_scope(builder, lambdaScope, key, callable);
         }
 
         REDUCT_ERROR_COMPILE_LAST(builder, "variable '%.*s' is not yet defined", key->length, key->string);
     }
 
-    reduct_rvsdg_origin_t* resultArg = reduct_builder_lift_origin(builder, scope, outer->value);
+    reduct_rvsdg_origin_t* resultArg = reduct_builder_resolve_origin(builder, scope, outer->value);
     return reduct_builder_add_local_to_scope(builder, scope, key, resultArg);
 }
 
@@ -214,28 +174,22 @@ static reduct_rvsdg_origin_t* reduct_build_quote(reduct_builder_t* builder, redu
 
     return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
         reduct_list_second(builder->reduct, list))
-        ->firstOutput;
+        ->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_recur(reduct_builder_t* builder, reduct_list_t* list)
 {
-    reduct_builder_scope_t* s = builder->scope;
-    while (s != NULL && s->lambdaNode == NULL)
-    {
-        s = s->parent;
-    }
+    reduct_builder_scope_t* scope = reduct_builder_find_lambda_scope(builder->scope);
+    REDUCT_ERROR_COMPILE_ASSERT(builder, scope != NULL, "recur: must be called within a lambda");
 
-    REDUCT_ERROR_COMPILE_ASSERT(builder, s != NULL, "recur: must be called within a lambda");
-
-    reduct_rvsdg_node_t* lambda = s->lambdaNode;
-
+    reduct_rvsdg_node_t* lambda = scope->lambdaNode;
     if (!reduct_rvsdg_node_is_inside_phi(lambda))
     {
         reduct_rvsdg_node_phi_wrap_lambda(builder->reduct, lambda);
     }
 
     reduct_rvsdg_node_t* phi = lambda->parent->parent;
-    reduct_rvsdg_origin_t* callable = reduct_builder_resolve_origin(builder, builder->scope, phi->firstOutput);
+    reduct_rvsdg_origin_t* callable = reduct_builder_resolve_origin(builder, builder->scope, phi->output);
 
     reduct_rvsdg_node_t* call = reduct_rvsdg_node_new_call(builder->reduct, builder->scope->region, callable);
 
@@ -248,7 +202,7 @@ static reduct_rvsdg_origin_t* reduct_build_recur(reduct_builder_t* builder, redu
         reduct_rvsdg_edge_connect(builder->reduct, argOrigin, input);
     }
 
-    return call->firstOutput;
+    return call->output;
 }
 
 static reduct_handle_t reduct_build_list_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
@@ -282,8 +236,8 @@ static reduct_rvsdg_origin_t* reduct_build_lambda(reduct_builder_t* builder, red
 
     reduct_rvsdg_node_t* lambda = reduct_rvsdg_node_new_lambda(builder->reduct, builder->scope->region);
 
-    reduct_builder_scope_t scope = {.region = lambda->firstRegion, .parent = builder->scope, .lambdaNode = lambda};
-    builder->scope = &scope;
+    reduct_builder_scope_t scope;
+    reduct_builder_enter_scope(builder, &scope, lambda->firstRegion, lambda);
 
     reduct_list_iter_t iter = REDUCT_LIST_ITER(REDUCT_HANDLE_TO_LIST(args));
     reduct_list_chunk_t chunk;
@@ -296,21 +250,31 @@ static reduct_rvsdg_origin_t* reduct_build_lambda(reduct_builder_t* builder, red
                 "lambda: parameter must be an atom, got %s", REDUCT_HANDLE_GET_TYPE_STRING(param));
 
             reduct_rvsdg_origin_t* value = reduct_rvsdg_region_add_argument(builder->reduct, lambda->firstRegion);
-            reduct_builder_add_local(builder, REDUCT_HANDLE_TO_ATOM(param), value);
+
+            reduct_atom_t* key = REDUCT_HANDLE_TO_ATOM(param);
+            if (key->length > 0 && key->string[0] == '*')
+            {
+                lambda->flags |= REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC;
+                reduct_atom_t* nameOnly = reduct_atom_substr(builder->reduct, key, 1, key->length - 1);
+                nameOnly = reduct_atom_ensure_interned(builder->reduct, nameOnly);
+                reduct_builder_add_local(builder, nameOnly, value);
+            }
+
+            reduct_builder_add_local(builder, key, value);
         }
     }
 
     reduct_rvsdg_origin_t* origin = reduct_build_generic_block(builder, REDUCT_HANDLE_FROM_LIST(list), 2);
-    reduct_rvsdg_edge_connect(builder->reduct, origin, lambda->firstRegion->firstResult);
+    reduct_rvsdg_edge_connect(builder->reduct, origin, lambda->firstRegion->result);
 
-    builder->scope = builder->scope->parent;
+    reduct_builder_exit_scope(builder);
 
     if (reduct_rvsdg_node_is_inside_phi(lambda))
     {
-        return lambda->parent->parent->firstOutput;
+        return lambda->parent->parent->output;
     }
 
-    return lambda->firstOutput;
+    return lambda->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_thread(reduct_builder_t* builder, reduct_list_t* list)
@@ -381,7 +345,8 @@ static reduct_rvsdg_origin_t* reduct_build_def(reduct_builder_t* builder, reduct
         REDUCT_HANDLE_GET_TYPE_STRING(name));
 
     reduct_builder_local_t* local = reduct_builder_add_local(builder, REDUCT_HANDLE_TO_ATOM(name), NULL);
-    local->value = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));;
+    local->value = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
+    ;
     return local->value;
 }
 
@@ -403,30 +368,28 @@ static reduct_rvsdg_origin_t* reduct_build_if(reduct_builder_t* builder, reduct_
 
     reduct_rvsdg_edge_connect(builder->reduct, condOrigin, reduct_rvsdg_node_get_input(gamma, 0));
 
-    reduct_rvsdg_region_t* thenRegion = gamma->firstRegion;
-    reduct_rvsdg_region_t* elseRegion = gamma->firstRegion->next;
+    reduct_rvsdg_region_t* elseRegion = gamma->firstRegion;
+    reduct_rvsdg_region_t* thenRegion = gamma->firstRegion->next;
 
     {
-        reduct_rvsdg_region_add_result(builder->reduct, thenRegion);
-        reduct_builder_scope_t scope = {.region = thenRegion, .parent = builder->scope};
-        builder->scope = &scope;
-
-        reduct_rvsdg_origin_t* result = reduct_build_handle(builder, then);
-        reduct_rvsdg_edge_connect(builder->reduct, result, thenRegion->firstResult);
-        builder->scope = builder->scope->parent;
-    }
-
-    {
-        reduct_rvsdg_region_add_result(builder->reduct, elseRegion);
-        reduct_builder_scope_t scope = {.region = elseRegion, .parent = builder->scope};
-        builder->scope = &scope;
+        reduct_builder_scope_t scope;
+        reduct_builder_enter_scope(builder, &scope, elseRegion, NULL);
 
         reduct_rvsdg_origin_t* result = reduct_build_handle(builder, els);
-        reduct_rvsdg_edge_connect(builder->reduct, result, elseRegion->firstResult);
-        builder->scope = builder->scope->parent;
+        reduct_rvsdg_edge_connect(builder->reduct, result, elseRegion->result);
+        reduct_builder_exit_scope(builder);
     }
 
-    return gamma->firstOutput;
+    {
+        reduct_builder_scope_t scope;
+        reduct_builder_enter_scope(builder, &scope, thenRegion, NULL);
+
+        reduct_rvsdg_origin_t* result = reduct_build_handle(builder, then);
+        reduct_rvsdg_edge_connect(builder->reduct, result, thenRegion->result);
+        reduct_builder_exit_scope(builder);
+    }
+
+    return gamma->output;
 }
 
 static reduct_list_t* reduct_build_get_pair(reduct_builder_t* builder, reduct_handle_t handle, const char* name)
@@ -449,45 +412,45 @@ static reduct_rvsdg_origin_t* reduct_build_and_or_internal(reduct_builder_t* bui
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
     reduct_rvsdg_edge_connect(builder->reduct, current, reduct_rvsdg_node_get_input(gamma, 0));
 
-    reduct_rvsdg_region_t* truthyRegion = gamma->firstRegion;
-    reduct_rvsdg_region_t* falsyRegion = gamma->firstRegion->next;
-    reduct_rvsdg_region_add_result(builder->reduct, truthyRegion);
-    reduct_rvsdg_region_add_result(builder->reduct, falsyRegion);
+    reduct_rvsdg_region_t* falsyRegion = gamma->firstRegion;
+    reduct_rvsdg_region_t* truthyRegion = gamma->firstRegion->next;
 
     if (!isOr)
     {
         {
-            reduct_builder_scope_t scope = {.region = truthyRegion, .parent = builder->scope};
-            reduct_builder_scope_t* prev = builder->scope;
-            builder->scope = &scope;
-            reduct_rvsdg_origin_t* res = reduct_build_and_or_internal(builder, list, index + 1, false);
-            reduct_rvsdg_edge_connect(builder->reduct, res, truthyRegion->firstResult);
-            builder->scope = prev;
+            reduct_builder_scope_t scope;
+            reduct_builder_enter_scope(builder, &scope, falsyRegion, NULL);
+            reduct_rvsdg_edge_connect(builder->reduct, reduct_builder_resolve_origin(builder, &scope, current),
+                falsyRegion->result);
+            reduct_builder_exit_scope(builder);
         }
         {
-            reduct_builder_scope_t scope = {.region = falsyRegion, .parent = builder->scope};
-            reduct_rvsdg_edge_connect(builder->reduct, reduct_builder_resolve_origin(builder, &scope, current),
-                falsyRegion->firstResult);
+            reduct_builder_scope_t scope;
+            reduct_builder_enter_scope(builder, &scope, truthyRegion, NULL);
+            reduct_rvsdg_origin_t* res = reduct_build_and_or_internal(builder, list, index + 1, false);
+            reduct_rvsdg_edge_connect(builder->reduct, res, truthyRegion->result);
+            reduct_builder_exit_scope(builder);
         }
     }
     else
     {
         {
-            reduct_builder_scope_t scope = {.region = truthyRegion, .parent = builder->scope};
-            reduct_rvsdg_edge_connect(builder->reduct, reduct_builder_resolve_origin(builder, &scope, current),
-                truthyRegion->firstResult);
+            reduct_builder_scope_t scope;
+            reduct_builder_enter_scope(builder, &scope, falsyRegion, NULL);
+            reduct_rvsdg_origin_t* res = reduct_build_and_or_internal(builder, list, index + 1, true);
+            reduct_rvsdg_edge_connect(builder->reduct, res, falsyRegion->result);
+            reduct_builder_exit_scope(builder);
         }
         {
-            reduct_builder_scope_t scope = {.region = falsyRegion, .parent = builder->scope};
-            reduct_builder_scope_t* prev = builder->scope;
-            builder->scope = &scope;
-            reduct_rvsdg_origin_t* res = reduct_build_and_or_internal(builder, list, index + 1, true);
-            reduct_rvsdg_edge_connect(builder->reduct, res, falsyRegion->firstResult);
-            builder->scope = prev;
+            reduct_builder_scope_t scope;
+            reduct_builder_enter_scope(builder, &scope, truthyRegion, NULL);
+            reduct_rvsdg_edge_connect(builder->reduct, reduct_builder_resolve_origin(builder, &scope, current),
+                truthyRegion->result);
+            reduct_builder_exit_scope(builder);
         }
     }
 
-    return gamma->firstOutput;
+    return gamma->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_not(reduct_builder_t* builder, reduct_list_t* list)
@@ -498,25 +461,21 @@ static reduct_rvsdg_origin_t* reduct_build_not(reduct_builder_t* builder, reduct
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
     reduct_rvsdg_edge_connect(builder->reduct, arg, reduct_rvsdg_node_get_input(gamma, 0));
 
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion);       // Truthy
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion->next); // Falsy
-
     reduct_rvsdg_edge_connect(builder->reduct,
-        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_FALSE())->firstOutput,
-        gamma->firstRegion->firstResult);
+        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_TRUE())->output,
+        gamma->firstRegion->result);
     reduct_rvsdg_edge_connect(builder->reduct,
-        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion->next, REDUCT_HANDLE_TRUE())
-            ->firstOutput,
-        gamma->firstRegion->next->firstResult);
+        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion->next, REDUCT_HANDLE_FALSE())->output,
+        gamma->firstRegion->next->result);
 
-    return gamma->firstOutput;
+    return gamma->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_and(reduct_builder_t* builder, reduct_list_t* list)
 {
     if (list->length == 1)
         return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE())
-            ->firstOutput;
+            ->output;
     return reduct_build_and_or_internal(builder, list, 1, false);
 }
 
@@ -524,7 +483,7 @@ static reduct_rvsdg_origin_t* reduct_build_or(reduct_builder_t* builder, reduct_
 {
     if (list->length == 1)
         return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE())
-            ->firstOutput;
+            ->output;
     return reduct_build_and_or_internal(builder, list, 1, true);
 }
 
@@ -540,19 +499,19 @@ static reduct_rvsdg_origin_t* reduct_build_variadic_op(reduct_builder_t* builder
         {
             reduct_rvsdg_origin_t* zero = reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
                 REDUCT_HANDLE_FROM_NUMBER(0.0))
-                                              ->firstOutput;
+                                              ->output;
             return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_SUB, zero,
                 acc)
-                ->firstOutput;
+                ->output;
         }
         if (op == REDUCT_OPCODE_DIV)
         {
             reduct_rvsdg_origin_t* one = reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
                 REDUCT_HANDLE_FROM_NUMBER(1.0))
-                                             ->firstOutput;
+                                             ->output;
             return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_DIV, one,
                 acc)
-                ->firstOutput;
+                ->output;
         }
         return acc;
     }
@@ -560,7 +519,7 @@ static reduct_rvsdg_origin_t* reduct_build_variadic_op(reduct_builder_t* builder
     for (size_t i = 2; i < list->length; i++)
     {
         reduct_rvsdg_origin_t* next = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, i));
-        acc = reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, op, acc, next)->firstOutput;
+        acc = reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, op, acc, next)->output;
     }
     return acc;
 }
@@ -571,9 +530,9 @@ static reduct_rvsdg_origin_t* reduct_build_inc(reduct_builder_t* builder, reduct
     reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
     reduct_rvsdg_origin_t* one =
         reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FROM_NUMBER(1.0))
-            ->firstOutput;
+            ->output;
     return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_ADD, arg, one)
-        ->firstOutput;
+        ->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_dec(reduct_builder_t* builder, reduct_list_t* list)
@@ -582,9 +541,9 @@ static reduct_rvsdg_origin_t* reduct_build_dec(reduct_builder_t* builder, reduct
     reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
     reduct_rvsdg_origin_t* one =
         reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FROM_NUMBER(1.0))
-            ->firstOutput;
+            ->output;
     return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_SUB, arg, one)
-        ->firstOutput;
+        ->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_comparison_internal(reduct_builder_t* builder, reduct_list_t* list,
@@ -592,7 +551,7 @@ static reduct_rvsdg_origin_t* reduct_build_comparison_internal(reduct_builder_t*
 {
     reduct_rvsdg_origin_t* right = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, index));
     reduct_rvsdg_origin_t* cmp =
-        reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, op, left, right)->firstOutput;
+        reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, op, left, right)->output;
 
     if (index == list->length - 1)
     {
@@ -602,25 +561,20 @@ static reduct_rvsdg_origin_t* reduct_build_comparison_internal(reduct_builder_t*
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
     reduct_rvsdg_edge_connect(builder->reduct, cmp, reduct_rvsdg_node_get_input(gamma, 0));
 
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion);       // Truthy
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion->next); // Falsy
-
     reduct_rvsdg_edge_connect(builder->reduct,
-        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion->next, REDUCT_HANDLE_FALSE())
-            ->firstOutput,
-        gamma->firstRegion->next->firstResult);
+        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_FALSE())->output,
+        gamma->firstRegion->result);
 
     {
-        reduct_builder_scope_t scope = {.region = gamma->firstRegion, .parent = builder->scope};
-        reduct_builder_scope_t* prev = builder->scope;
-        builder->scope = &scope;
+        reduct_builder_scope_t scope;
+        reduct_builder_enter_scope(builder, &scope, gamma->firstRegion->next, NULL);
         reduct_rvsdg_origin_t* next = reduct_build_comparison_internal(builder, list, index + 1, op,
             reduct_builder_resolve_origin(builder, &scope, right));
-        reduct_rvsdg_edge_connect(builder->reduct, next, gamma->firstRegion->firstResult);
-        builder->scope = prev;
+        reduct_rvsdg_edge_connect(builder->reduct, next, gamma->firstRegion->next->result);
+        reduct_builder_exit_scope(builder);
     }
 
-    return gamma->firstOutput;
+    return gamma->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_chained_comparison(reduct_builder_t* builder, reduct_list_t* list,
@@ -637,7 +591,7 @@ static reduct_rvsdg_origin_t* reduct_build_cond_internal(reduct_builder_t* build
     {
         return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
             REDUCT_HANDLE_NIL(builder->reduct))
-            ->firstOutput;
+            ->output;
     }
 
     reduct_list_t* pair = reduct_build_get_pair(builder, reduct_list_nth(builder->reduct, list, index), "cond");
@@ -646,28 +600,23 @@ static reduct_rvsdg_origin_t* reduct_build_cond_internal(reduct_builder_t* build
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
     reduct_rvsdg_edge_connect(builder->reduct, cond, reduct_rvsdg_node_get_input(gamma, 0));
 
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion);       // Truthy
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion->next); // Falsy
-
     {
-        reduct_builder_scope_t scope = {.region = gamma->firstRegion, .parent = builder->scope};
-        reduct_builder_scope_t* prev = builder->scope;
-        builder->scope = &scope;
-        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, reduct_list_second(builder->reduct, pair));
-        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->firstResult);
-        builder->scope = prev;
-    }
-
-    {
-        reduct_builder_scope_t scope = {.region = gamma->firstRegion->next, .parent = builder->scope};
-        reduct_builder_scope_t* prev = builder->scope;
-        builder->scope = &scope;
+        reduct_builder_scope_t scope;
+        reduct_builder_enter_scope(builder, &scope, gamma->firstRegion, NULL);
         reduct_rvsdg_origin_t* res = reduct_build_cond_internal(builder, list, index + 1);
-        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->next->firstResult);
-        builder->scope = prev;
+        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->result);
+        reduct_builder_exit_scope(builder);
     }
 
-    return gamma->firstOutput;
+    {
+        reduct_builder_scope_t scope;
+        reduct_builder_enter_scope(builder, &scope, gamma->firstRegion->next, NULL);
+        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, reduct_list_second(builder->reduct, pair));
+        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->next->result);
+        reduct_builder_exit_scope(builder);
+    }
+
+    return gamma->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_cond(reduct_builder_t* builder, reduct_list_t* list)
@@ -688,34 +637,29 @@ static reduct_rvsdg_origin_t* reduct_build_match_internal(reduct_builder_t* buil
 
     reduct_rvsdg_origin_t* cmp =
         reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_EQ, target, caseVal)
-            ->firstOutput;
+            ->output;
 
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
     reduct_rvsdg_edge_connect(builder->reduct, cmp, reduct_rvsdg_node_get_input(gamma, 0));
 
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion);       // Truthy
-    reduct_rvsdg_region_add_result(builder->reduct, gamma->firstRegion->next); // Falsy
-
     {
-        reduct_builder_scope_t scope = {.region = gamma->firstRegion, .parent = builder->scope};
-        reduct_builder_scope_t* prev = builder->scope;
-        builder->scope = &scope;
-        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, reduct_list_second(builder->reduct, pair));
-        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->firstResult);
-        builder->scope = prev;
-    }
-
-    {
-        reduct_builder_scope_t scope = {.region = gamma->firstRegion->next, .parent = builder->scope};
-        reduct_builder_scope_t* prev = builder->scope;
-        builder->scope = &scope;
+        reduct_builder_scope_t scope;
+        reduct_builder_enter_scope(builder, &scope, gamma->firstRegion, NULL);
         reduct_rvsdg_origin_t* res = reduct_build_match_internal(builder, list, index + 1,
             reduct_builder_resolve_origin(builder, &scope, target));
-        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->next->firstResult);
-        builder->scope = prev;
+        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->result);
+        reduct_builder_exit_scope(builder);
     }
 
-    return gamma->firstOutput;
+    {
+        reduct_builder_scope_t scope;
+        reduct_builder_enter_scope(builder, &scope, gamma->firstRegion->next, NULL);
+        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, reduct_list_second(builder->reduct, pair));
+        reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->next->result);
+        reduct_builder_exit_scope(builder);
+    }
+
+    return gamma->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_match(reduct_builder_t* builder, reduct_list_t* list)
@@ -950,7 +894,7 @@ static reduct_rvsdg_origin_t* reduct_build_bit_not(reduct_builder_t* builder, re
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "~: expected 1 argument");
     return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_BNOT,
         reduct_build_handle(builder, reduct_list_second(builder->reduct, list)))
-        ->firstOutput;
+        ->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_bit_shl(reduct_builder_t* builder, reduct_list_t* list)
@@ -1034,14 +978,14 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_atom(reduct_builder_t
 
     if (REDUCT_HANDLE_IS_NUMBER_SHAPED(handle))
     {
-        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, handle)->firstOutput;
+        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, handle)->output;
     }
 
     reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(handle);
     if (atom->flags & REDUCT_ATOM_FLAG_QUOTED || reduct_atom_is_intrinsic(builder->reduct, atom) ||
         reduct_atom_is_native(builder->reduct, atom))
     {
-        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, handle)->firstOutput;
+        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, handle)->output;
     }
 
     reduct_builder_local_t* local = reduct_builder_resolve_local(builder, builder->scope, atom);
@@ -1057,14 +1001,14 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_atom(reduct_builder_t
         if (atom->string[0] == 'e')
         {
             return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_E())
-                ->firstOutput;
+                ->output;
         }
         break;
     case 2:
         if (memcmp(atom->string, "pi", 2) == 0)
         {
             return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_PI())
-                ->firstOutput;
+                ->output;
         }
         break;
     case 3:
@@ -1072,21 +1016,21 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_atom(reduct_builder_t
         {
             return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
                 REDUCT_HANDLE_NIL(builder->reduct))
-                ->firstOutput;
+                ->output;
         }
         break;
     case 4:
         if (memcmp(atom->string, "true", 4) == 0)
         {
             return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_TRUE())
-                ->firstOutput;
+                ->output;
         }
         break;
     case 5:
         if (memcmp(atom->string, "false", 5) == 0)
         {
             return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE())
-                ->firstOutput;
+                ->output;
         }
         break;
     }
@@ -1122,8 +1066,9 @@ static inline bool reduct_builder_is_data(reduct_builder_t* builder, reduct_hand
     return false;
 }
 
-static inline reduct_rvsdg_origin_t* reduct_build_dispatch_list(reduct_builder_t* builder, reduct_list_t* list)
+static inline reduct_rvsdg_origin_t* reduct_build_dispatch_list(reduct_builder_t* builder, reduct_handle_t handle)
 {
+    reduct_list_t* list = REDUCT_HANDLE_TO_LIST(handle);
     assert(builder != NULL);
     assert(list != NULL);
 
@@ -1131,13 +1076,13 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_list(reduct_builder_t
     {
         return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
             REDUCT_HANDLE_NIL(builder->reduct))
-            ->firstOutput;
+            ->output;
     }
 
     reduct_handle_t head = reduct_list_first(builder->reduct, list);
     if (reduct_builder_is_data(builder, head))
     {
-        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, head)->firstOutput;
+        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, handle)->output;
     }
 
     if (REDUCT_HANDLE_IS_INTRINSIC(builder->reduct, head))
@@ -1161,7 +1106,7 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_list(reduct_builder_t
         }
     }
 
-    return call->firstOutput;
+    return call->output;
 }
 
 REDUCT_API reduct_handle_t reduct_build(reduct_t* reduct, reduct_handle_t ast)
@@ -1183,12 +1128,16 @@ REDUCT_API reduct_handle_t reduct_build(reduct_t* reduct, reduct_handle_t ast)
     };
 
     reduct_rvsdg_node_t* lambda = reduct_rvsdg_node_new_lambda(builder.reduct, NULL);
+    reduct_item_t* lambdaItem = REDUCT_CONTAINER_OF(lambda, reduct_item_t, rvsdgNode);
+    reduct_item_t* astItem = REDUCT_HANDLE_TO_ITEM(ast);
+    lambdaItem->inputId = astItem->inputId;
+    lambdaItem->position = astItem->position;
 
-    reduct_builder_scope_t scope = {.region = lambda->firstRegion, .lambdaNode = lambda};
-    builder.scope = &scope;
+    reduct_builder_scope_t scope;
+    reduct_builder_enter_scope(&builder, &scope, lambda->firstRegion, lambda);
 
     reduct_rvsdg_origin_t* origin = reduct_build_handle(&builder, ast);
-    reduct_rvsdg_edge_connect(builder.reduct, origin, lambda->firstRegion->firstResult);
+    reduct_rvsdg_edge_connect(builder.reduct, origin, lambda->firstRegion->result);
 
     return REDUCT_HANDLE_FROM_RVSDG_NODE(lambda);
 }
@@ -1214,11 +1163,21 @@ REDUCT_API reduct_rvsdg_origin_t* reduct_build_handle(reduct_builder_t* builder,
     }
     else if (REDUCT_HANDLE_IS_LIST(handle))
     {
-        out = reduct_build_dispatch_list(builder, REDUCT_HANDLE_TO_LIST(handle));
+        out = reduct_build_dispatch_list(builder, handle);
     }
     else
     {
         REDUCT_ERROR_COMPILE_LAST(builder, "unexpected %s", REDUCT_HANDLE_GET_TYPE_STRING(handle));
+    }
+
+    if (out != NULL && out->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+    {
+        reduct_item_t* nodeItem = REDUCT_CONTAINER_OF(out->node, reduct_item_t, rvsdgNode);
+        if (nodeItem->position == 0 && builder->lastItem != NULL)
+        {
+            nodeItem->inputId = builder->lastItem->inputId;
+            nodeItem->position = builder->lastItem->position;
+        }
     }
 
     builder->lastItem = previousItem;
@@ -1261,7 +1220,7 @@ REDUCT_API reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* bu
         }
     }
 
-    return node->firstOutput;
+    return node->output;
 }
 
 REDUCT_API reduct_rvsdg_origin_t* reduct_build_generic_block(reduct_builder_t* builder, reduct_handle_t list,
