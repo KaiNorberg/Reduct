@@ -6,6 +6,8 @@
 
 struct reduct;
 struct reduct_list;
+struct reduct_builder;
+struct reduct_list;
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 #ifdef REDUCT_BUILD_LIB
@@ -115,6 +117,17 @@ typedef struct
 {
     uint64_t _value;
 } reduct_handle_t;
+
+/**
+ * @brief Native function pointer type.
+ */
+typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
+
+/**
+ * @brief Intrinsic handler function type.
+ */
+typedef struct reduct_rvsdg_origin* (
+    *reduct_native_intrinsic_fn)(struct reduct_builder* builder, struct reduct_list* expr);
 
 /**
  * @brief Module initialization function type.

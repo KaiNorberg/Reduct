@@ -137,7 +137,10 @@ static inline REDUCT_ALWAYS_INLINE uint32_t reduct_eval_bundle_args(reduct_t* re
     return argc;
 }
 
-static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCount)
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((hot))
+#endif
+static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCount)
 {
     assert(reduct != NULL);
 
@@ -158,12 +161,14 @@ static inline reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initial
     goto* dispatchTable[REDUCT_INST_GET_OP(inst)]
 
 #define UPDATE_STATE() \
+    regs = reduct->regs; \
     frame = &reduct->frames[reduct->frameCount - 1]; \
     ip = frame->ip; \
     base = regs + frame->base; \
     constants = frame->closure->constants
 
 #define UPDATE_BASE() \
+    regs = reduct->regs; \
     base = regs + frame->base
 
 #define PREPARE_CALLABLE() \
@@ -275,6 +280,12 @@ LABEL_C_OP(_label, { \
         [REDUCT_OPCODE_JLE] = &&label_jle, [REDUCT_OPCODE_JLE_CONST] = &&label_jle_k,
         [REDUCT_OPCODE_JGT] = &&label_jgt, [REDUCT_OPCODE_JGT_CONST] = &&label_jgt_k,
         [REDUCT_OPCODE_JGE] = &&label_jge, [REDUCT_OPCODE_JGE_CONST] = &&label_jge_k,
+        [REDUCT_OPCODE_LEN] = &&label_len, [REDUCT_OPCODE_LEN_CONST] = &&label_len_k,
+        [REDUCT_OPCODE_NTH2] = &&label_nth2, [REDUCT_OPCODE_NTH2_CONST] = &&label_nth2_k,
+        [REDUCT_OPCODE_NTH3] = &&label_nth3, [REDUCT_OPCODE_NTH3_CONST] = &&label_nth3_k,
+        [REDUCT_OPCODE_RANGE1] = &&label_range1, [REDUCT_OPCODE_RANGE1_CONST] = &&label_range1_k,
+        [REDUCT_OPCODE_RANGE2] = &&label_range2, [REDUCT_OPCODE_RANGE2_CONST] = &&label_range2_k,
+        [REDUCT_OPCODE_RANGE3] = &&label_range3, [REDUCT_OPCODE_RANGE3_CONST] = &&label_range3_k,
     };
 
 #define LABEL_C_OP(_label, ...) \
@@ -335,8 +346,6 @@ LABEL_C_OP(label_call, {
         b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
 
         reduct_eval_push_frame(reduct, closure, frame->base + a);
-        regs = reduct->regs;
-
         UPDATE_STATE();
         DISPATCH();
     }
@@ -372,7 +381,6 @@ LABEL_C_OP(label_tailcall, {
         }
 
         reduct_eval_tail_frame(reduct, closure);
-        regs = reduct->regs;
 
         UPDATE_STATE();
 
@@ -408,7 +416,6 @@ label_recur:
     b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
 
     reduct_eval_push_frame(reduct, closure, frame->base + a);
-    regs = reduct->regs;
 
     UPDATE_STATE();
     DISPATCH();
@@ -485,6 +492,40 @@ LABEL_C_OP(label_bnot, {
 })
 OP_SHIFT(label_shl, <<, "left")
 OP_SHIFT(label_shr, >>, "right")
+LABEL_C_OP(label_len, {
+    DECODE_A();
+    base[a] = REDUCT_HANDLE_FROM_NUMBER(reduct_handle_as_item(reduct, valC)->length);
+    DISPATCH();
+})
+LABEL_C_OP(label_nth2, {
+    DECODE_A();
+    DECODE_B();
+    base[a] = reduct_nth(reduct, base[b], valC, REDUCT_HANDLE_NIL(reduct));
+    DISPATCH();
+})
+LABEL_C_OP(label_nth3, {
+    DECODE_A();
+    DECODE_B();
+    base[a] = reduct_nth(reduct, base[a], base[b], valC);
+    DISPATCH();
+})
+LABEL_C_OP(label_range1, {
+    DECODE_A();
+    base[a] = reduct_range(reduct, REDUCT_HANDLE_FROM_NUMBER(0.0), valC, REDUCT_HANDLE_NIL(reduct));
+    DISPATCH();
+})
+LABEL_C_OP(label_range2, {
+    DECODE_A();
+    DECODE_B();
+    base[a] = reduct_range(reduct, base[b], valC, REDUCT_HANDLE_NIL(reduct));
+    DISPATCH();
+})
+LABEL_C_OP(label_range3, {
+    DECODE_A();
+    DECODE_B();
+    base[a] = reduct_range(reduct, base[a], base[b], valC);
+    DISPATCH();
+})
 label_closure:
 {
     DECODE_A();
@@ -506,8 +547,7 @@ label_nop:
 LABEL_C_OP(label_capture, {
     DECODE_A();
     DECODE_B();
-    reduct_handle_t closureHandle = base[a];
-    reduct_closure_t* closurePtr = &REDUCT_HANDLE_TO_ITEM(closureHandle)->closure;
+    reduct_closure_t* closurePtr = &REDUCT_HANDLE_TO_ITEM(base[a])->closure;
     closurePtr->constants[b] = valC;
     DISPATCH();
 })
@@ -525,7 +565,8 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t handle)
         reduct_handle_t graph = reduct_build(reduct, handle);
         reduct_optimize(reduct, graph, reduct->optimizeFlags);
         reduct_handle_t function = reduct_emit(reduct, graph);
-        return reduct_eval(reduct, function);
+        return REDUCT_HANDLE_FROM_NUMBER(0);
+        //return reduct_eval(reduct, function);
     }
 
     reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(handle);
@@ -546,7 +587,10 @@ REDUCT_API reduct_handle_t reduct_eval_file(reduct_t* reduct, const char* path, 
     assert(path != NULL);
 
     reduct_handle_t ast = reduct_parse_file(reduct, path);
-    return reduct_eval(reduct, ast);
+    reduct_handle_t graph = reduct_build(reduct, ast);
+    reduct_optimize(reduct, graph, optimize);
+    reduct_handle_t function = reduct_emit(reduct, graph);
+    return reduct_eval(reduct, function);
 }
 
 REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str, size_t len,
@@ -556,7 +600,10 @@ REDUCT_API reduct_handle_t reduct_eval_string(reduct_t* reduct, const char* str,
     assert(str != NULL);
 
     reduct_handle_t ast = reduct_parse(reduct, str, len, "<eval>");
-    return reduct_eval(reduct, ast);
+    reduct_handle_t graph = reduct_build(reduct, ast);
+    reduct_optimize(reduct, graph, optimize);
+    reduct_handle_t function = reduct_emit(reduct, graph);
+    return reduct_eval(reduct, function);
 }
 
 REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t callable, size_t argc,

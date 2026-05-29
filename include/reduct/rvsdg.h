@@ -79,8 +79,9 @@ struct reduct_rvsdg_edge;
  * of this region connected to the inputs of the lambda node. The phi node itself only takes inputs for captured
  * variables and a outputs the lambda.
  *
- * @note The paper describes a phi node as being able to contain multiple lambda nodes for mutual recursion. This will not be needed within Reduct.
- * 
+ * @note The paper describes a phi node as being able to contain multiple lambda nodes for mutual recursion. This will
+ * not be needed within Reduct.
+ *
  * @see https://arxiv.org/abs/1912.05036 "RVSDG: An Intermediate Representation for Optimizing Compilers" (Nico
  * Reissmann et al., 2020)
  *
@@ -110,7 +111,7 @@ typedef struct reduct_rvsdg_origin
     };
     uint16_t index;                   ///< The index for the associated output/argument.
     uint16_t useCount;                ///< Length of the `uses` list.
-    struct reduct_rvsdg_edge* uses;   ///< List of edges originating from this output/argument.
+    struct reduct_rvsdg_edge* edges;  ///< List of edges originating from this output/argument.
     struct reduct_rvsdg_origin* next; ///< Next origin in the node/region list.
 } reduct_rvsdg_origin_t;
 
@@ -126,7 +127,7 @@ typedef struct reduct_rvsdg_user
         struct reduct_rvsdg_region* region; ///< The region this user belongs to.
     };
     uint16_t index;                 ///< The index for the associated input/result.
-    struct reduct_rvsdg_edge* use;  ///< The single edge connecting to this input's/result's origin.
+    struct reduct_rvsdg_edge* edge; ///< The single edge connecting to this input's/result's origin.
     struct reduct_rvsdg_user* next; ///< Next user in the node/region list.
 } reduct_rvsdg_user_t;
 
@@ -185,7 +186,7 @@ REDUCT_API const reduct_rvsdg_node_info_t* reduct_rvsdg_node_get_info(reduct_rvs
  */
 typedef struct reduct_rvsdg_node
 {
-    reduct_rvsdg_node_flags_t type;  ///< The type of the node.
+    reduct_rvsdg_node_type_t type;   ///< The type of the node.
     uint8_t inputCount;              ///< Number of input edges.
     uint8_t regionCount;             ///< Number of regions in the node.
     reduct_rvsdg_node_flags_t flags; ///< Node flags, interpretation depends on node type.
@@ -234,6 +235,13 @@ REDUCT_API reduct_rvsdg_edge_t* reduct_rvsdg_edge_new(struct reduct* reduct);
  */
 REDUCT_API void reduct_rvsdg_edge_connect(struct reduct* reduct, reduct_rvsdg_origin_t* origin,
     reduct_rvsdg_user_t* user);
+
+/**
+ * @brief Disconnect an edge from its origin and user.
+ *
+ * @param edge Pointer to the edge to disconnect.
+ */
+REDUCT_API void reduct_rvsdg_edge_disconnect(reduct_rvsdg_edge_t* edge);
 
 /**
  * @brief Allocate a new IR node.
@@ -292,6 +300,21 @@ REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_simple_binary(struct reduc
     struct reduct_rvsdg_origin* right);
 
 /**
+ * @brief Create a simple ternary opcode node.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param region The region to add the node to, or NULL.
+ * @param opcode The opcode to use.
+ * @param a The origin of the first input.
+ * @param b The origin of the second input.
+ * @param c The origin of the third input.
+ * @return The newly allocated node.
+ */
+REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_simple_ternary(struct reduct* reduct,
+    reduct_rvsdg_region_t* region, reduct_opcode_t opcode, struct reduct_rvsdg_origin* a,
+    struct reduct_rvsdg_origin* b, struct reduct_rvsdg_origin* c);
+
+/**
  * @brief Create a lambda node.
  *
  * @param reduct Pointer to the Reduct structure.
@@ -330,6 +353,15 @@ REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_gamma(struct reduct* reduc
 REDUCT_API struct reduct_rvsdg_user* reduct_rvsdg_node_get_input(reduct_rvsdg_node_t* node, uint16_t index);
 
 /**
+ * @brief Get the output of the node connected to an input node of a node by index.
+ * 
+ * @param node The node to search.
+ * @param index The index of the input port.
+ * @return The origin port, or NULL if not found or not connected.
+ */
+REDUCT_API struct reduct_rvsdg_origin* reduct_rvsdg_node_get_input_origin(reduct_rvsdg_node_t* node, uint16_t index);
+
+/**
  * @brief Get the node connected to an input node of a node by index.
  *
  * @param node The node to search.
@@ -337,6 +369,15 @@ REDUCT_API struct reduct_rvsdg_user* reduct_rvsdg_node_get_input(reduct_rvsdg_no
  * @return The input node, or NULL if not found or the port is not connected to a node.
  */
 REDUCT_API struct reduct_rvsdg_node* reduct_rvsdg_node_get_input_node(reduct_rvsdg_node_t* node, uint16_t index);
+
+/**
+ * @brief Redirect all users of a origin to a new origin.
+ *
+ * @param origin The current origin.
+ * @param newOrigin The new origin to redirect users to.
+ */
+REDUCT_API void reduct_rvsdg_origin_redirect_users(struct reduct_rvsdg_origin* origin,
+    struct reduct_rvsdg_origin* newOrigin);
 
 /**
  * @brief Get an argument port of a region by index.
@@ -485,12 +526,19 @@ REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_region_add_argument(struct reduct
 REDUCT_API void reduct_rvsdg_region_add_node(reduct_rvsdg_region_t* region, reduct_rvsdg_node_t* node);
 
 /**
- * @brief Removes a node from a region.
+ * @brief Removes a node from its region.
  *
- * @param region Pointer to the region to remove the node from.
  * @param node Pointer to the node to remove.
  */
-REDUCT_API void reduct_rvsdg_region_remove_node(reduct_rvsdg_region_t* region, reduct_rvsdg_node_t* node);
+REDUCT_API void reduct_rvsdg_region_remove_node(reduct_rvsdg_node_t* node);
+
+/**
+ * @brief Removes from the region and disconnects from any connections a node and any nodes connected to its input.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param node Pointer to the node to delete.
+ */
+REDUCT_API void reduct_rvsdg_node_delete(struct reduct* reduct, reduct_rvsdg_node_t* node);
 
 /**
  * @brief Lift an origin from an outer region to an inner region, creating a new argument in the inner region and
@@ -503,6 +551,17 @@ REDUCT_API void reduct_rvsdg_region_remove_node(reduct_rvsdg_region_t* region, r
  */
 REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_region_lift_origin(struct reduct* reduct, reduct_rvsdg_region_t* region,
     reduct_rvsdg_origin_t* outerValue);
+
+/**
+ * @brief Recursively copy a node.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param region The region to add the copy to, or NULL.
+ * @param node The node to copy.
+ * @return The newly copied node.
+ */
+REDUCT_API struct reduct_rvsdg_node* reduct_rvsdg_node_copy(struct reduct* reduct, reduct_rvsdg_region_t* region,
+    struct reduct_rvsdg_node* node);
 
 /** @} */
 

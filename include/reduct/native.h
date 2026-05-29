@@ -25,25 +25,6 @@ struct reduct_expr;
  */
 
 /**
- * @brief Native function pointer type.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param argc The number of arguments.
- * @param argv The array of arguments.
- * @return The result of the function.
- */
-typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
-
-/**
- * @brief Intrinsic handler function type.
- *
- * @param builder Pointer to the builder context.
- * @param expr The expression being compiled.
- * @return The origin representing the result of the intrinsic.
- */
-typedef reduct_rvsdg_origin_t* (*reduct_native_intrinsic_fn)(struct reduct_builder* builder, struct reduct_list* expr);
-
-/**
  * @brief Native function definition structure.
  */
 typedef struct

@@ -6,88 +6,6 @@
 #include <reduct/opcode.h>
 #include <reduct/optimize.h>
 
-static const char* reduct_dump_opcode_name(reduct_opcode_t op)
-{
-    bool isConst = (op & REDUCT_OPCODE_MODE_CONST) != 0;
-    switch (op & ~REDUCT_OPCODE_MODE_CONST)
-    {
-    case REDUCT_OPCODE_LIST:
-        return "LIST";
-    case REDUCT_OPCODE_JMP:
-        return "JMP";
-    case REDUCT_OPCODE_JMPF:
-        return "JMPF";
-    case REDUCT_OPCODE_JMPT:
-        return "JMPT";
-    case REDUCT_OPCODE_CALL:
-        return isConst ? "CALL_K" : "CALL";
-    case REDUCT_OPCODE_RET:
-        return isConst ? "RET_K" : "RET";
-    case REDUCT_OPCODE_MOV:
-        return isConst ? "MOV_K" : "MOV";
-    case REDUCT_OPCODE_EQ:
-        return isConst ? "EQ_K" : "EQ";
-    case REDUCT_OPCODE_NEQ:
-        return isConst ? "NEQ_K" : "NEQ";
-    case REDUCT_OPCODE_LT:
-        return isConst ? "LT_K" : "LT";
-    case REDUCT_OPCODE_LE:
-        return isConst ? "LE_K" : "LE";
-    case REDUCT_OPCODE_GT:
-        return isConst ? "GT_K" : "GT";
-    case REDUCT_OPCODE_GE:
-        return isConst ? "GE_K" : "GE";
-    case REDUCT_OPCODE_JEQ:
-        return isConst ? "JEQ_K" : "JEQ";
-    case REDUCT_OPCODE_JNEQ:
-        return isConst ? "JNEQ_K" : "JNEQ";
-    case REDUCT_OPCODE_JLT:
-        return isConst ? "JLT_K" : "JLT";
-    case REDUCT_OPCODE_JLE:
-        return isConst ? "JLE_K" : "JLE";
-    case REDUCT_OPCODE_JGT:
-        return isConst ? "JGT_K" : "JGT";
-    case REDUCT_OPCODE_JGE:
-        return isConst ? "JGE_K" : "JGE";
-    case REDUCT_OPCODE_ADD:
-        return isConst ? "ADD_K" : "ADD";
-    case REDUCT_OPCODE_SUB:
-        return isConst ? "SUB_K" : "SUB";
-    case REDUCT_OPCODE_MUL:
-        return isConst ? "MUL_K" : "MUL";
-    case REDUCT_OPCODE_DIV:
-        return isConst ? "DIV_K" : "DIV";
-    case REDUCT_OPCODE_MOD:
-        return isConst ? "MOD_K" : "MOD";
-    case REDUCT_OPCODE_BAND:
-        return isConst ? "BAND_K" : "BAND";
-    case REDUCT_OPCODE_BOR:
-        return isConst ? "BOR_K" : "BOR";
-    case REDUCT_OPCODE_BXOR:
-        return isConst ? "BXOR_K" : "BXOR";
-    case REDUCT_OPCODE_BNOT:
-        return isConst ? "BNOT_K" : "BNOT";
-    case REDUCT_OPCODE_SHL:
-        return isConst ? "SHL_K" : "SHL";
-    case REDUCT_OPCODE_SHR:
-        return isConst ? "SHR_K" : "SHR";
-    case REDUCT_OPCODE_CLOSURE:
-        return "CLOSURE";
-    case REDUCT_OPCODE_NOP:
-        return "NOP";
-    case REDUCT_OPCODE_CAPTURE:
-        return isConst ? "CAPTURE_K" : "CAPTURE";
-    case REDUCT_OPCODE_TAILCALL:
-        return isConst ? "TAILCALL_K" : "TAILCALL";
-    case REDUCT_OPCODE_RECUR:
-        return "RECUR";
-    case REDUCT_OPCODE_TAILRECUR:
-        return "TAILRECUR";
-    default:
-        return "UNKNOWN";
-    }
-}
-
 static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
 {
     if (REDUCT_HANDLE_IS_NUMBER(handle))
@@ -166,63 +84,33 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
         uint32_t c = REDUCT_INST_GET_C(inst);
         int32_t sax = REDUCT_INST_GET_SAX(inst);
 
-        const char* opName = reduct_dump_opcode_name(op);
+        const char* name = REDUCT_OPCODE_GET_NAME(op);
+        const reduct_opcode_layout_t layout = REDUCT_OPCODE_GET_LAYOUT(op);
 
-        fprintf(out, "[%04u] %-12s ", (unsigned int)i, opName);
+        fprintf(out, "[%04u] %-12s ", (unsigned int)i, name);
 
-        switch (op)
+        switch (layout)
         {
-        case REDUCT_OPCODE_LIST:
+        case REDUCT_LAYOUT_AB_RANGE:
             fprintf(out, "R%-5u %-6u", a, b);
             break;
-        case REDUCT_OPCODE_JMP:
+        case REDUCT_LAYOUT_SAX:
             fprintf(out, "%-6d %-6s %-6s", sax, "", "");
             break;
-        case REDUCT_OPCODE_JMPF:
-        case REDUCT_OPCODE_JMPT:
+        case REDUCT_LAYOUT_SAXC:
             fprintf(out, "%-6d %-6s R%-5u", sax, "", c);
             break;
-        case REDUCT_OPCODE_TAILCALL:
-        case REDUCT_OPCODE_TAILCALL_CONST:
-        case REDUCT_OPCODE_CALL:
-        case REDUCT_OPCODE_CALL_CONST:
-        case REDUCT_OPCODE_CAPTURE:
-        case REDUCT_OPCODE_CAPTURE_CONST:
+        case REDUCT_LAYOUT_ABC_RANGE:
             fprintf(out, "R%-5u %-6u %c%-5u", a, b, isConst ? 'K' : 'R', c);
             break;
-        case REDUCT_OPCODE_RET:
-        case REDUCT_OPCODE_RET_CONST:
+        case REDUCT_LAYOUT_C:
             fprintf(out, "%c%-5u %-6s %-6s", isConst ? 'K' : 'R', c, "", "");
             break;
-        case REDUCT_OPCODE_MOV:
-        case REDUCT_OPCODE_MOV_CONST:
-        case REDUCT_OPCODE_BNOT:
-        case REDUCT_OPCODE_BNOT_CONST:
+        case REDUCT_LAYOUT_AC:
             fprintf(out, "R%-5u %-6s %c%-5u", a, "", isConst ? 'K' : 'R', c);
             break;
-        case REDUCT_OPCODE_CLOSURE:
-            fprintf(out, "R%-5u %-6s K%-5u", a, "", c);
-            break;
-        case REDUCT_OPCODE_NOP:
+        case REDUCT_LAYOUT_NONE:
             fprintf(out, "%-6s %-6s %-6s", "", "", "");
-            break;
-        case REDUCT_OPCODE_JEQ:
-        case REDUCT_OPCODE_JEQ_CONST:
-        case REDUCT_OPCODE_JNEQ:
-        case REDUCT_OPCODE_JNEQ_CONST:
-        case REDUCT_OPCODE_JLT:
-        case REDUCT_OPCODE_JLT_CONST:
-        case REDUCT_OPCODE_JLE:
-        case REDUCT_OPCODE_JLE_CONST:
-        case REDUCT_OPCODE_JGT:
-        case REDUCT_OPCODE_JGT_CONST:
-        case REDUCT_OPCODE_JGE:
-        case REDUCT_OPCODE_JGE_CONST:
-            fprintf(out, "R%-5u %-6s %c%-5u", b, "", isConst ? 'K' : 'R', c);
-            break;
-        case REDUCT_OPCODE_RECUR:
-        case REDUCT_OPCODE_TAILRECUR:
-            fprintf(out, "R%-5u %-6u %-6s", a, b, "");
             break;
         default:
             fprintf(out, "R%-5u R%-5u %c%-5u", a, b, isConst ? 'K' : 'R', c);
@@ -453,7 +341,7 @@ static void reduct_dump_gv_node(reduct_t* reduct, reduct_rvsdg_node_t* node, FIL
 
         if (node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
         {
-            fprintf(out, "OP: %s", reduct_dump_opcode_name(node->opcode & ~REDUCT_OPCODE_MODE_CONST));
+            fprintf(out, "OP: %s", REDUCT_OPCODE_GET_NAME(node->opcode));
         }
         else if (node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
         {
@@ -484,7 +372,7 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
         reduct_rvsdg_node_t* node = nodes[n];
         if (node->output != NULL)
         {
-            for (reduct_rvsdg_edge_t* edge = node->output->uses; edge != NULL; edge = edge->next)
+            for (reduct_rvsdg_edge_t* edge = node->output->edges; edge != NULL; edge = edge->next)
             {
                 if (node->regionCount > 0)
                 {
@@ -518,7 +406,7 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
         {
             for (reduct_rvsdg_origin_t* arg = region->firstArgument; arg != NULL; arg = arg->next)
             {
-                for (reduct_rvsdg_edge_t* edge = arg->uses; edge != NULL; edge = edge->next)
+                for (reduct_rvsdg_edge_t* edge = arg->edges; edge != NULL; edge = edge->next)
                 {
                     fprintf(out, "  region_%p_args:arg_%u -> ", (void*)region, arg->index);
                     if (edge->user->ownerKind == REDUCT_RVSDG_OWNER_NODE)

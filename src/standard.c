@@ -2732,7 +2732,6 @@ REDUCT_STDLIB_WRAPPER_2(try, reduct_try)
 REDUCT_STDLIB_WRAPPER_2(map, reduct_map)
 REDUCT_STDLIB_WRAPPER_2(filter, reduct_filter)
 REDUCT_STDLIB_WRAPPER_2(apply, reduct_apply)
-REDUCT_STDLIB_WRAPPER_V1(len, reduct_len)
 REDUCT_STDLIB_WRAPPER_V1(is_atom, reduct_is_atom)
 REDUCT_STDLIB_WRAPPER_V1(is_number, reduct_is_number)
 REDUCT_STDLIB_WRAPPER_V1(is_lambda, reduct_is_lambda)
@@ -2792,22 +2791,6 @@ REDUCT_STDLIB_WRAPPER_R12(sort, reduct_sort)
 REDUCT_STDLIB_WRAPPER_R12(flatten, reduct_flatten)
 REDUCT_STDLIB_WRAPPER_R12(log, reduct_log)
 
-static reduct_handle_t reduct_stdlib_range(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 3, "range: expected 1 to 3 argument(s), got %zu", (size_t)argc);
-    reduct_handle_t start = (argc >= 2) ? argv[0] : REDUCT_HANDLE_NIL(reduct);
-    reduct_handle_t end = (argc == 1) ? argv[0] : (argc >= 2 ? argv[1] : REDUCT_HANDLE_NIL(reduct));
-    reduct_handle_t step = (argc == 3) ? argv[2] : REDUCT_HANDLE_NIL(reduct);
-
-    if (argc == 1)
-    {
-        reduct_handle_t zero = REDUCT_HANDLE_FROM_NUMBER((double)0);
-        return reduct_range(reduct, zero, end, REDUCT_HANDLE_NIL(reduct));
-    }
-
-    return reduct_range(reduct, start, end, step);
-}
-
 static reduct_handle_t reduct_stdlib_concat(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
     return reduct_concat(reduct, argc, argv);
@@ -2833,7 +2816,6 @@ REDUCT_STDLIB_WRAPPER_1(reverse, reduct_reverse)
 REDUCT_STDLIB_WRAPPER_1(unique, reduct_unique)
 REDUCT_STDLIB_WRAPPER_1(keys, reduct_keys)
 REDUCT_STDLIB_WRAPPER_1(values, reduct_values)
-REDUCT_STDLIB_WRAPPER_R23(nth, reduct_nth)
 REDUCT_STDLIB_WRAPPER_R23(slice, reduct_slice)
 REDUCT_STDLIB_WRAPPER_R23(get_in, reduct_get_in)
 REDUCT_STDLIB_WRAPPER_R34(assoc, reduct_assoc)
@@ -2971,14 +2953,13 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
             {"any?", reduct_stdlib_any, NULL},
             {"all?", reduct_stdlib_all, NULL},
             {"sort", reduct_stdlib_sort, NULL},
+            {"find", reduct_stdlib_find, NULL},
         };
         reduct_native_register(reduct, natives, sizeof(natives) / sizeof(reduct_native_t));
     }
     if (sets & REDUCT_STDLIB_SEQUENCES)
     {
         static reduct_native_t natives[] = {
-            {"len", reduct_stdlib_len, NULL},
-            {"range", reduct_stdlib_range, NULL},
             {"concat", reduct_stdlib_concat, NULL},
             {"append", reduct_stdlib_append, NULL},
             {"prepend", reduct_stdlib_prepend, NULL},
@@ -2986,7 +2967,6 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
             {"last", reduct_stdlib_last, NULL},
             {"rest", reduct_stdlib_rest, NULL},
             {"init", reduct_stdlib_init, NULL},
-            {"nth", reduct_stdlib_nth, NULL},
             {"assoc", reduct_stdlib_assoc, NULL},
             {"dissoc", reduct_stdlib_dissoc, NULL},
             {"update", reduct_stdlib_update, NULL},
@@ -2998,7 +2978,6 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
             {"replace", reduct_stdlib_replace, NULL},
             {"unique", reduct_stdlib_unique, NULL},
             {"chunk", reduct_stdlib_chunk, NULL},
-            {"find", reduct_stdlib_find, NULL},
             {"get-in", reduct_stdlib_get_in, NULL},
             {"assoc-in", reduct_stdlib_assoc_in, NULL},
             {"dissoc-in", reduct_stdlib_dissoc_in, NULL},
@@ -3017,7 +2996,6 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
         static reduct_native_t natives[] = {
             {"starts-with?", reduct_stdlib_starts_with, NULL},
             {"ends-with?", reduct_stdlib_ends_with, NULL},
-            {"replace", reduct_stdlib_replace, NULL},
             {"join", reduct_stdlib_join, NULL},
             {"split", reduct_stdlib_split, NULL},
             {"upper", reduct_stdlib_upper, NULL},

@@ -59,12 +59,9 @@ typedef uint32_t reduct_inst_t;
  */
 #define REDUCT_INST_READS_REG(_inst, _reg) \
     ((REDUCT_OPCODE_READS_A(REDUCT_INST_GET_OP(_inst)) && (_reg) == REDUCT_INST_GET_A(_inst)) || \
-        (REDUCT_OPCODE_READS_B(REDUCT_INST_GET_OP(_inst)) && \
-            (_reg) == REDUCT_INST_GET_B(_inst)) || \
-        (REDUCT_OPCODE_READS_C(REDUCT_INST_GET_OP(_inst)) && \
-            (_reg) == REDUCT_INST_GET_C(_inst)) || \
-        (REDUCT_OPCODE_READS_RANGE(REDUCT_INST_GET_OP(_inst)) && \
-            (_reg) >= REDUCT_INST_GET_A(_inst) && \
+        (REDUCT_OPCODE_READS_B(REDUCT_INST_GET_OP(_inst)) && (_reg) == REDUCT_INST_GET_B(_inst)) || \
+        (REDUCT_OPCODE_READS_C(REDUCT_INST_GET_OP(_inst)) && (_reg) == REDUCT_INST_GET_C(_inst)) || \
+        (REDUCT_OPCODE_READS_RANGE(REDUCT_INST_GET_OP(_inst)) && (_reg) >= REDUCT_INST_GET_A(_inst) && \
             (_reg) < REDUCT_INST_GET_A(_inst) + REDUCT_INST_GET_B(_inst)))
 
 /**
@@ -95,7 +92,7 @@ typedef uint32_t reduct_inst_t;
 #define REDUCT_INST_POS_A (REDUCT_INST_POS_OPCODE + REDUCT_INST_WIDTH_OPCODE) ///< A operand position in bits.
 #define REDUCT_INST_POS_B (REDUCT_INST_POS_A + REDUCT_INST_WIDTH_A)           ///< B operand position in bits.
 #define REDUCT_INST_POS_C (REDUCT_INST_POS_B + REDUCT_INST_WIDTH_B)           ///< C operand position in bits.
-#define REDUCT_INST_POS_SAX (REDUCT_INST_POS_A)         ///< SAx operand position in bits.
+#define REDUCT_INST_POS_SAX (REDUCT_INST_POS_A)                               ///< SAx operand position in bits.
 
 #define REDUCT_INST_MASK_OPCODE ((1U << REDUCT_INST_WIDTH_OPCODE) - 1U) ///< Opcode mask.
 #define REDUCT_INST_MASK_A ((1U << REDUCT_INST_WIDTH_A) - 1U)           ///< A operand mask.
@@ -162,8 +159,7 @@ typedef uint32_t reduct_inst_t;
  *
  * @param _inst Instruction.
  */
-#define REDUCT_INST_GET_SAX(_inst) \
-    ((int32_t)(int16_t)(((_inst) >> REDUCT_INST_POS_SAX) & REDUCT_INST_MASK_SAX))
+#define REDUCT_INST_GET_SAX(_inst) ((int32_t)(int16_t)(((_inst) >> REDUCT_INST_POS_SAX) & REDUCT_INST_MASK_SAX))
 
 /**
  * @brief Set the opcode in an instruction.

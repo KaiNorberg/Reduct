@@ -856,6 +856,16 @@ Returns the provided expression without evaluating it.
 
 Calls the currently executing lambda with the provided arguments.
 
+**`(len <item>) -> <number>`**
+
+Returns the total number of items in the list and the number of characters in the atom.
+
+**`(nth <item> <n: number> [default: item]) -> <item>`**
+
+Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
+
+If the index is out of bounds, returns `[default]` or `nil`.
+
 **`(list {expression} ) -> <list>`**
 
 Returns a new list containing the results of evaluating each expression.
@@ -1092,13 +1102,13 @@ If a `callable` is provided, it should accept two arguments and return a truthy 
 
 If no `callable` is specified, then items are sorted in ascending order.
 
+**`(find <list> <callable>) -> <item>`**
+
+Returns the first item in the list for which the `<callable>` returns a truthy value. If no such item is found, returns `nil`.
+
 ---
 
 #### Sequences (Lists & Strings)
-
-**`(len <item> {item}) -> <number>`**
-
-Returns the total number of items in the lists and the number of characters in the atoms for all provided arguments.
 
 **`(range [start: number] <end: number> [step: number]) -> <list>`**
 
@@ -1106,7 +1116,7 @@ Returns a new list containing a sequence of numbers from `<start>` up to (but no
 
 **`(concat {item}) -> <item>`**
 
-Returns a new atom or list by concatenating all items, can also be utilized for "append" or "prepend" operations. If any of the items is a list, the result will be a list, otherwise it will be an atom.
+Returns a new atom or list by concatenating all items. If any of the items is a list, the result will be a list, otherwise it will be an atom.
 
 **`(append <list> {item}) -> <item>`**
 
@@ -1131,12 +1141,6 @@ Returns a new list containing all except the first item of a list or an atom con
 **`(init <item>) -> <item>`**
 
 Returns a new list containing all but the last item of a list or an atom containing all but the last character of an atom.
-
-**`(nth <item> <n: number> [default: item]) -> <item>`**
-
-Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
-
-If the index is out of bounds, returns `[default]` or `nil`.
 
 **`(assoc <item> <n: number> <value: item> [fill: item]) -> <item>`**
 
@@ -1187,10 +1191,6 @@ Returns a new list containing only the unique items from the provided list, pres
 **`(chunk <list> <n: number>) -> <list>`**
 
 Returns a new list of sub-lists, where each sub-list contains <n> items from the original list.
-
-**`(find <list> <callable>) -> <item>`**
-
-Returns the first item in the list for which the `<callable>` returns a truthy value. If no such item is found, returns `nil`.
 
 **`(get-in <list> <path: list|atom> [default: item]) -> <item>`**
 

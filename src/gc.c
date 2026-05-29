@@ -62,6 +62,114 @@ static void reduct_gc_mark_atom(reduct_t* reduct, reduct_atom_t* atom)
     }
 }
 
+static void reduct_gc_mark_rvsdg_node(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    if (node->parent != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(node->parent, reduct_item_t, rvsdgRegion));
+    }
+
+    reduct_rvsdg_user_t* user = node->firstInput;
+    while (user != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user, reduct_item_t, rvsdgUser));
+        user = user->next;
+    }
+
+    if (node->output != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(node->output, reduct_item_t, rvsdgOrigin));
+    }
+
+    reduct_rvsdg_region_t* region = node->firstRegion;
+    while (region != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(region, reduct_item_t, rvsdgRegion));
+        region = region->next;
+    }
+
+    if (node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST && REDUCT_HANDLE_IS_ITEM(node->constant))
+    {
+        reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(node->constant));
+    }
+}
+
+static void reduct_gc_mark_rvsdg_edge(reduct_t* reduct, reduct_rvsdg_edge_t* edge)
+{
+    if (edge->origin != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(edge->origin, reduct_item_t, rvsdgOrigin));
+    }
+
+    if (edge->user != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(edge->user, reduct_item_t, rvsdgUser));
+    }
+}
+
+static void reduct_gc_mark_rvsdg_region(reduct_t* reduct, reduct_rvsdg_region_t* region)
+{
+    if (region->parent != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(region->parent, reduct_item_t, rvsdgNode));
+    }
+
+    reduct_rvsdg_origin_t* arg = region->firstArgument;
+    while (arg != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(arg, reduct_item_t, rvsdgOrigin));
+        arg = arg->next;
+    }
+
+    if (region->result != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(region->result, reduct_item_t, rvsdgUser));
+    }
+
+    reduct_rvsdg_node_t* node = region->firstNode;
+    while (node != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode));
+        node = node->next;
+    }
+}
+
+static void reduct_gc_mark_rvsdg_user(reduct_t* reduct, reduct_rvsdg_user_t* user)
+{
+    if (user->ownerKind == REDUCT_RVSDG_OWNER_NODE && user->node != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user->node, reduct_item_t, rvsdgNode));
+    }
+    else if (user->ownerKind == REDUCT_RVSDG_OWNER_REGION && user->region != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user->region, reduct_item_t, rvsdgRegion));
+    }
+
+    if (user->edge != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user->edge, reduct_item_t, rvsdgEdge));
+    }
+}
+
+static void reduct_gc_mark_rvsdg_origin(reduct_t* reduct, reduct_rvsdg_origin_t* origin)
+{
+    if (origin->ownerKind == REDUCT_RVSDG_OWNER_NODE && origin->node != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(origin->node, reduct_item_t, rvsdgNode));
+    }
+    else if (origin->ownerKind == REDUCT_RVSDG_OWNER_REGION && origin->region != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(origin->region, reduct_item_t, rvsdgRegion));
+    }
+
+    reduct_rvsdg_edge_t* edge = origin->edges;
+    while (edge != NULL)
+    {
+        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(edge, reduct_item_t, rvsdgEdge));
+        edge = edge->next;
+    }
+}
+
 static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
 {
     assert(reduct != NULL);
@@ -105,6 +213,26 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
                 reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(handle));
             }
         }
+    }
+    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_NODE)
+    {
+        reduct_gc_mark_rvsdg_node(reduct, &item->rvsdgNode);
+    }
+    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_EDGE)
+    {
+        reduct_gc_mark_rvsdg_edge(reduct, &item->rvsdgEdge);
+    }
+    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_REGION)
+    {
+        reduct_gc_mark_rvsdg_region(reduct, &item->rvsdgRegion);
+    }
+    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_USER)
+    {
+        reduct_gc_mark_rvsdg_user(reduct, &item->rvsdgUser);
+    }
+    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_ORIGIN)
+    {
+        reduct_gc_mark_rvsdg_origin(reduct, &item->rvsdgOrigin);
     }
 }
 
