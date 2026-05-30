@@ -94,6 +94,7 @@ REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, re
     reduct_list_t* mappedList = reduct_list_new(reduct);
     reduct_handle_t mappedHandle = REDUCT_HANDLE_FROM_LIST(mappedList);
 
+    reduct_list_retain(reduct, mappedList);
     reduct_list_iter_t iter = REDUCT_LIST_ITER(sourceList);
     reduct_list_chunk_t chunk;
     while (reduct_list_iter_next_chunk(&iter, &chunk))
@@ -105,6 +106,7 @@ REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, re
         }
     }
 
+    reduct_list_release(reduct, mappedList);
     return mappedHandle;
 }
 
@@ -120,6 +122,7 @@ REDUCT_API reduct_handle_t reduct_filter(reduct_t* reduct, reduct_handle_t list,
     reduct_list_t* filteredList = reduct_list_new(reduct);
     reduct_handle_t filteredHandle = REDUCT_HANDLE_FROM_LIST(filteredList);
 
+    reduct_list_retain(reduct, filteredList);
     reduct_list_iter_t iter = REDUCT_LIST_ITER(sourceList);
     reduct_list_chunk_t chunk;
     while (reduct_list_iter_next_chunk(&iter, &chunk))
@@ -134,6 +137,7 @@ REDUCT_API reduct_handle_t reduct_filter(reduct_t* reduct, reduct_handle_t list,
         }
     }
 
+    reduct_list_release(reduct, filteredList);
     return filteredHandle;
 }
 
@@ -149,6 +153,8 @@ REDUCT_API reduct_handle_t reduct_reduce(reduct_t* reduct, reduct_handle_t list,
     reduct_list_t* sourceList = REDUCT_HANDLE_TO_LIST(list);
     reduct_handle_t accumulator = initial;
 
+    REDUCT_HANDLE_RETAIN(reduct, accumulator);
+
     reduct_list_iter_t iter = REDUCT_LIST_ITER(sourceList);
     reduct_list_chunk_t chunk;
     while (reduct_list_iter_next_chunk(&iter, &chunk))
@@ -158,16 +164,21 @@ REDUCT_API reduct_handle_t reduct_reduce(reduct_t* reduct, reduct_handle_t list,
             if (REDUCT_HANDLE_IS_NIL(accumulator))
             {
                 accumulator = chunk.handles[i];
+            REDUCT_HANDLE_RETAIN(reduct, accumulator);
                 continue;
             }
 
             reduct_handle_t args[2] = {accumulator, chunk.handles[i]};
             reduct_handle_t result = reduct_eval_call(reduct, callable, 2, args);
+            REDUCT_HANDLE_RETAIN(reduct, result);
+            REDUCT_HANDLE_RELEASE(reduct, accumulator);
 
             accumulator = result;
         }
     }
 
+    REDUCT_HANDLE_RELEASE(reduct, accumulator);
+    
     if (REDUCT_HANDLE_IS_NIL(accumulator))
     {
         return REDUCT_HANDLE_NIL(reduct);
@@ -237,11 +248,11 @@ static inline reduct_handle_t reduct_eval_maybe_call(reduct_t* reduct, reduct_ha
                 reduct_handle_t result = reduct_eval_maybe_call(reduct, fn, chunk.handles[i]); \
                 if (_predicate) \
                 { \
-                    return REDUCT_HANDLE_FROM_NUMBER((double)!(_default)); \
+                    return REDUCT_HANDLE_FROM_BOOL(reduct, !(_default)); \
                 } \
             } \
         } \
-        return REDUCT_HANDLE_FROM_NUMBER((double)_default); \
+        return REDUCT_HANDLE_FROM_BOOL(reduct, (_default)); \
     }
 
 REDUCT_ANY_ALL_IMPL(reduct_any, REDUCT_HANDLE_IS_TRUTHY(result), false)
@@ -1009,7 +1020,7 @@ REDUCT_API reduct_handle_t reduct_contains(struct reduct* reduct, reduct_handle_
 {
     assert(reduct != NULL);
     reduct_handle_t index = reduct_index_of(reduct, handle, target);
-    return REDUCT_HANDLE_FROM_BOOL(!REDUCT_HANDLE_IS_NIL(index));
+    return REDUCT_HANDLE_FROM_BOOL(reduct, !REDUCT_HANDLE_IS_NIL(index));
 }
 
 REDUCT_API reduct_handle_t reduct_replace(struct reduct* reduct, reduct_handle_t handle, reduct_handle_t oldVal,
@@ -1549,11 +1560,11 @@ static inline reduct_handle_t reduct_sequence_check_edge(reduct_t* reduct, reduc
         reduct_list_t* list = REDUCT_HANDLE_TO_LIST(handle);
         if (list->length == 0)
         {
-            return REDUCT_HANDLE_FALSE();
+            return REDUCT_HANDLE_FALSE(reduct);
         }
         size_t index = start ? 0 : list->length - 1;
         reduct_handle_t edge = reduct_list_nth(reduct, list, index);
-        return (reduct_handle_compare(reduct, &edge, &target) == 0) ? REDUCT_HANDLE_TRUE() : REDUCT_HANDLE_FALSE();
+        return REDUCT_HANDLE_FROM_BOOL(reduct, reduct_handle_compare(reduct, &edge, &target) == 0);
     }
 
     const char *srcStr, *tgtStr;
@@ -1563,10 +1574,10 @@ static inline reduct_handle_t reduct_sequence_check_edge(reduct_t* reduct, reduc
 
     if (tgtLen > srcLen)
     {
-        return REDUCT_HANDLE_FALSE();
+        return REDUCT_HANDLE_FALSE(reduct);
     }
     const char* offset = start ? srcStr : srcStr + srcLen - tgtLen;
-    return (memcmp(offset, tgtStr, tgtLen) == 0) ? REDUCT_HANDLE_TRUE() : REDUCT_HANDLE_FALSE();
+    return REDUCT_HANDLE_FROM_BOOL(reduct, memcmp(offset, tgtStr, tgtLen) == 0);
 }
 
 REDUCT_API reduct_handle_t reduct_starts_with(reduct_t* reduct, reduct_handle_t handle, reduct_handle_t prefix)
@@ -1753,7 +1764,7 @@ REDUCT_API reduct_handle_t reduct_trim(reduct_t* reduct, reduct_handle_t srcHand
         { \
             if (!(_predicate)) \
             { \
-                return REDUCT_HANDLE_FALSE(); \
+                return REDUCT_HANDLE_FALSE(reduct); \
             } \
         } \
         return REDUCT_HANDLE_TRUE(); \
@@ -2752,7 +2763,7 @@ static reduct_handle_t reduct_exact_equal_impl(reduct_t* reduct, size_t argc, re
     {
         if (!reduct_handle_is_equal(reduct, &argv[i], &argv[i + 1]))
         {
-            return REDUCT_HANDLE_FALSE();
+            return REDUCT_HANDLE_FALSE(reduct);
         }
     }
     return REDUCT_HANDLE_TRUE();
@@ -2769,7 +2780,7 @@ static reduct_handle_t reduct_exact_not_equal_impl(reduct_t* reduct, size_t argc
     {
         if (reduct_handle_is_equal(reduct, &argv[i], &argv[i + 1]))
         {
-            return REDUCT_HANDLE_FALSE();
+            return REDUCT_HANDLE_FALSE(reduct);
         }
     }
     return REDUCT_HANDLE_TRUE();

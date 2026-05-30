@@ -494,7 +494,7 @@ static reduct_rvsdg_origin_t* reduct_build_not(reduct_builder_t* builder, reduct
         reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_TRUE())->output,
         gamma->firstRegion->result);
     reduct_rvsdg_edge_connect(builder->reduct,
-        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion->next, REDUCT_HANDLE_FALSE())->output,
+        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion->next, REDUCT_HANDLE_FALSE(builder->reduct))->output,
         gamma->firstRegion->next->result);
 
     return gamma->output;
@@ -504,7 +504,7 @@ static reduct_rvsdg_origin_t* reduct_build_and(reduct_builder_t* builder, reduct
 {
     if (list->length == 1)
     {
-        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE())
+        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE(builder->reduct))
             ->output;
     }
     return reduct_build_and_or_internal(builder, list, 1, false);
@@ -514,7 +514,7 @@ static reduct_rvsdg_origin_t* reduct_build_or(reduct_builder_t* builder, reduct_
 {
     if (list->length == 1)
     {
-        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE())
+        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE(builder->reduct))
             ->output;
     }
     return reduct_build_and_or_internal(builder, list, 1, true);
@@ -595,7 +595,7 @@ static reduct_rvsdg_origin_t* reduct_build_comparison_internal(reduct_builder_t*
     reduct_rvsdg_edge_connect(builder->reduct, cmp, reduct_rvsdg_node_get_input(gamma, 0));
 
     reduct_rvsdg_edge_connect(builder->reduct,
-        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_FALSE())->output,
+        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_FALSE(builder->reduct))->output,
         gamma->firstRegion->result);
 
     {
@@ -727,10 +727,9 @@ static reduct_rvsdg_origin_t* reduct_build_match(reduct_builder_t* builder, redu
 #define REDUCT_BUILD_NATIVE_LOGIC(_name, _shortCircuitTruth) \
     static reduct_handle_t reduct_build_##_name##_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
-        REDUCT_UNUSED(reduct); \
         if (argc == 0) \
         { \
-            return REDUCT_HANDLE_FALSE(); \
+            return REDUCT_HANDLE_FALSE(reduct); \
         } \
         reduct_handle_t res = argv[0]; \
         for (size_t i = 0; i < argc; i++) \
@@ -767,7 +766,7 @@ static reduct_rvsdg_origin_t* reduct_build_match(reduct_builder_t* builder, redu
         { \
             if (!(reduct_handle_compare(reduct, &argv[i], &argv[i + 1]) _op 0)) \
             { \
-                return REDUCT_HANDLE_FALSE(); \
+                return REDUCT_HANDLE_FALSE(reduct); \
             } \
         } \
         return REDUCT_HANDLE_TRUE(); \
@@ -870,7 +869,7 @@ static reduct_handle_t reduct_build_shr_native(reduct_t* reduct, size_t argc, re
 static reduct_handle_t reduct_build_not_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
     REDUCT_ERROR_ASSERT(reduct, argc == 1, "not: expected 1 argument(s), got %zu", (size_t)argc);
-    return REDUCT_HANDLE_IS_TRUTHY(argv[0]) ? REDUCT_HANDLE_FALSE() : REDUCT_HANDLE_TRUE();
+    return REDUCT_HANDLE_FROM_BOOL(reduct, !REDUCT_HANDLE_IS_TRUTHY(argv[0]));
 }
 
 #define REDUCT_BUILD_INTRINSIC_VARIADIC(_name, _opcode) \
@@ -1101,7 +1100,7 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_atom(reduct_builder_t
     case 5:
         if (memcmp(atom->string, "false", 5) == 0)
         {
-            return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE())
+            return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE(builder->reduct))
                 ->output;
         }
         break;

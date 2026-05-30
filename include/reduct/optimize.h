@@ -12,7 +12,7 @@ struct reduct;
  * @file optimize.h
  * @brief Bytecode optimization.
  * @defgroup optimize Optimization
- *
+ * 
  * @{
  */
 
@@ -28,10 +28,11 @@ typedef enum reduct_optimize_flags
     REDUCT_OPTIMIZE_CSE = 1 << 2,               ///< Common subexpression elimination.
     REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION = 1 << 3, ///< Algebraic simplification.
     REDUCT_OPTIMIZE_GAMMA_FOLDING = 1 << 4,     ///< Branch folding for Gamma nodes.
+    REDUCT_OPTIMIZE_LICM = 1 << 5,              ///< Loop-invariant code motion. @todo Implement LICM.
     REDUCT_OPTIMIZE_ALL = 0xFFFFFFFF,           ///< Enable all optimizations.
 
     REDUCT_OPTIMIZE_O1 = REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION,               ///< Level 1 optimizations.
-    REDUCT_OPTIMIZE_O2 = REDUCT_OPTIMIZE_CONSTANT_FOLDING | REDUCT_OPTIMIZE_CSE | REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION | REDUCT_OPTIMIZE_GAMMA_FOLDING, ///< Level 2 optimizations.
+    REDUCT_OPTIMIZE_O2 = REDUCT_OPTIMIZE_CONSTANT_FOLDING | REDUCT_OPTIMIZE_CSE | REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION | REDUCT_OPTIMIZE_GAMMA_FOLDING | REDUCT_OPTIMIZE_LICM, ///< Level 2 optimizations.
     REDUCT_OPTIMIZE_O3 = REDUCT_OPTIMIZE_ALL,                                    ///< Level 3 optimizations (maximum).
 } reduct_optimize_flags_t;
 

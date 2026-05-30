@@ -42,8 +42,7 @@ typedef uint8_t reduct_item_type_t;
  */
 typedef uint8_t reduct_item_flags_t;
 #define REDUCT_ITEM_FLAG_NONE 0           ///< No flags.
-#define REDUCT_ITEM_FLAG_FALSY (1 << 0)   ///< Item is falsy.
-#define REDUCT_ITEM_FLAG_GC_MARK (1 << 1) ///< Item is marked by GC.
+#define REDUCT_ITEM_FLAG_GC_MARK (1 << 0) ///< Item is marked by GC.
 
 #define REDUCT_ITEM_PAYLOAD_MAX 56 ///< The maximum size of the item payload.
 

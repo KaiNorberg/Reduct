@@ -140,9 +140,10 @@ typedef enum
 /**
  * @brief Create a boolean handle from a C condition.
  *
+ * @param _reduct Pointer to the Reduct structure.
  * @param _cond The condition to evaluate.
  */
-#define REDUCT_HANDLE_FROM_BOOL(_cond) REDUCT_HANDLE_FROM_NUMBER((double)(!!(_cond)))
+#define REDUCT_HANDLE_FROM_BOOL(_reduct, _cond) ((_cond) ? REDUCT_HANDLE_TRUE() : REDUCT_HANDLE_FALSE(_reduct))
 
 /**
  * @brief Check if a handle is a number.
@@ -466,21 +467,13 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
         reduct_list_iter_next(&_iter, (_handle));)
 
 /**
- * @brief Get flags from an item handle.
- *
- * @param _handle Pointer to the handle.
- * @return The flags stored in the handle.
- */
-#define REDUCT_HANDLE_GET_FLAGS(_handle) (REDUCT_HANDLE_IS_ITEM(_handle) ? REDUCT_HANDLE_TO_ITEM(_handle)->flags : 0)
-
-/**
  * @brief Get the constant nil handle.
  *
  * @param _reduct Pointer to the Reduct structure.
  */
 #define REDUCT_HANDLE_NIL(_reduct) ((_reduct)->nil)
 
-#define REDUCT_HANDLE_FALSE() REDUCT_HANDLE_FROM_NUMBER(0.0) ///< Constant false handle.
+#define REDUCT_HANDLE_FALSE(_reduct) REDUCT_HANDLE_NIL(_reduct) ///< Constant false handle.
 
 #define REDUCT_HANDLE_TRUE() REDUCT_HANDLE_FROM_NUMBER(1.0) ///< Constant true handle.
 
@@ -625,9 +618,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @return `true` if the handle is truthy, `false` otherwise.
  */
 #define REDUCT_HANDLE_IS_TRUTHY(_handle) \
-    ((_handle)._value >= REDUCT_HANDLE_OFFSET_NUMBER \
-            ? (REDUCT_HANDLE_TO_NUMBER(_handle) != 0.0) \
-            : (REDUCT_HANDLE_IS_ITEM(_handle) && !(REDUCT_HANDLE_GET_FLAGS(_handle) & REDUCT_ITEM_FLAG_FALSY)))
+    (!REDUCT_HANDLE_IS_LIST(_handle) || REDUCT_HANDLE_TO_LIST(_handle)->length != 0)
 
 /**
  * @brief Retain a handle, preventing its referenced item from being collected by the garbage collector.

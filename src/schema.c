@@ -243,9 +243,7 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
     }
     break;
     case REDUCT_SCHEMA_TYPE_BOOL:
-    {
-        return *(bool*)val ? REDUCT_HANDLE_FROM_NUMBER(1.0) : REDUCT_HANDLE_FROM_NUMBER(0.0);
-    }
+        return REDUCT_HANDLE_FROM_BOOL(reduct, *(bool*)val);
     break;
     case REDUCT_SCHEMA_TYPE_STRING:
     {

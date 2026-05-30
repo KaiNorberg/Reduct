@@ -337,7 +337,7 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
     {
         if (left != NULL && left == right)
         {
-            replacement = reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FALSE())->output;
+            replacement = reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FALSE(reduct))->output;
         }
     }
     break;

@@ -36,7 +36,6 @@ REDUCT_API reduct_list_t* reduct_list_new(reduct_t* reduct)
 
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_LIST;
-    item->flags |= REDUCT_ITEM_FLAG_FALSY;
     reduct_list_t* list = &item->list;
     list->length = 0;
     list->shift = 0;
@@ -54,10 +53,6 @@ REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t 
     {
         reduct_item_t* item = reduct_item_new(reduct);
         item->type = REDUCT_ITEM_TYPE_LIST;
-        if (count == 0)
-        {
-            item->flags |= REDUCT_ITEM_FLAG_FALSY;
-        }
 
         reduct_list_t* list = &item->list;
         list->length = count;
@@ -169,11 +164,6 @@ REDUCT_API reduct_list_t* reduct_list_assoc(struct reduct* reduct, reduct_list_t
 
     reduct_list_t* newList = reduct_list_new(reduct);
     newList->length = list->length;
-    if (newList->length > 0)
-    {
-        REDUCT_CONTAINER_OF(newList, reduct_item_t, list)->flags &= ~REDUCT_ITEM_FLAG_FALSY;
-    }
-
     newList->shift = list->shift;
 
     size_t tailOffset = REDUCT_LIST_TAIL_OFFSET(list);
@@ -265,11 +255,6 @@ REDUCT_API reduct_list_t* reduct_list_append(struct reduct* reduct, reduct_list_
 
     reduct_list_t* newList = reduct_list_new(reduct);
     newList->length = list->length;
-    if (newList->length > 0)
-    {
-        REDUCT_CONTAINER_OF(newList, reduct_item_t, list)->flags &= ~REDUCT_ITEM_FLAG_FALSY;
-    }
-
     newList->shift = list->shift;
     newList->root = list->root;
     newList->tail = list->tail;
@@ -342,12 +327,7 @@ static reduct_list_node_t* reduct_push_tail(reduct_t* reduct, uint32_t shift, si
 REDUCT_API void reduct_list_push(reduct_t* reduct, reduct_list_t* list, reduct_handle_t val)
 {
     assert(list != NULL);
-
-    if (list->length == 0)
-    {
-        REDUCT_CONTAINER_OF(list, reduct_item_t, list)->flags &= ~REDUCT_ITEM_FLAG_FALSY;
-    }
-
+    
     if (list->length < REDUCT_LIST_WIDTH || (list->length & REDUCT_LIST_MASK) != 0)
     {
         list->tail.handles[list->length & REDUCT_LIST_MASK] = val;

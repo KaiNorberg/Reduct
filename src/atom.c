@@ -235,11 +235,6 @@ REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, size_t len)
     atom->string = NULL;
     atom->length = (uint32_t)len;
 
-    if (len == 0)
-    {
-        item->flags |= REDUCT_ITEM_FLAG_FALSY;
-    }
-
     if (len <= REDUCT_ATOM_SMALL_MAX)
     {
         atom->string = atom->smallString;
@@ -276,11 +271,6 @@ REDUCT_API reduct_atom_t* reduct_atom_new_number(reduct_t* reduct, double value)
     memcpy(atom->string, buf, (size_t)len);
     atom->numberValue = value;
     atom->flags |= REDUCT_ATOM_FLAG_NUMBER | REDUCT_ATOM_FLAG_NUMBER_CHECKED;
-    if (value == 0.0)
-    {
-        reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
-        item->flags |= REDUCT_ITEM_FLAG_FALSY;
-    }
     return atom;
 }
 
@@ -521,10 +511,6 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
         {
             atom->flags |= REDUCT_ATOM_FLAG_NUMBER;
             atom->numberValue = sign * (double)intValue;
-            if (atom->numberValue == 0.0)
-            {
-                item->flags |= REDUCT_ITEM_FLAG_FALSY;
-            }
         }
 
         return;
@@ -656,20 +642,11 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
                 }
             }
             atom->numberValue = sign * finalVal;
-            if (atom->numberValue == 0.0)
-            {
-                item->flags |= REDUCT_ITEM_FLAG_FALSY;
-            }
-
             return;
         }
 
         atom->flags |= REDUCT_ATOM_FLAG_NUMBER;
         atom->numberValue = sign * (double)intValue;
-        if (atom->numberValue == 0.0)
-        {
-            item->flags |= REDUCT_ITEM_FLAG_FALSY;
-        }
     }
 }
 

@@ -199,7 +199,7 @@ LABEL_C_OP(_label, { \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    base[a] = REDUCT_HANDLE_FROM_BOOL(REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], valC, _op)); \
+    base[a] = REDUCT_HANDLE_FROM_BOOL(reduct, REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], valC, _op)); \
     DISPATCH(); \
 })
 

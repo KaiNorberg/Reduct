@@ -81,7 +81,7 @@ struct reduct_rvsdg_edge;
  *
  * @note The paper describes a phi node as being able to contain multiple lambda nodes for mutual recursion. This will
  * not be needed within Reduct.
- *
+ * 
  * @see https://arxiv.org/abs/1912.05036 "RVSDG: An Intermediate Representation for Optimizing Compilers" (Nico
  * Reissmann et al., 2020)
  *

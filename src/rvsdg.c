@@ -509,6 +509,11 @@ REDUCT_API struct reduct_rvsdg_node* reduct_rvsdg_node_get_input_node(reduct_rvs
 REDUCT_API void reduct_rvsdg_origin_redirect_users(struct reduct_rvsdg_origin* origin,
     struct reduct_rvsdg_origin* newOrigin)
 {
+    if (origin == newOrigin)
+    {
+        return;
+    }
+
     reduct_rvsdg_edge_t* edge = origin->edges;
     while (edge != NULL)
     {

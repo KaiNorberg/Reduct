@@ -348,14 +348,14 @@ This system can also be used to implement more complex logic, such as emulating 
 
 ### Truthiness
 
-A truthy item is any item that is not falsy. Falsy items include `nil` (an empty list), an empty atom, the constant `false` (which evaluates to `0`), or any number-shaped atom that evaluates to zero.
+A truthy item is any item that is not `nil`. The only falsy item is `nil` (an empty list).
 
 For example:
 
 ```lisp
 (if () "truthy" "falsy") // Evaluates to "falsy"
-(if 0 "truthy" "falsy") // Evaluates to "falsy"
-(if "" "truthy" "falsy") // Evaluates to "falsy"
+(if 0 "truthy" "falsy") // Evaluates to "truthy"
+(if "" "truthy" "falsy") // Evaluates to "truthy"
 (if 1 "truthy" "falsy") // Evaluates to "truthy"
 (if false "truthy" "falsy") // Evaluates to "falsy"
 (if true "truthy" "falsy") // Evaluates to "truthy"
@@ -763,11 +763,11 @@ symbol = character, { character } ;
 number = decimal_integer | hex_integer | octal_integer | binary_integer | float ;
 float = float_number | float_naked_decimal | float_trailing_decimal | scientific_number | special_float ;
 
-truthy = true | expression - falsy_item ;
-falsy  = nil | '""' | false | zero ;
+truthy = expression - nil ;
+falsy  = nil ;
 
 true = "1" ;
-false = "0" ;
+false = nil ;
 
 nil = "(", { white_space }, ")" ;
 
@@ -839,7 +839,7 @@ The following constants are defined by default in the Reduct environment:
 | Constant | Value |
 |----------|-------|
 | `true`   | `1` |
-| `false`  | `0` |
+| `false`  | `nil` |
 | `nil`    | `()` |
 | `pi`     | `3.14159265358979323846` |
 | `e`      | `2.7182818284590452354` |

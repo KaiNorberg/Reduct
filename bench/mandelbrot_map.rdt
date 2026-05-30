@@ -1,0 +1,21 @@
+(def mandelbrot (lambda (width height max-iter)
+    (def check (lambda (zr zi i c-re c-im)
+        (if {i >= max-iter or zr * zr + zi * zi > 4.0}
+            i
+            (check {zr * zr - zi * zi + c-re} {2.0 * zr * zi + c-im} (++ i) c-re c-im)
+        )
+    ))
+
+    (def scanline (+ width 1))
+    (implode (map (range 0 (* scanline height)) (lambda (n)
+        (def x (% n scanline))
+        (def y (floor (/ n scanline)))
+        (cond
+            ({x >= width} (ord "\n"))
+            ({(check 0.0 0.0 0 {x / width * 3.5 - 2.5} {y / height * 2.0 - 1.0}) == max-iter} (ord "*"))
+            (true (ord " "))
+        )
+    )))
+))
+
+(mandelbrot 80 40 10000)
