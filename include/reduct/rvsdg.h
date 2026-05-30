@@ -311,8 +311,8 @@ REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_simple_binary(struct reduc
  * @return The newly allocated node.
  */
 REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_simple_ternary(struct reduct* reduct,
-    reduct_rvsdg_region_t* region, reduct_opcode_t opcode, struct reduct_rvsdg_origin* a,
-    struct reduct_rvsdg_origin* b, struct reduct_rvsdg_origin* c);
+    reduct_rvsdg_region_t* region, reduct_opcode_t opcode, struct reduct_rvsdg_origin* a, struct reduct_rvsdg_origin* b,
+    struct reduct_rvsdg_origin* c);
 
 /**
  * @brief Create a lambda node.
@@ -354,7 +354,7 @@ REDUCT_API struct reduct_rvsdg_user* reduct_rvsdg_node_get_input(reduct_rvsdg_no
 
 /**
  * @brief Get the output of the node connected to an input node of a node by index.
- * 
+ *
  * @param node The node to search.
  * @param index The index of the input port.
  * @return The origin port, or NULL if not found or not connected.
@@ -539,6 +539,17 @@ REDUCT_API void reduct_rvsdg_region_remove_node(reduct_rvsdg_node_t* node);
  * @param node Pointer to the node to delete.
  */
 REDUCT_API void reduct_rvsdg_node_delete(struct reduct* reduct, reduct_rvsdg_node_t* node);
+
+/**
+ * @brief Check if two nodes are structurally identical.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param nodeA First node.
+ * @param nodeB Second node.
+ * @return true if the nodes are identical, false otherwise.
+ */
+REDUCT_API bool reduct_rvsdg_node_is_identical(struct reduct* reduct, reduct_rvsdg_node_t* nodeA,
+    reduct_rvsdg_node_t* nodeB);
 
 /**
  * @brief Lift an origin from an outer region to an inner region, creating a new argument in the inner region and

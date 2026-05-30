@@ -22,14 +22,17 @@ struct reduct;
  */
 typedef enum reduct_optimize_flags
 {
-    REDUCT_OPTIMIZE_NONE = 0,         ///< No optimization flags.
+    REDUCT_OPTIMIZE_NONE = 0,                   ///< No optimization flags.
     REDUCT_OPTIMIZE_FUNCTION_INLINING = 1 << 0, ///< Function inlining.
-    REDUCT_OPTIMIZE_CONSTANT_FOLDING = 1 << 1, ///< Constant folding.
-    REDUCT_OPTIMIZE_ALL = 0xFFFFFFFF, ///< Enable all optimizations.
+    REDUCT_OPTIMIZE_CONSTANT_FOLDING = 1 << 1,  ///< Constant folding.
+    REDUCT_OPTIMIZE_CSE = 1 << 2,               ///< Common subexpression elimination.
+    REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION = 1 << 3, ///< Algebraic simplification.
+    REDUCT_OPTIMIZE_GAMMA_FOLDING = 1 << 4,     ///< Branch folding for Gamma nodes.
+    REDUCT_OPTIMIZE_ALL = 0xFFFFFFFF,           ///< Enable all optimizations.
 
-    REDUCT_OPTIMIZE_O1 = 0,                   ///< Level 1 optimizations.
-    REDUCT_OPTIMIZE_O2 = REDUCT_OPTIMIZE_CONSTANT_FOLDING,                   ///< Level 2 optimizations.
-    REDUCT_OPTIMIZE_O3 = REDUCT_OPTIMIZE_ALL, ///< Level 3 optimizations (maximum).
+    REDUCT_OPTIMIZE_O1 = REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION,               ///< Level 1 optimizations.
+    REDUCT_OPTIMIZE_O2 = REDUCT_OPTIMIZE_CONSTANT_FOLDING | REDUCT_OPTIMIZE_CSE | REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION | REDUCT_OPTIMIZE_GAMMA_FOLDING, ///< Level 2 optimizations.
+    REDUCT_OPTIMIZE_O3 = REDUCT_OPTIMIZE_ALL,                                    ///< Level 3 optimizations (maximum).
 } reduct_optimize_flags_t;
 
 /**

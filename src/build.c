@@ -963,13 +963,17 @@ static reduct_rvsdg_origin_t* reduct_build_nth(reduct_builder_t* builder, reduct
     {
         reduct_rvsdg_origin_t* src = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
         reduct_rvsdg_origin_t* idx = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
-        return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH2, src, idx)->output;
+        return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH2, src,
+            idx)
+            ->output;
     }
 
     reduct_rvsdg_origin_t* src = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
     reduct_rvsdg_origin_t* idx = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
     reduct_rvsdg_origin_t* def = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 3));
-    return reduct_rvsdg_node_new_simple_ternary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH3, src, idx, def)->output;
+    return reduct_rvsdg_node_new_simple_ternary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH3, src, idx,
+        def)
+        ->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_range(reduct_builder_t* builder, reduct_list_t* list)
@@ -980,18 +984,23 @@ static reduct_rvsdg_origin_t* reduct_build_range(reduct_builder_t* builder, redu
     if (list->length == 2)
     {
         reduct_rvsdg_origin_t* end = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
-        return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE1, end)->output;
+        return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE1, end)
+            ->output;
     }
 
     reduct_rvsdg_origin_t* start = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
     reduct_rvsdg_origin_t* end = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
     if (list->length == 3)
     {
-        return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE2, start, end)->output;
+        return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE2, start,
+            end)
+            ->output;
     }
 
     reduct_rvsdg_origin_t* step = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 3));
-    return reduct_rvsdg_node_new_simple_ternary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE3, start, end, step)->output;
+    return reduct_rvsdg_node_new_simple_ternary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE3, start,
+        end, step)
+        ->output;
 }
 
 const reduct_native_t reductIntrinsics[UINT8_MAX + 1] = {

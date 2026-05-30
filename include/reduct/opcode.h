@@ -201,13 +201,14 @@ REDUCT_API extern const reduct_opcode_info_t reductOpcodeTable[128];
  * @param _op The skip opcode.
  */
 #define REDUCT_OPCODE_INVERT_SKIP(_op) \
-    ((reduct_opcode_t)((REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JEQ ? REDUCT_OPCODE_JNEQ : \
-      REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JNEQ ? REDUCT_OPCODE_JEQ : \
-      REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JLT ? REDUCT_OPCODE_JGE : \
-      REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JGE ? REDUCT_OPCODE_JLT : \
-      REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JLE ? REDUCT_OPCODE_JGT : \
-      REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JGT ? REDUCT_OPCODE_JLE : \
-      (_op)) | ((_op) & REDUCT_OPCODE_MODE_CONST)))
+    ((reduct_opcode_t)((REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JEQ           ? REDUCT_OPCODE_JNEQ \
+                               : REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JNEQ ? REDUCT_OPCODE_JEQ \
+                               : REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JLT  ? REDUCT_OPCODE_JGE \
+                               : REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JGE  ? REDUCT_OPCODE_JLT \
+                               : REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JLE  ? REDUCT_OPCODE_JGT \
+                               : REDUCT_OPCODE_BASE(_op) == REDUCT_OPCODE_JGT  ? REDUCT_OPCODE_JLE \
+                                                                               : (_op)) | \
+        ((_op) & REDUCT_OPCODE_MODE_CONST)))
 
 /**
  * @brief Get the recursive version of a call opcode.

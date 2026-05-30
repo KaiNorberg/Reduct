@@ -307,6 +307,49 @@ REDUCT_API void reduct_rvsdg_node_delete(struct reduct* reduct, reduct_rvsdg_nod
     }
 }
 
+REDUCT_API bool reduct_rvsdg_node_is_identical(struct reduct* reduct, reduct_rvsdg_node_t* nodeA,
+    reduct_rvsdg_node_t* nodeB)
+{
+    if (nodeA == nodeB)
+    {
+        return true;
+    }
+
+    if (nodeA->type != nodeB->type || nodeA->inputCount != nodeB->inputCount || nodeA->flags != nodeB->flags)
+    {
+        return false;
+    }
+
+    if (nodeA->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+    {
+        if (nodeA->opcode != nodeB->opcode)
+        {
+            return false;
+        }
+    }
+    else if (nodeA->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+    {
+        if (!reduct_handle_is_equal(reduct, &nodeA->constant, &nodeB->constant))
+        {
+            return false;
+        }
+    }
+    else
+    {
+        return false;
+    }
+
+    for (uint16_t i = 0; i < nodeA->inputCount; i++)
+    {
+        if (reduct_rvsdg_node_get_input_origin(nodeA, i) != reduct_rvsdg_node_get_input_origin(nodeB, i))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_simple_opcode(reduct_t* reduct, reduct_rvsdg_region_t* region,
     reduct_opcode_t opcode)
 {
@@ -351,8 +394,8 @@ REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_simple_binary(reduct_t* re
 }
 
 REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_simple_ternary(struct reduct* reduct,
-    reduct_rvsdg_region_t* region, reduct_opcode_t opcode, struct reduct_rvsdg_origin* a,
-    struct reduct_rvsdg_origin* b, struct reduct_rvsdg_origin* c)
+    reduct_rvsdg_region_t* region, reduct_opcode_t opcode, struct reduct_rvsdg_origin* a, struct reduct_rvsdg_origin* b,
+    struct reduct_rvsdg_origin* c)
 {
     reduct_rvsdg_node_t* node = reduct_rvsdg_node_new_simple_opcode(reduct, region, opcode);
     reduct_rvsdg_edge_connect(reduct, a, reduct_rvsdg_node_add_input(reduct, node));

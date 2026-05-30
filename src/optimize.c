@@ -159,12 +159,322 @@ static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_nod
     return true;
 }
 
-static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, reduct_optimize_flags_t flags)
+static bool reduct_optimize_is_const(reduct_t* reduct, reduct_rvsdg_origin_t* origin, double value)
+{
+    if (origin == NULL || origin->ownerKind != REDUCT_RVSDG_OWNER_NODE)
+    {
+        return false;
+    }
+
+    reduct_rvsdg_node_t* node = origin->node;
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+    {
+        return false;
+    }
+
+    if (!REDUCT_HANDLE_IS_NUMBER_SHAPED(node->constant))
+    {
+        return false;
+    }
+
+    return reduct_handle_as_number(reduct, node->constant) == value;
+}
+
+static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rvsdg_node_t* node)
 {
     assert(reduct != NULL);
     assert(node != NULL);
 
-    bool changed = false;
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+    {
+        return false;
+    }
+
+    reduct_rvsdg_origin_t* left = reduct_rvsdg_node_get_input_origin(node, 0);
+    reduct_rvsdg_origin_t* right = (node->inputCount > 1) ? reduct_rvsdg_node_get_input_origin(node, 1) : NULL;
+
+    reduct_rvsdg_origin_t* replacement = NULL;
+
+    switch (REDUCT_OPCODE_BASE(node->opcode))
+    {
+    case REDUCT_OPCODE_MOV: // Should never happen
+    {
+        replacement = left;
+    }
+    break;
+    case REDUCT_OPCODE_ADD:
+    {
+        if (reduct_optimize_is_const(reduct, left, 0.0))
+        {
+            replacement = right;
+        }
+        else if (reduct_optimize_is_const(reduct, right, 0.0))
+        {
+            replacement = left;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_SUB:
+    {
+        if (reduct_optimize_is_const(reduct, right, 0.0))
+        {   
+            replacement = left;
+        }
+        else if (left != NULL && left == right)
+        {
+            reduct_rvsdg_node_t* zero =
+                reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FROM_NUMBER(0.0));
+            replacement = zero->output;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_MUL:
+    {
+        if (reduct_optimize_is_const(reduct, left, 1.0))
+        {
+            replacement = right;
+        }
+        else if (reduct_optimize_is_const(reduct, right, 1.0))
+        {
+            replacement = left;
+        }
+        else if (reduct_optimize_is_const(reduct, left, 0.0) || reduct_optimize_is_const(reduct, right, 0.0))
+        {
+            reduct_rvsdg_node_t* zero =
+                reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FROM_NUMBER(0.0));
+            replacement = zero->output;
+        }
+        else if (reduct_optimize_is_const(reduct, right, 2.0))
+        {
+            reduct_rvsdg_node_t* add = reduct_rvsdg_node_new_simple_binary(reduct, node->parent, REDUCT_OPCODE_ADD, left, left);
+            replacement = add->output;
+        }
+        else if (reduct_optimize_is_const(reduct, left, 2.0))
+        {
+            reduct_rvsdg_node_t* add = reduct_rvsdg_node_new_simple_binary(reduct, node->parent, REDUCT_OPCODE_ADD, right, right);
+            replacement = add->output;
+        } 
+    }
+    break;
+    case REDUCT_OPCODE_DIV:
+    {
+        if (reduct_optimize_is_const(reduct, right, 1.0))
+        {
+            replacement = left;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_BOR:
+    {
+        if (reduct_optimize_is_const(reduct, left, 0.0))
+        {
+            replacement = right;
+        }
+        else if (reduct_optimize_is_const(reduct, right, 0.0))
+        {
+            replacement = left;
+        }
+        else if (left != NULL && left == right)
+        {
+            replacement = left;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_BAND:
+    {
+        if (reduct_optimize_is_const(reduct, left, 0.0) || reduct_optimize_is_const(reduct, right, 0.0))
+        {
+            reduct_rvsdg_node_t* zero =
+                reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FROM_NUMBER(0.0));
+            replacement = zero->output;
+        }
+        else if (left != NULL && left == right)
+        {
+            replacement = left;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_BXOR:
+    {
+        if (reduct_optimize_is_const(reduct, left, 0.0))
+        {
+            replacement = right;
+        }
+        else if (reduct_optimize_is_const(reduct, right, 0.0))
+        {
+            replacement = left;
+        }
+        else if (left != NULL && left == right)
+        {
+            reduct_rvsdg_node_t* zero =
+                reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FROM_NUMBER(0.0));
+            replacement = zero->output;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_SHL:
+    case REDUCT_OPCODE_SHR:
+    {
+        if (reduct_optimize_is_const(reduct, right, 0.0))
+        {
+            replacement = left;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_EQ:
+    case REDUCT_OPCODE_LE:
+    case REDUCT_OPCODE_GE:
+    {
+        if (left != NULL && left == right)
+        {
+            replacement = reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_TRUE())->output;
+        }
+    }
+    break;
+    case REDUCT_OPCODE_NEQ:
+    case REDUCT_OPCODE_LT:
+    case REDUCT_OPCODE_GT:
+    {
+        if (left != NULL && left == right)
+        {
+            replacement = reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FALSE())->output;
+        }
+    }
+    break;
+    }
+
+    if (replacement != NULL)
+    {
+        reduct_rvsdg_origin_redirect_users(node->output, replacement);
+        reduct_rvsdg_node_delete(reduct, node);
+        return true;
+    }
+
+    return false;
+}
+
+static bool reduct_optimize_cse(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    if (node->parent == NULL)
+    {
+        return false;
+    }
+
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST && node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+    {
+        return false;
+    }
+
+    if (node->inputCount > 0)
+    {
+        reduct_rvsdg_origin_t* origin = reduct_rvsdg_node_get_input_origin(node, 0);
+        if (origin != NULL)
+        {
+            reduct_rvsdg_edge_t* edge = origin->edges;
+            while (edge != NULL)
+            {
+                if (edge->user->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+                {
+                    reduct_rvsdg_node_t* search = edge->user->node;
+                    if (search != node && search->parent == node->parent &&
+                        reduct_rvsdg_node_is_identical(reduct, search, node))
+                    {
+                        reduct_rvsdg_origin_redirect_users(node->output, search->output);
+                        reduct_rvsdg_node_delete(reduct, node);
+                        return true;
+                    }
+                }
+                edge = edge->next;
+            }
+            return false;
+        }
+    }
+
+    reduct_rvsdg_node_t* search = node->parent->firstNode;
+    while (search != NULL && search != node)
+    {
+        if (reduct_rvsdg_node_is_identical(reduct, search, node))
+        {
+            reduct_rvsdg_origin_redirect_users(node->output, search->output);
+            reduct_rvsdg_node_delete(reduct, node);
+            return true;
+        }
+        search = search->next;
+    }
+
+    return false;
+}
+
+static bool reduct_optimize_gamma_folding(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_GAMMA)
+    {
+        return false;
+    }
+
+    reduct_rvsdg_origin_t* selector = reduct_rvsdg_node_get_input_origin(node, 0);
+    if (selector == NULL || selector->ownerKind != REDUCT_RVSDG_OWNER_NODE ||
+        selector->node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+    {
+        return false;
+    }
+
+    if (!REDUCT_HANDLE_IS_NUMBER_SHAPED(selector->node->constant))
+    {
+        return false;
+    }
+
+    uint32_t index = (uint32_t)reduct_handle_as_number(reduct, selector->node->constant);
+    if (index >= node->regionCount)
+    {
+        return false;
+    }
+
+    reduct_rvsdg_region_t* target = node->firstRegion;
+    for (uint32_t i = 0; i < index; i++)
+    {
+        target = target->next;
+    }
+
+    reduct_rvsdg_node_t* child = target->firstNode;
+    while (child != NULL)
+    {
+        reduct_rvsdg_node_t* next = child->next;
+        reduct_rvsdg_region_remove_node(child);
+        reduct_rvsdg_region_add_node(node->parent, child);
+        child = next;
+    }
+
+    reduct_rvsdg_origin_t* arg = target->firstArgument;
+    const reduct_rvsdg_node_info_t* info = reduct_rvsdg_node_get_info(node->type);
+
+    while (arg != NULL)
+    {
+        uint16_t inputIndex;
+        if (reduct_rvsdg_node_map_argument_to_input(node, target, arg->index, &inputIndex))
+        {
+            reduct_rvsdg_origin_t* inputOrigin = reduct_rvsdg_node_get_input_origin(node, inputIndex);
+            if (inputOrigin != NULL)
+            {
+                reduct_rvsdg_origin_redirect_users(arg, inputOrigin);
+            }
+        }
+        arg = arg->next;
+    }
+
+    if (target->result->edge != NULL)
+    {
+        reduct_rvsdg_origin_redirect_users(node->output, target->result->edge->origin);
+    }
+
+    reduct_rvsdg_node_delete(reduct, node);
+    return true;
+}
+
+static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, reduct_optimize_flags_t flags)
+{
+    assert(reduct != NULL);
+    assert(node != NULL);
 
     if (node->output->useCount == 0)
     {
@@ -172,12 +482,29 @@ static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, re
         return true;
     }
 
+    bool changed = false;
+
     if (flags & REDUCT_OPTIMIZE_FUNCTION_INLINING && reduct_optimize_function_inlining(reduct, node))
     {
         changed = true;
     }
 
     if (flags & REDUCT_OPTIMIZE_CONSTANT_FOLDING && reduct_optimize_constant_folding(reduct, node))
+    {
+        changed = true;
+    }
+
+    if (flags & REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION && reduct_optimize_algebraic_simplification(reduct, node))
+    {
+        changed = true;
+    }
+
+    if (flags & REDUCT_OPTIMIZE_GAMMA_FOLDING && reduct_optimize_gamma_folding(reduct, node))
+    {
+        changed = true;
+    }
+
+    if (flags & REDUCT_OPTIMIZE_CSE && reduct_optimize_cse(reduct, node))
     {
         changed = true;
     }

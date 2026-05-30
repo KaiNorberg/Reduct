@@ -565,8 +565,7 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t handle)
         reduct_handle_t graph = reduct_build(reduct, handle);
         reduct_optimize(reduct, graph, reduct->optimizeFlags);
         reduct_handle_t function = reduct_emit(reduct, graph);
-        return REDUCT_HANDLE_FROM_NUMBER(0);
-        //return reduct_eval(reduct, function);
+        return reduct_eval(reduct, function);
     }
 
     reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(handle);
