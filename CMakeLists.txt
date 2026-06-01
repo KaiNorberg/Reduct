@@ -60,9 +60,11 @@ set(REDUCT_SOURCES
     src/optimize.c
     src/parse.c
     src/schema.c
+    src/scratch.c
     src/standard.c
     src/stringify.c
     src/rvsdg.c
+    src/task.c
 )
 
 add_library(reduct SHARED ${REDUCT_SOURCES})

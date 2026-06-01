@@ -174,7 +174,7 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
 {
     assert(reduct != NULL);
 
-    if (REDUCT_UNLIKELY(item == NULL || (item->flags & REDUCT_ITEM_FLAG_GC_MARK)))
+    /*if (REDUCT_UNLIKELY(item == NULL || (item->flags & REDUCT_ITEM_FLAG_GC_MARK)))
     {
         return;
     }
@@ -233,14 +233,14 @@ static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
     else if (item->type == REDUCT_ITEM_TYPE_RVSDG_ORIGIN)
     {
         reduct_gc_mark_rvsdg_origin(reduct, &item->rvsdgOrigin);
-    }
+    }*/
 }
 
 REDUCT_API void reduct_gc(reduct_t* reduct)
 {
     assert(reduct != NULL);
 
-    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(reduct->nil));
+    /*reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(reduct->nil));
 
     for (size_t i = 0; i < reduct->retainedCount; i++)
     {
@@ -326,7 +326,7 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
     {
         reduct->block = NULL;
     }
-    reduct->prevBlockCount = reduct->blockCount;
+    reduct->prevBlockCount = reduct->blockCount;*/
 }
 
 REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
@@ -334,7 +334,7 @@ REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
     assert(reduct != NULL);
     assert(item != NULL);
 
-    for (size_t i = 0; i < reduct->retainedCount; i++)
+    /*for (size_t i = 0; i < reduct->retainedCount; i++)
     {
         if (reduct->retained[i] == item)
         {
@@ -355,7 +355,7 @@ REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
         reduct->retainedCapacity = newCapacity;
     }
 
-    reduct->retained[reduct->retainedCount++] = item;
+    reduct->retained[reduct->retainedCount++] = item;*/
 }
 
 REDUCT_API void reduct_gc_release(reduct_t* reduct, reduct_item_t* item)
@@ -363,12 +363,12 @@ REDUCT_API void reduct_gc_release(reduct_t* reduct, reduct_item_t* item)
     assert(reduct != NULL);
     assert(item != NULL);
 
-    for (size_t i = 0; i < reduct->retainedCount; i++)
-    {
-        if (reduct->retained[i] == item)
-        {
-            reduct->retained[i] = reduct->retained[--reduct->retainedCount];
-            return;
-        }
-    }
+    /*for (size_t i = 0; i < reduct->retainedCount; i++)
+     {
+         if (reduct->retained[i] == item)
+         {
+             reduct->retained[i] = reduct->retained[--reduct->retainedCount];
+             return;
+         }
+     }*/
 }

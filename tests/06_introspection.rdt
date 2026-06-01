@@ -1,10 +1,10 @@
-(do
-    (def num-int 42)
-    (def num-float 3.14)
-    (def text "hello")
-    (def my-list (list 1 2 3))
-    (def my-lambda (lambda (x) x))
+(def num-int 42)
+(def num-float 3.14)
+(def text "hello")
+(def my-list (list 1 2 3))
+(def my-lambda (lambda (x) x))
 
+(-> (world)
     (assert! (== (atom? text) true) "atom? should return true for string atoms")
     (assert! (== (atom? num-int) true) "atom? should return true for number atoms")
     (assert! (== (atom? my-list) false) "atom? should return false for lists")
@@ -45,7 +45,7 @@
     (assert! (== (empty? "" my-list) false) "empty? should return false if any item is not empty")
 
     (assert! (== (nil? nil) true) "nil? should return true for nil")
-    (assert! (== (nil? false) false) "nil? should return false for false")
+    (assert! (== (nil? false) true) "nil? should return true for false")
     (assert! (== (nil? nil nil) true) "nil? should return true if all items are nil")
     (assert! (== (nil? nil text) false) "nil? should return false if any item is not nil")
 

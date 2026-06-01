@@ -1,4 +1,4 @@
-(do
+(-> (world)
     (assert! (== (number "42") 42) "number should convert string to number")
     (assert! (== (number 3.14) 3.14) "number should pass through number types")
     (assert! (== (number "0x10") 16) "number should convert hex string to number")

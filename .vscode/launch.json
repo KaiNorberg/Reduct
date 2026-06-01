@@ -11,8 +11,7 @@
             "program": "${workspaceFolder}/build/reduct",
             "args": [
                 "${workspaceFolder}/temp.rdt",
-                "-O3",
-                "--ir"
+                "-O3"
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

@@ -31,6 +31,15 @@ struct reduct_item;
 REDUCT_API reduct_handle_t reduct_build(struct reduct* reduct, reduct_handle_t ast);
 
 /**
+ * @brief Register the intrinsics used by the builder.
+ *
+ * @note Will be called by `reduct_new()`.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ */
+REDUCT_API void reduct_build_register_intrinsics(struct reduct* reduct);
+
+/**
  * @brief Get the native function associated with an opcode.
  *
  * @param op The opcode.

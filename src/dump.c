@@ -5,6 +5,7 @@
 #include <reduct/item.h>
 #include <reduct/opcode.h>
 #include <reduct/optimize.h>
+#include <reduct/scratch.h>
 
 static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
 {
@@ -437,7 +438,7 @@ REDUCT_API void reduct_dump_rvsdg(reduct_t* reduct, reduct_handle_t graph, FILE*
     assert(out != NULL);
 
     size_t nodeCount = 0;
-    reduct_item_block_t* block = reduct->block;
+    reduct_item_block_t* block = reduct->env->item.block;
     while (block != NULL)
     {
         for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
@@ -450,9 +451,9 @@ REDUCT_API void reduct_dump_rvsdg(reduct_t* reduct, reduct_handle_t graph, FILE*
         block = block->next;
     }
 
-    REDUCT_SCRATCH(reduct, nodes, reduct_rvsdg_node_t*, nodeCount);
+    REDUCT_SCRATCH_GET(reduct, nodes, reduct_rvsdg_node_t*, nodeCount);
     size_t idx = 0;
-    block = reduct->block;
+    block = reduct->env->item.block;
     while (block != NULL)
     {
         for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
@@ -484,5 +485,5 @@ REDUCT_API void reduct_dump_rvsdg(reduct_t* reduct, reduct_handle_t graph, FILE*
 
     fprintf(out, "}\n");
 
-    REDUCT_SCRATCH_FREE(reduct, nodes);
+    REDUCT_SCRATCH_PUT(reduct, nodes);
 }

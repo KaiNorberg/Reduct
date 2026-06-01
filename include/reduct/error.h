@@ -19,8 +19,8 @@ struct reduct_item;
  * @{
  */
 
-#define REDUCT_ERROR_MAX_LEN 512      ///< Maximum length of an error string.
-#define REDUCT_ERROR_BACKTRACE_MAX 16 ///< Maximum number of backtrace frames.
+#define REDUCT_ERROR_MAX_LEN 128     ///< Maximum length of an error string.
+#define REDUCT_ERROR_BACKTRACE_MAX 8 ///< Maximum number of backtrace frames.
 
 /**
  * @brief Error type enumeration.

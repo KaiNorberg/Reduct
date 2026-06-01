@@ -36,6 +36,34 @@ typedef struct reduct_eval_frame
 } reduct_eval_frame_t;
 
 /**
+ * @brief Per-thread eval-related state structure.
+ * @struct reduct_eval_state_t
+ */
+typedef struct reduct_eval_state
+{
+    struct reduct_eval_frame* frames;
+    size_t frameCount;
+    size_t frameCapacity;
+    reduct_handle_t* regs;
+    size_t regCount;
+    size_t regCapacity;
+} reduct_eval_state_t;
+
+/**
+ * @brief Initialize an eval state.
+ *
+ * @param state Pointer to the eval state to initialize.
+ */
+REDUCT_API void reduct_eval_state_init(reduct_eval_state_t* state);
+
+/**
+ * @brief Deinitialize an eval state.
+ *
+ * @param state Pointer to the eval state to deinitialize.
+ */
+REDUCT_API void reduct_eval_state_deinit(reduct_eval_state_t* state);
+
+/**
  * @brief Evaluates a handle.
  *
  * If the handle is a compiled function then it will be interpreted, otherwise, it will first be compiled into a

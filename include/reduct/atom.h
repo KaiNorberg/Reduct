@@ -5,6 +5,7 @@
 #include <reduct/intrinsic.h>
 #include <reduct/native.h>
 #include <reduct/schema.h>
+#include <reduct/sync.h>
 
 #include <assert.h>
 #include <stdbool.h>
@@ -138,6 +139,57 @@ typedef struct reduct_atom
 
 #define REDUCT_FNV_PRIME 16777619U    ///< FNV-1a 32-bit prime.
 #define REDUCT_FNV_OFFSET 2166136261U ///< FNV-1a 32-bit offset basis.
+
+/**
+ * @brief Global atom-related environment structure.
+ * @struct reduct_atom_env_t
+ */
+typedef struct
+{
+    struct reduct_atom** map;
+    uint32_t size;
+    uint32_t capacity;
+    uint32_t mask;
+    uint32_t tombstones;
+    reduct_rwmutex_t mutex;
+} reduct_atom_env_t;
+
+/**
+ * @brief Per-thread atom-related state structure.
+ * @struct reduct_atom_state_t
+ */
+typedef struct
+{
+    reduct_atom_stack_t* atomStack;
+} reduct_atom_state_t;
+
+/**
+ * @brief Initialize an atom environment.
+ *
+ * @param env Pointer to the atom environment to initialize.
+ */
+REDUCT_API void reduct_atom_env_init(reduct_atom_env_t* env);
+
+/**
+ * @brief Deinitialize an atom environment.
+ *
+ * @param env Pointer to the atom environment to deinitialize.
+ */
+REDUCT_API void reduct_atom_env_deinit(reduct_atom_env_t* env);
+
+/**
+ * @brief Initialize an atom state.
+ *
+ * @param state Pointer to the atom state to initialize.
+ */
+REDUCT_API void reduct_atom_state_init(reduct_atom_state_t* state);
+
+/**
+ * @brief Deinitialize an atom state.
+ *
+ * @param state Pointer to the atom state to deinitialize.
+ */
+REDUCT_API void reduct_atom_state_deinit(reduct_atom_state_t* state);
 
 /**
  * @brief Check if an atom is equal to a string.

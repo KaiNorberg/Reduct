@@ -373,10 +373,10 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
     size_t regionLength = 0;
     size_t position = 0;
 
-    if (reduct != NULL && reduct->frameCount > 0)
+    if (reduct != NULL && reduct->eval.frameCount > 0)
     {
-        assert(reduct->frames != NULL);
-        reduct_eval_frame_t* frame = &reduct->frames[reduct->frameCount - 1];
+        assert(reduct->eval.frames != NULL);
+        reduct_eval_frame_t* frame = &reduct->eval.frames[reduct->eval.frameCount - 1];
         if (frame->closure != NULL && frame->closure->function != NULL)
         {
             reduct_function_t* func = frame->closure->function;
@@ -414,16 +414,16 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
     reduct_error_set(reduct->error, path, input, inputLength, regionLength, position, REDUCT_ERROR_TYPE_RUNTIME, "%s",
         formattedMessage);
 
-    if (reduct != NULL && reduct->frameCount > 0)
+    if (reduct != NULL && reduct->eval.frameCount > 0)
     {
-        for (uint32_t i = reduct->frameCount - 1; i > 0; i--)
+        for (uint32_t i = reduct->eval.frameCount - 1; i > 0; i--)
         {
             if (reduct->error->frameCount >= REDUCT_ERROR_BACKTRACE_MAX)
             {
                 break;
             }
 
-            reduct_eval_frame_t* btFrame = &reduct->frames[i - 1];
+            reduct_eval_frame_t* btFrame = &reduct->eval.frames[i - 1];
             if (btFrame->closure == NULL || btFrame->closure->function == NULL)
             {
                 continue;

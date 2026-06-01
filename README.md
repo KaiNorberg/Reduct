@@ -1050,15 +1050,19 @@ Will stop evaluating arguments as soon as one is not greater than or equal to th
 
 Since Reduct is a functional language, side effects should be avoided when possible. As such, any native with side effects will be suffixed with an exclamation mark `!`.
 
-> TODO: All side effects should be removed and replaced with state threading.
+#### State Management
+
+**`(world) -> <list>`**
+
+Returns an empty list representing the "world state". Intended to be utilized for state threading.
 
 #### Error Handling
 
-**`(assert! <cond: item> <msg: item>) -> <cond: item>`**
+**`(assert! <state: item> <cond: item> <msg: item>) -> <cond: item>`**
 
-Evaluates `<cond>`. If it is falsy, the evaluation fails and throws an error with `<msg>` as the message.
+Evaluates `<cond>`. If it is falsy, the evaluation fails and throws an error with `<msg>` as the message. Will return the provided state as the first argument for easy threading.
 
-**`(throw! <msg: atom>)`**
+**`(throw <msg: atom>)`**
 
 Throws an error with the given atom being the error message.
 
@@ -1073,6 +1077,30 @@ Calls the provided callable. If an error occurs during evaluation, the `<catch>`
 **`(map <list> <callable>) -> <list>`**
 
 Returns a new list by applying `<callable>` to each item in `<list>`. The `<callable>` must accept a single argument.
+
+**`(grid <extents: list> <callable>) -> <list>`**
+
+Returns a new `n` dimensional list where `n` is the number of arguments that `<callable>` accepts and the length of `<list>`. Each item in `<list>` is the extent of the corresponding argument in `<callable>`, and the value of each item in the resulting list is the result of calling `<callable>` with some integer point representing the index within the extent of the arguments.
+
+Each element in `<extents>` defines the range for the corresponding argument of the callable:
+
+- If the element is a single number `n`, the range is from `0` to `n - 1`.
+- If the element is a list of two numbers `(start end)`, the range is from `start` to `end - 1`.
+- If the element is a list of three numbers `(start end step)`, the range is from `start` to `end - 1` with increments of `step`.
+
+For example:
+
+```lisp
+(grid (3 3) (lambda (x y) {x + y})) 
+// Evaluates to "((0 1 2) (1 2 3) (2 3 4))"
+
+(grid ((-1 2) (10 13)) (lambda (x y) (+ x y)))
+// Evaluates to "((9 10 11) (10 11 12) (11 12 13))"
+```
+
+**`(compute <extents: list> <callable>) -> <list>`**
+
+Similar to `grid`, but the resulting list is flattened.
 
 **`(filter <list> <callable>) -> <list>`**
 
@@ -1372,11 +1400,11 @@ For example:
 
 **`(read-file! <path: string>) -> <string>`**
 
-Reads the file at the given path and returns its contents as a string atom without evaluating it.
+Reads the file at the given path and returns its contents as a string atom.
 
-**`(write-file! <path: string> <content: item>) -> <content: item>`**
+**`(write-file! <state: item> <path: string> <content: item>) -> <state: item>`**
 
-Writes the string representation of `<content>` to the file at the given path.
+Writes the string representation of `<content>` to the file at the given path and returns the provided state.
 
 **`(read-line!) -> <string>`**
 
@@ -1386,13 +1414,13 @@ Reads a single line of input from the standard input and returns it as an atom.
 
 Reads a single character from the standard input and returns it as an atom.
 
-**`(print! {item}) -> nil`**
+**`(print! <state: item> {item}) -> <state: item>`**
 
-Prints the string representation of all arguments to the standard output.
+Prints the string representation of all arguments to the standard output. Returns the provided state.
 
-**`(println! {item}) -> nil`**
+**`(println! <state: item> {item}) -> <state: item>`**
 
-Prints the string representation of all arguments to the standard output, followed by a newline.
+Prints the string representation of all arguments to the standard output, followed by a newline. Returns the provided state.
 
 **`(ord <atom: string>) -> <number>`**
 

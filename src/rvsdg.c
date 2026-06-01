@@ -38,7 +38,7 @@ REDUCT_API void reduct_rvsdg_edge_connect(reduct_t* reduct, reduct_rvsdg_origin_
 
 REDUCT_API void reduct_rvsdg_edge_disconnect(reduct_rvsdg_edge_t* edge)
 {
-    if (edge == NULL || edge->origin == NULL || edge->user == NULL)
+    if (edge == NULL || edge->origin == NULL)
     {
         return;
     }
@@ -57,7 +57,10 @@ REDUCT_API void reduct_rvsdg_edge_disconnect(reduct_rvsdg_edge_t* edge)
     }
     edge->origin->useCount--;
 
-    edge->user->edge = NULL;
+    if (edge->user != NULL)
+    {
+        edge->user->edge = NULL;
+    }
 }
 
 REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new(reduct_t* reduct)
@@ -906,12 +909,12 @@ static reduct_rvsdg_node_t* reduct_rvsdg_node_copy_internal(reduct_t* reduct, re
 REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_copy(reduct_t* reduct, reduct_rvsdg_region_t* region,
     reduct_rvsdg_node_t* node)
 {
-    REDUCT_SCRATCH(reduct, entries, reduct_rvsdg_copy_entry_t, 16);
+    REDUCT_SCRATCH_GET(reduct, entries, reduct_rvsdg_copy_entry_t, 16);
     reduct_rvsdg_copy_map_t map = {reduct, entries, 0, 16};
 
     reduct_rvsdg_node_t* copy = reduct_rvsdg_node_copy_internal(reduct, region, node, &map);
 
     entries = map.entries;
-    REDUCT_SCRATCH_FREE(reduct, entries);
+    REDUCT_SCRATCH_PUT(reduct, entries);
     return copy;
 }

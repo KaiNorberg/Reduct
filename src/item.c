@@ -6,6 +6,94 @@
 #include <reduct/gc.h>
 #include <reduct/item.h>
 
+static inline void reduct_item_free_external(reduct_item_t* item)
+{
+    switch (item->type)
+    {
+    case REDUCT_ITEM_TYPE_ATOM:
+        if (item->atom.flags & REDUCT_ATOM_FLAG_SCHEMA && item->atom.schema != NULL)
+        {
+            free(item->atom.schema);
+            item->atom.schema = NULL;
+        }
+        break;
+    case REDUCT_ITEM_TYPE_ATOM_STACK:
+        if (item->atomStack.data != NULL)
+        {
+            free(item->atomStack.data);
+            item->atomStack.data = NULL;
+        }
+        break;
+    case REDUCT_ITEM_TYPE_FUNCTION:
+        if (item->function.insts != NULL)
+        {
+            free(item->function.insts);
+            item->function.insts = NULL;
+        }
+        if (item->function.positions != NULL)
+        {
+            free(item->function.positions);
+            item->function.positions = NULL;
+        }
+        if (item->function.constants != NULL)
+        {
+            free(item->function.constants);
+            item->function.constants = NULL;
+        }
+        break;
+    case REDUCT_ITEM_TYPE_CLOSURE:
+        if (item->closure.constants != NULL && item->closure.constants != item->closure.smallConstants)
+        {
+            free(item->closure.constants);
+            item->closure.constants = item->closure.smallConstants;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+REDUCT_API void reduct_item_env_init(reduct_item_env_t* env)
+{
+    assert(env != NULL);
+    env->prevBlockCount = 0;
+    env->blockCount = 0;
+    env->block = NULL;
+    reduct_rwmutex_init(&env->mutex);
+}
+
+REDUCT_API void reduct_item_env_deinit(reduct_item_env_t* env)
+{
+    assert(env != NULL);
+    reduct_item_block_t* block = env->block;
+    while (block != NULL)
+    {
+        for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
+        {
+            reduct_item_free_external(&block->items[i]);
+        }
+        reduct_item_block_t* next = block->next;
+        free(block->allocated);
+        block = next;
+    }
+    env->block = NULL;
+    reduct_rwmutex_destroy(&env->mutex);
+}
+
+REDUCT_API void reduct_item_state_init(reduct_item_state_t* state)
+{
+    assert(state != NULL);
+    state->freeCount = 0;
+    state->freeList = NULL;
+}
+
+REDUCT_API void reduct_item_state_deinit(reduct_item_state_t* state)
+{
+    assert(state != NULL);
+    state->freeCount = 0;
+    state->freeList = NULL;
+}
+
 static inline void reduct_item_init(reduct_item_t* item)
 {
     item->type = REDUCT_ITEM_TYPE_NONE;
@@ -18,9 +106,9 @@ static inline reduct_item_t* reduct_item_pop_free_list(reduct_t* reduct)
 {
     assert(reduct != NULL);
 
-    reduct_item_t* item = reduct->freeList;
-    reduct->freeList = item->free;
-    reduct->freeCount--;
+    reduct_item_t* item = reduct->item.freeList;
+    reduct->item.freeList = item->free;
+    reduct->item.freeCount--;
     return item;
 }
 
@@ -28,12 +116,11 @@ REDUCT_API reduct_item_t* reduct_item_new(reduct_t* reduct)
 {
     assert(reduct != NULL);
 
-    if (REDUCT_LIKELY(reduct->freeList != NULL))
+    if (REDUCT_LIKELY(reduct->item.freeList != NULL))
     {
         return reduct_item_pop_free_list(reduct);
     }
 
-    reduct_item_t* item = NULL;
     void* allocated = calloc(1, sizeof(reduct_item_block_t));
     if (allocated == NULL)
     {
@@ -41,21 +128,27 @@ REDUCT_API reduct_item_t* reduct_item_new(reduct_t* reduct)
     }
     reduct_item_block_t* block = (reduct_item_block_t*)REDUCT_ROUND_UP((size_t)allocated, REDUCT_ALIGNMENT);
     block->allocated = allocated;
-    reduct->blockCount++;
+
+    for (size_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
+    {
+        reduct_item_init(&block->items[i]);
+    }
+
+    reduct_rwmutex_write_lock(&reduct->env->item.mutex);
+    reduct->env->item.blockCount++;
+    block->next = reduct->env->item.block;
+    reduct->env->item.block = block;
+    reduct_rwmutex_write_unlock(&reduct->env->item.mutex);
 
     for (size_t i = 1; i < REDUCT_ITEM_BLOCK_MAX - 1; i++)
     {
         block->items[i].free = &block->items[i + 1];
     }
     block->items[REDUCT_ITEM_BLOCK_MAX - 1].free = NULL;
-    reduct->freeCount += REDUCT_ITEM_BLOCK_MAX - 1;
+    reduct->item.freeCount += REDUCT_ITEM_BLOCK_MAX - 1;
+    reduct->item.freeList = &block->items[1];
 
-    reduct->freeList = &block->items[1];
-    block->next = reduct->block;
-    reduct->block = block;
-
-    item = &block->items[0];
-    return item;
+    return &block->items[0];
 }
 
 REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
@@ -65,19 +158,15 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
     case REDUCT_ITEM_TYPE_ATOM:
     {
         reduct_atom_t* atom = &item->atom;
-        if (reduct->atomMap != NULL && atom->index != REDUCT_ATOM_INDEX_NONE)
+
+        reduct_rwmutex_write_lock(&reduct->env->atom.mutex);
+        if (reduct->env->atom.map != NULL && atom->index != REDUCT_ATOM_INDEX_NONE)
         {
-            reduct->atomMap[atom->index] = REDUCT_ATOM_TOMBSTONE;
-            reduct->atomMapTombstones++;
-            reduct->atomMapSize--;
+            reduct->env->atom.map[atom->index] = REDUCT_ATOM_TOMBSTONE;
+            reduct->env->atom.tombstones++;
+            reduct->env->atom.size--;
         }
-        if (atom->flags & REDUCT_ATOM_FLAG_SCHEMA)
-        {
-            if (atom->schema != NULL)
-            {
-                free(atom->schema);
-            }
-        }
+        reduct_rwmutex_write_unlock(&reduct->env->atom.mutex);
     }
     break;
     case REDUCT_ITEM_TYPE_ATOM_STACK:
@@ -91,42 +180,14 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         {
             stack->prev->next = stack->next;
         }
-        else if (reduct->atomStack == stack)
+        else if (reduct->atom.atomStack == stack)
         {
-            reduct->atomStack = stack->next;
+            reduct->atom.atomStack = stack->next;
         }
-        if (stack->data != NULL)
-        {
-            free(stack->data);
-        }
+        break;
     }
-    break;
     case REDUCT_ITEM_TYPE_FUNCTION:
-    {
-        reduct_function_t* func = &item->function;
-        if (func->insts != NULL)
-        {
-            free(func->insts);
-        }
-        if (func->positions != NULL)
-        {
-            free(func->positions);
-        }
-        if (func->constants != NULL)
-        {
-            free(func->constants);
-        }
-    }
-    break;
     case REDUCT_ITEM_TYPE_CLOSURE:
-    {
-        reduct_closure_t* closure = &item->closure;
-        if (closure->constants != closure->smallConstants)
-        {
-            free(closure->constants);
-        }
-    }
-    break;
     case REDUCT_ITEM_TYPE_RVSDG_NODE:
     case REDUCT_ITEM_TYPE_RVSDG_EDGE:
     case REDUCT_ITEM_TYPE_RVSDG_REGION:
@@ -137,6 +198,7 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         break;
     }
 
+    reduct_item_free_external(item);
     reduct_item_init(item);
 
 #ifndef NDEBUG
@@ -151,9 +213,9 @@ REDUCT_API void reduct_item_free(reduct_t* reduct, reduct_item_t* item)
 
     reduct_item_deinit(reduct, item);
 
-    reduct->freeCount++;
-    item->free = reduct->freeList;
-    reduct->freeList = item;
+    reduct->item.freeCount++;
+    item->free = reduct->item.freeList;
+    reduct->item.freeList = item;
 }
 
 REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)

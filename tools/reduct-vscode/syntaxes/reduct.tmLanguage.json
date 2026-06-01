@@ -143,7 +143,7 @@
             ]
         },
         "keywords": {
-            "match": "(?<=^|[\\s\\(\\)\\{\\}\\.])(quote|recur|list|do|lambda|->|def|if|cond|match|and|or|not|assert!|throw!|try|map|filter|reduce|apply|any\\?|all\\?|sort|len|range|concat|append|prepend|first|last|rest|init|nth|assoc|dissoc|update|index-of|reverse|slice|flatten|contains\\?|replace|unique|chunk|find|get-in|assoc-in|dissoc-in|update-in|keys|values|merge|explode|implode|repeat|starts-with\\?|ends-with\\?|join|split|upper|lower|trim|atom\\?|number\\?|lambda\\?|native\\?|callable\\?|list\\?|empty\\?|nil\\?|number|eval|parse|run|import|read-file!|write-file!|print!|println!|ord|chr|read-line!|read-char!|format|now!|uptime!|env!|args!|min|max|clamp|abs|floor|ceil|round|pow|exp|log|sqrt|sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|rand|seed!)(?=[\\s\\(\\)\\{\\}\\.]|$)",
+            "match": "(?<=^|[\\s\\(\\)\\{\\}\\.])(quote|recur|list|do|lambda|->|def|if|cond|match|and|or|not|assert!|throw|try|map|filter|reduce|apply|any\\?|all\\?|sort|len|range|concat|append|prepend|first|last|rest|init|nth|assoc|dissoc|update|index-of|reverse|slice|flatten|contains\\?|replace|unique|chunk|find|get-in|assoc-in|dissoc-in|update-in|keys|values|merge|explode|implode|repeat|starts-with\\?|ends-with\\?|join|split|upper|lower|trim|atom\\?|number\\?|lambda\\?|native\\?|callable\\?|list\\?|empty\\?|nil\\?|number|eval|parse|run|import|read-file!|write-file!|print!|println!|ord|chr|read-line!|read-char!|format|env!|args!|min|max|clamp|abs|floor|ceil|round|pow|exp|log|sqrt|sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|rand|seed!)(?=[\\s\\(\\)\\{\\}\\.]|$)",
             "name": "keyword.control.reduct"
         },
         "operators": {

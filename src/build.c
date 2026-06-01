@@ -222,9 +222,8 @@ static reduct_rvsdg_origin_t* reduct_build_recur(reduct_builder_t* builder, redu
 
     reduct_rvsdg_node_t* call = reduct_rvsdg_node_new_call(builder->reduct, builder->scope->region, callable);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(list, 1);
     reduct_handle_t arg;
-    while (reduct_list_iter_next(&iter, &arg))
+    REDUCT_LIST_FOR_EACH_AT(&arg, list, 1)
     {
         reduct_rvsdg_origin_t* argOrigin = reduct_build_handle(builder, arg);
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_add_input(builder->reduct, call);
@@ -268,29 +267,24 @@ static reduct_rvsdg_origin_t* reduct_build_lambda(reduct_builder_t* builder, red
     reduct_builder_scope_t scope;
     reduct_builder_enter_scope(builder, &scope, lambda->firstRegion, lambda);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(REDUCT_HANDLE_TO_LIST(args));
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t param;
+    REDUCT_LIST_FOR_EACH(&param, REDUCT_HANDLE_TO_LIST(args))
     {
-        for (size_t i = 0; i < chunk.count; i++)
+        REDUCT_ERROR_COMPILE_ASSERT(builder, REDUCT_HANDLE_IS_ATOM(param), "lambda: parameter must be an atom, got %s",
+            REDUCT_HANDLE_GET_TYPE_STRING(param));
+
+        reduct_rvsdg_origin_t* value = reduct_rvsdg_region_add_argument(builder->reduct, lambda->firstRegion);
+
+        reduct_atom_t* key = REDUCT_HANDLE_TO_ATOM(param);
+        if (key->length > 0 && key->string[0] == '*')
         {
-            reduct_handle_t param = chunk.handles[i];
-            REDUCT_ERROR_COMPILE_ASSERT(builder, REDUCT_HANDLE_IS_ATOM(param),
-                "lambda: parameter must be an atom, got %s", REDUCT_HANDLE_GET_TYPE_STRING(param));
-
-            reduct_rvsdg_origin_t* value = reduct_rvsdg_region_add_argument(builder->reduct, lambda->firstRegion);
-
-            reduct_atom_t* key = REDUCT_HANDLE_TO_ATOM(param);
-            if (key->length > 0 && key->string[0] == '*')
-            {
-                lambda->flags |= REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC;
-                reduct_atom_t* nameOnly = reduct_atom_substr(builder->reduct, key, 1, key->length - 1);
-                nameOnly = reduct_atom_ensure_interned(builder->reduct, nameOnly);
-                reduct_builder_add_local(builder, nameOnly, value);
-            }
-
-            reduct_builder_add_local(builder, key, value);
+            lambda->flags |= REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC;
+            reduct_atom_t* nameOnly = reduct_atom_substr(builder->reduct, key, 1, key->length - 1);
+            nameOnly = reduct_atom_ensure_interned(builder->reduct, nameOnly);
+            reduct_builder_add_local(builder, nameOnly, value);
         }
+
+        reduct_builder_add_local(builder, key, value);
     }
 
     reduct_rvsdg_origin_t* origin = reduct_build_generic_block(builder, REDUCT_HANDLE_FROM_LIST(list), 2);
@@ -342,9 +336,8 @@ static reduct_rvsdg_origin_t* reduct_build_thread(reduct_builder_t* builder, red
             reduct_list_push(builder->reduct, next, reduct_list_first(builder->reduct, stepList));
             reduct_list_push(builder->reduct, next, current);
 
-            reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(stepList, 1);
             reduct_handle_t arg;
-            while (reduct_list_iter_next(&iter, &arg))
+            REDUCT_LIST_FOR_EACH_AT(&arg, stepList, 1)
             {
                 reduct_list_push(builder->reduct, next, arg);
             }
@@ -494,7 +487,9 @@ static reduct_rvsdg_origin_t* reduct_build_not(reduct_builder_t* builder, reduct
         reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_TRUE())->output,
         gamma->firstRegion->result);
     reduct_rvsdg_edge_connect(builder->reduct,
-        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion->next, REDUCT_HANDLE_FALSE(builder->reduct))->output,
+        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion->next,
+            REDUCT_HANDLE_FALSE(builder->reduct))
+            ->output,
         gamma->firstRegion->next->result);
 
     return gamma->output;
@@ -504,7 +499,8 @@ static reduct_rvsdg_origin_t* reduct_build_and(reduct_builder_t* builder, reduct
 {
     if (list->length == 1)
     {
-        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE(builder->reduct))
+        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
+            REDUCT_HANDLE_FALSE(builder->reduct))
             ->output;
     }
     return reduct_build_and_or_internal(builder, list, 1, false);
@@ -514,7 +510,8 @@ static reduct_rvsdg_origin_t* reduct_build_or(reduct_builder_t* builder, reduct_
 {
     if (list->length == 1)
     {
-        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE(builder->reduct))
+        return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
+            REDUCT_HANDLE_FALSE(builder->reduct))
             ->output;
     }
     return reduct_build_and_or_internal(builder, list, 1, true);
@@ -595,7 +592,8 @@ static reduct_rvsdg_origin_t* reduct_build_comparison_internal(reduct_builder_t*
     reduct_rvsdg_edge_connect(builder->reduct, cmp, reduct_rvsdg_node_get_input(gamma, 0));
 
     reduct_rvsdg_edge_connect(builder->reduct,
-        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_FALSE(builder->reduct))->output,
+        reduct_rvsdg_node_new_simple_constant(builder->reduct, gamma->firstRegion, REDUCT_HANDLE_FALSE(builder->reduct))
+            ->output,
         gamma->firstRegion->result);
 
     {
@@ -1100,7 +1098,8 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_atom(reduct_builder_t
     case 5:
         if (memcmp(atom->string, "false", 5) == 0)
         {
-            return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FALSE(builder->reduct))
+            return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
+                REDUCT_HANDLE_FALSE(builder->reduct))
                 ->output;
         }
         break;
@@ -1165,16 +1164,12 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_list(reduct_builder_t
     reduct_rvsdg_origin_t* callable = reduct_build_handle(builder, head);
     reduct_rvsdg_node_t* call = reduct_rvsdg_node_new_call(builder->reduct, builder->scope->region, callable);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(list, 1);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t argH;
+    REDUCT_LIST_FOR_EACH_AT(&argH, list, 1)
     {
-        for (size_t i = 0; i < chunk.count; i++)
-        {
-            reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, chunk.handles[i]);
-            reduct_rvsdg_user_t* input = reduct_rvsdg_node_add_input(builder->reduct, call);
-            reduct_rvsdg_edge_connect(builder->reduct, arg, input);
-        }
+        reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, argH);
+        reduct_rvsdg_user_t* input = reduct_rvsdg_node_add_input(builder->reduct, call);
+        reduct_rvsdg_edge_connect(builder->reduct, arg, input);
     }
 
     return call->output;
@@ -1234,28 +1229,12 @@ static reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* builde
     reduct_rvsdg_node_t* node =
         reduct_rvsdg_node_new_simple_opcode(builder->reduct, builder->scope->region, REDUCT_OPCODE_LIST);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(listPtr);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH_AT(&handle, listPtr, startIdx)
     {
-        if (iter.index < startIdx)
-        {
-            continue;
-        }
-
-        size_t baseIdx = iter.index - chunk.count;
-        for (size_t i = 0; i < chunk.count; i++)
-        {
-            size_t idx = baseIdx + i;
-            if (idx < startIdx)
-            {
-                continue;
-            }
-
-            reduct_rvsdg_origin_t* input = reduct_build_handle(builder, chunk.handles[i]);
-            reduct_rvsdg_user_t* user = reduct_rvsdg_node_add_input(builder->reduct, node);
-            reduct_rvsdg_edge_connect(builder->reduct, input, user);
-        }
+        reduct_rvsdg_origin_t* input = reduct_build_handle(builder, handle);
+        reduct_rvsdg_user_t* user = reduct_rvsdg_node_add_input(builder->reduct, node);
+        reduct_rvsdg_edge_connect(builder->reduct, input, user);
     }
 
     return node->output;
@@ -1271,27 +1250,17 @@ static reduct_rvsdg_origin_t* reduct_build_generic_block(reduct_builder_t* build
         REDUCT_ERROR_COMPILE(builder, list, "expected list, got %s", REDUCT_HANDLE_GET_TYPE_STRING(list));
     }
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(REDUCT_HANDLE_TO_LIST(list));
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH_AT(&handle, REDUCT_HANDLE_TO_LIST(list), startIdx)
     {
-        if (iter.index < startIdx)
-        {
-            continue;
-        }
+        last = reduct_build_handle(builder, handle);
+    }
 
-        size_t baseIdx = iter.index - chunk.count;
-        for (size_t i = 0; i < chunk.count; i++)
-        {
-            size_t idx = baseIdx + i;
-            if (idx < startIdx)
-            {
-                continue;
-            }
-
-            reduct_handle_t handle = chunk.handles[i];
-            last = reduct_build_handle(builder, handle);
-        }
+    if (last == NULL)
+    {
+        last = reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
+            REDUCT_HANDLE_NIL(builder->reduct))
+                   ->output;
     }
 
     return last;
@@ -1302,18 +1271,6 @@ REDUCT_API reduct_handle_t reduct_build(reduct_t* reduct, reduct_handle_t ast)
     if (!REDUCT_HANDLE_IS_LIST(ast))
     {
         REDUCT_ERROR_THROW(reduct, "expected list as root of AST, got %s", REDUCT_HANDLE_GET_TYPE_STRING(ast));
-    }
-
-    if (!reduct->hasRegisteredIntrinsics)
-    {
-        for (uint32_t i = 0; i < UINT8_MAX + 1; i++)
-        {
-            if (reductIntrinsics[i].name != NULL)
-            {
-                reduct_native_register(reduct, (reduct_native_t*)&reductIntrinsics[i], 1);
-            }
-        }
-        reduct->hasRegisteredIntrinsics = true;
     }
 
     reduct_builder_t builder = {
@@ -1334,6 +1291,17 @@ REDUCT_API reduct_handle_t reduct_build(reduct_t* reduct, reduct_handle_t ast)
     reduct_rvsdg_edge_connect(builder.reduct, origin, lambda->firstRegion->result);
 
     return REDUCT_HANDLE_FROM_RVSDG_NODE(lambda);
+}
+
+REDUCT_API void reduct_build_register_intrinsics(struct reduct* reduct)
+{
+    for (uint32_t i = 0; i < UINT8_MAX + 1; i++)
+    {
+        if (reductIntrinsics[i].name != NULL)
+        {
+            reduct_native_register(reduct, (reduct_native_t*)&reductIntrinsics[i], 1);
+        }
+    }
 }
 
 REDUCT_API reduct_native_fn reduct_builder_get_native_fn(reduct_opcode_t op)

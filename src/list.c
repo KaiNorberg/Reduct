@@ -196,17 +196,12 @@ REDUCT_API reduct_list_t* reduct_list_dissoc(struct reduct* reduct, reduct_list_
     /// @todo There is definetly a better way to do this
 
     reduct_list_t* newList = reduct_list_new(reduct);
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(list);
-    reduct_list_chunk_t chunk;
-    size_t currentIndex = 0;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH(&handle, list)
     {
-        for (size_t i = 0; i < chunk.count; i++, currentIndex++)
+        if (_index != index)
         {
-            if (currentIndex != index)
-            {
-                reduct_list_push(reduct, newList, chunk.handles[i]);
-            }
+            reduct_list_push(reduct, newList, handle);
         }
     }
 
@@ -225,24 +220,13 @@ REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t
 
     reduct_list_t* newList = reduct_list_new(reduct);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(list, start);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH_AT(&handle, list, start)
     {
-        size_t chunkStart = iter.index - chunk.count;
-        size_t count = chunk.count;
-        if (chunkStart + count > end)
-        {
-            count = end - chunkStart;
-        }
-        for (size_t i = 0; i < count; i++)
-        {
-            reduct_list_push(reduct, newList, chunk.handles[i]);
-        }
-        if (chunkStart + count >= end)
-        {
+        if (_index >= end)
             break;
-        }
+
+        reduct_list_push(reduct, newList, handle);
     }
 
     return newList;
@@ -327,7 +311,7 @@ static reduct_list_node_t* reduct_push_tail(reduct_t* reduct, uint32_t shift, si
 REDUCT_API void reduct_list_push(reduct_t* reduct, reduct_list_t* list, reduct_handle_t val)
 {
     assert(list != NULL);
-    
+
     if (list->length < REDUCT_LIST_WIDTH || (list->length & REDUCT_LIST_MASK) != 0)
     {
         list->tail.handles[list->length & REDUCT_LIST_MASK] = val;
@@ -369,14 +353,10 @@ REDUCT_API void reduct_list_push_list(reduct_t* reduct, reduct_list_t* list, red
     assert(list != NULL);
     assert(other != NULL);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(other);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH(&handle, other)
     {
-        for (size_t i = 0; i < chunk.count; i++)
-        {
-            reduct_list_push(reduct, list, chunk.handles[i]);
-        }
+        reduct_list_push(reduct, list, handle);
     }
 }
 
@@ -409,35 +389,30 @@ REDUCT_API reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_list_
 
     reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(list);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t entryH;
+    REDUCT_LIST_FOR_EACH(&entryH, list)
     {
-        for (size_t i = 0; i < chunk.count; i++)
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
         {
-            reduct_handle_t entryH = chunk.handles[i];
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
-            {
-                continue;
-            }
+            continue;
+        }
 
-            reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
-            if (REDUCT_UNLIKELY(entry->length < 1))
-            {
-                continue;
-            }
+        reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
+        if (REDUCT_UNLIKELY(entry->length < 1))
+        {
+            continue;
+        }
 
-            reduct_handle_t entryKey = reduct_list_first(reduct, entry);
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
-            {
-                continue;
-            }
+        reduct_handle_t entryKey = reduct_list_first(reduct, entry);
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
+        {
+            continue;
+        }
 
-            reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
-            if (internedKey == entryKeyInterned)
-            {
-                return entryH;
-            }
+        reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
+        if (internedKey == entryKeyInterned)
+        {
+            return entryH;
         }
     }
 
@@ -469,39 +444,34 @@ REDUCT_API bool reduct_list_find_entry_index(reduct_t* reduct, reduct_list_t* li
 
     reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(list);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t entryH;
+    REDUCT_LIST_FOR_EACH(&entryH, list)
     {
-        for (size_t i = 0; i < chunk.count; i++)
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
         {
-            reduct_handle_t entryH = chunk.handles[i];
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
-            {
-                continue;
-            }
+            continue;
+        }
 
-            reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
-            if (REDUCT_UNLIKELY(entry->length < 1))
-            {
-                continue;
-            }
+        reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
+        if (REDUCT_UNLIKELY(entry->length < 1))
+        {
+            continue;
+        }
 
-            reduct_handle_t entryKey = reduct_list_first(reduct, entry);
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
-            {
-                continue;
-            }
+        reduct_handle_t entryKey = reduct_list_first(reduct, entry);
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
+        {
+            continue;
+        }
 
-            reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
-            if (internedKey == entryKeyInterned)
+        reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
+        if (internedKey == entryKeyInterned)
+        {
+            if (outIndex != NULL)
             {
-                if (outIndex != NULL)
-                {
-                    *outIndex = iter.index - chunk.count + i;
-                }
-                return true;
+                *outIndex = _index;
             }
+            return true;
         }
     }
 

@@ -10,14 +10,14 @@
 
 REDUCT_API reduct_handle_type_t reduct_handle_get_type(reduct_handle_t handle)
 {
-    if (REDUCT_HANDLE_IS_NIL(handle))
-    {
-        return REDUCT_HANDLE_TYPE_NONE;
-    }
-
     if (REDUCT_HANDLE_IS_NUMBER(handle))
     {
         return REDUCT_HANDLE_TYPE_NUMBER;
+    }
+
+    if (REDUCT_HANDLE_IS_NIL(handle))
+    {
+        return REDUCT_HANDLE_TYPE_NONE;
     }
 
     if (!REDUCT_HANDLE_IS_ITEM(handle))
@@ -172,13 +172,22 @@ REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t* a, red
 
         reduct_list_iter_t iterA = REDUCT_LIST_ITER(listA);
         reduct_list_iter_t iterB = REDUCT_LIST_ITER(listB);
-        reduct_handle_t itemA, itemB;
 
-        while (reduct_list_iter_next(&iterA, &itemA) && reduct_list_iter_next(&iterB, &itemB))
+        reduct_list_chunk_t chunkA;
+        reduct_list_chunk_t chunkB;
+        while (reduct_list_iter_next_chunk(&iterA, &chunkA) && reduct_list_iter_next_chunk(&iterB, &chunkB))
         {
-            if (!reduct_handle_is_equal(reduct, &itemA, &itemB))
+            if (chunkA.count != chunkB.count)
             {
                 return false;
+            }
+
+            for (size_t i = 0; i < chunkA.count && i < chunkB.count; i++)
+            {
+                if (!reduct_handle_is_equal(reduct, &chunkA.handles[i], &chunkB.handles[i]))
+                {
+                    return false;
+                }
             }
         }
 

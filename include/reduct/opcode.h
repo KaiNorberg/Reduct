@@ -86,6 +86,11 @@ typedef enum
     REDUCT_OPCODE_RANGE1,     ///< (A, C) R(A) = range(0, R/K(C), 1)
     REDUCT_OPCODE_RANGE2,     ///< (A, B, C) R(A) = range(R(B), R/K(C), 1)
     REDUCT_OPCODE_RANGE3,     ///< (A, B, C) R(A) = range(R(A), R(B), R/K(C))
+    REDUCT_OPCODE_FORK, ///< (A, B, C) Spawn a thread for R/K(C) with B args starting at R(A). Task handle stored in
+                        ///< R(A).
+    REDUCT_OPCODE_JOIN, ///< (A, C) Wait for task handle in R(C) to complete, result stored in R(A).
+    REDUCT_OPCODE_AND,  ///< (A, B, C) R(A) = R(B) && R/K(C)
+    REDUCT_OPCODE_OR,   ///< (A, B, C) R(A) = R(B) || R/K(C)
     REDUCT_OPCODE_MOV_CONST = REDUCT_OPCODE_MOV | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_CALL_CONST = REDUCT_OPCODE_CALL | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_RET_CONST = REDUCT_OPCODE_RET | REDUCT_OPCODE_MODE_CONST,
@@ -120,6 +125,10 @@ typedef enum
     REDUCT_OPCODE_RANGE1_CONST = REDUCT_OPCODE_RANGE1 | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_RANGE2_CONST = REDUCT_OPCODE_RANGE2 | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_RANGE3_CONST = REDUCT_OPCODE_RANGE3 | REDUCT_OPCODE_MODE_CONST,
+    REDUCT_OPCODE_FORK_CONST = REDUCT_OPCODE_FORK | REDUCT_OPCODE_MODE_CONST,
+    REDUCT_OPCODE_JOIN_CONST = REDUCT_OPCODE_JOIN | REDUCT_OPCODE_MODE_CONST,
+    REDUCT_OPCODE_AND_CONST = REDUCT_OPCODE_AND | REDUCT_OPCODE_MODE_CONST,
+    REDUCT_OPCODE_OR_CONST = REDUCT_OPCODE_OR | REDUCT_OPCODE_MODE_CONST,
 } reduct_opcode_t;
 
 /**
@@ -140,6 +149,7 @@ typedef enum
     REDUCT_OPCODE_FLAG_IS_CALL = (1 << 9),        ///< Opcode is a function call.
     REDUCT_OPCODE_FLAG_IS_TERMINATOR = (1 << 10), ///< Opcode ends basic block reachability.
     REDUCT_OPCODE_FLAG_IS_RECUR = (1 << 11),      ///< Opcode is a recursive call.
+    REDUCT_OPCODE_FLAG_IS_FORK = (1 << 12),       ///< Opcode returns a task handle.
 } reduct_opcode_flags_t;
 
 /**
@@ -355,6 +365,13 @@ REDUCT_API extern const reduct_opcode_info_t reductOpcodeTable[128];
     ((reductOpcodeTable[REDUCT_OPCODE_BASE(_op)].flags & \
          (REDUCT_OPCODE_FLAG_READ_A | REDUCT_OPCODE_FLAG_READ_B | REDUCT_OPCODE_FLAG_READ_C)) == \
         REDUCT_OPCODE_FLAG_READ_C)
+
+/**
+ * @brief Check if an opcode is a fork instruction.
+ *
+ * @param _op The opcode.
+ */
+#define REDUCT_OPCODE_IS_FORK(_op) (reductOpcodeTable[REDUCT_OPCODE_BASE(_op)].flags & REDUCT_OPCODE_FLAG_IS_FORK)
 
 /** @} */
 

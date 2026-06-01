@@ -2,6 +2,7 @@
 #define REDUCT_SCHEMA_H 1
 
 #include <reduct/defs.h>
+#include <reduct/sync.h>
 
 #include <stdbool.h>
 
@@ -62,6 +63,32 @@ typedef uint32_t reduct_schema_id_t; ///< Schema ID type.
 typedef uint32_t reduct_schema_index_t; ///< Schema index type.
 
 #define REDUCT_SCHEMA_INDEX_NONE ((reduct_schema_index_t) - 1) ///< Invalid schema index.
+
+/**
+ * @brief Global schema-related environment structure.
+ * @struct reduct_schema_env_t
+ */
+typedef struct
+{
+    struct reduct_schema_internal** schemas;
+    size_t count;
+    size_t capacity;
+    reduct_rwmutex_t mutex;
+} reduct_schema_env_t;
+
+/**
+ * @brief Initialize a schema environment.
+ *
+ * @param env Pointer to the schema environment to initialize.
+ */
+REDUCT_API void reduct_schema_env_init(reduct_schema_env_t* env);
+
+/**
+ * @brief Deinitialize a schema environment.
+ *
+ * @param env Pointer to the schema environment to deinitialize.
+ */
+REDUCT_API void reduct_schema_env_deinit(reduct_schema_env_t* env);
 
 /**
  * @brief Create a new schema.

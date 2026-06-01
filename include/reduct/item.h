@@ -7,6 +7,7 @@
 #include <reduct/function.h>
 #include <reduct/list.h>
 #include <reduct/rvsdg.h>
+#include <reduct/task.h>
 
 /**
  * @file item.h
@@ -73,6 +74,7 @@ typedef struct reduct_item
         reduct_rvsdg_region_t rvsdgRegion; ///< An ir region.
         reduct_rvsdg_user_t rvsdgUser;     ///< An ir user.
         reduct_rvsdg_origin_t rvsdgOrigin; ///< An ir origin.
+        reduct_task_t task;                ///< A task.
         struct reduct_item* free;          ///< The next free item in the free list.
         uint8_t _raw[REDUCT_ITEM_PAYLOAD_MAX];
     };
@@ -103,6 +105,56 @@ typedef struct reduct_item_block
 _Static_assert((sizeof(reduct_item_block_t) & (sizeof(reduct_item_block_t) - 1)) == 0,
     "reduct_item_block_t must be a power of two");
 #endif
+
+/**
+ * @brief Global item-related environment structure.
+ * @struct reduct_item_env_t
+ */
+typedef struct
+{
+    size_t prevBlockCount;
+    size_t blockCount;
+    reduct_item_block_t* block;
+    reduct_rwmutex_t mutex;
+} reduct_item_env_t;
+
+/**
+ * @brief Per-thread item-related state structure.
+ * @struct reduct_item_state_t
+ */
+typedef struct
+{
+    size_t freeCount;
+    reduct_item_t* freeList;
+} reduct_item_state_t;
+
+/**
+ * @brief Initialize an item environment.
+ *
+ * @param env Pointer to the item environment to initialize.
+ */
+REDUCT_API void reduct_item_env_init(reduct_item_env_t* env);
+
+/**
+ * @brief Deinitialize an item environment.
+ *
+ * @param env Pointer to the item environment to deinitialize.
+ */
+REDUCT_API void reduct_item_env_deinit(reduct_item_env_t* env);
+
+/**
+ * @brief Initialize an item state.
+ *
+ * @param state Pointer to the item state to initialize.
+ */
+REDUCT_API void reduct_item_state_init(reduct_item_state_t* state);
+
+/**
+ * @brief Deinitialize an item state.
+ *
+ * @param state Pointer to the item state to deinitialize.
+ */
+REDUCT_API void reduct_item_state_deinit(reduct_item_state_t* state);
 
 /**
  * @brief Allocate a new item.

@@ -290,54 +290,33 @@ static inline REDUCT_ALWAYS_INLINE bool reduct_list_iter_next_chunk(reduct_list_
 }
 
 /**
- * @brief Get the next element from the iterator.
- *
- * @param iter Pointer to the iterator.
- * @param out Pointer to store the retrieved handle.
- * @return `true` if an element was retrieved, `false` if the end was reached.
- */
-static inline REDUCT_ALWAYS_INLINE bool reduct_list_iter_next(reduct_list_iter_t* iter, reduct_handle_t* out)
-{
-    if (REDUCT_UNLIKELY(iter->chunkRem == 0))
-    {
-        if (REDUCT_UNLIKELY(iter->index >= iter->list->length))
-        {
-            return false;
-        }
-
-        reduct_list_node_t* leaf = reduct_list_find_leaf(iter->list, iter->index, iter->tailOffset);
-        size_t offset = iter->index & REDUCT_LIST_MASK;
-        iter->chunkPtr = &leaf->handles[offset];
-
-        size_t nodeRem = REDUCT_LIST_WIDTH - offset;
-        size_t listRem = (size_t)iter->list->length - iter->index;
-        iter->chunkRem = (uint32_t)(nodeRem < listRem ? nodeRem : listRem);
-    }
-
-    *out = *iter->chunkPtr++;
-    iter->index++;
-    iter->chunkRem--;
-    return true;
-}
-
-/**
  * @brief Macro for iterating over all elements in a list.
+ *
+ * @note The current index is available as a `_index` variable within the loop.
  *
  * @param _handle The reduct_handle_t variable to store each element.
  * @param _list Pointer to the reduct_list_t to iterate.
  */
 #define REDUCT_LIST_FOR_EACH(_handle, _list) \
-    for (reduct_list_iter_t _iter = REDUCT_LIST_ITER(_list); reduct_list_iter_next(&_iter, (_handle));)
+    for (reduct_list_iter_t _it = REDUCT_LIST_ITER(_list); _it.index < (_it.list)->length;) \
+        for (reduct_list_chunk_t _ch; reduct_list_iter_next_chunk(&_it, &_ch);) \
+            for (size_t _i = 0, _index = _it.index - _ch.count; \
+                _i < _ch.count && (*(_handle) = _ch.handles[_i], true); _i++, _index++)
 
 /**
  * @brief Macro for iterating over elements in a list starting from a specific index.
+ *
+ * @note The current index is available as a `_index` variable within the loop.
  *
  * @param _handle The reduct_handle_t variable to store each element.
  * @param _list Pointer to the reduct_list_t to iterate.
  * @param _start The starting index.
  */
 #define REDUCT_LIST_FOR_EACH_AT(_handle, _list, _start) \
-    for (reduct_list_iter_t _iter = REDUCT_LIST_ITER_AT(_list, _start); reduct_list_iter_next(&_iter, (_handle));)
+    for (reduct_list_iter_t _it = REDUCT_LIST_ITER_AT(_list, _start); _it.index < (_it.list)->length;) \
+        for (reduct_list_chunk_t _ch; reduct_list_iter_next_chunk(&_it, &_ch);) \
+            for (size_t _i = 0, _index = _it.index - _ch.count; \
+                _i < _ch.count && (*(_handle) = _ch.handles[_i], true); _i++, _index++)
 
 /**
  * @brief Get the first element of the list.

@@ -12,6 +12,8 @@
  * @brief Garbage collection
  * @defgroup gc Garbage Collection
  *
+ * @todo Reimplement Garbage Collector.
+ *
  * @{
  */
 
@@ -35,13 +37,15 @@ REDUCT_API void reduct_gc(reduct_t* reduct);
  */
 static inline REDUCT_ALWAYS_INLINE void reduct_gc_if_needed(reduct_t* reduct)
 {
-    assert(reduct != NULL);
+    REDUCT_UNUSED(reduct);
+
+    /*assert(reduct != NULL);
 
     if (REDUCT_UNLIKELY(reduct->blockCount * REDUCT_ITEM_BLOCK_MAX * 3 > reduct->freeCount * 4 &&
             reduct->blockCount > reduct->prevBlockCount))
     {
         reduct_gc(reduct);
-    }
+    }*/
 }
 
 /**

@@ -1,3 +1,4 @@
+#include "reduct/sync.h"
 #include <reduct/atom.h>
 #include <reduct/char.h>
 #include <reduct/core.h>
@@ -13,7 +14,43 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define REDUCT_ATOM_TOMBSTONE ((reduct_atom_t*)(uintptr_t)1)
+REDUCT_API void reduct_atom_env_init(reduct_atom_env_t* env)
+{
+    assert(env != NULL);
+    env->map = NULL;
+    env->size = 0;
+    env->capacity = 0;
+    env->mask = 0;
+    env->tombstones = 0;
+    reduct_rwmutex_init(&env->mutex);
+}
+
+REDUCT_API void reduct_atom_env_deinit(reduct_atom_env_t* env)
+{
+    assert(env != NULL);
+    if (env->map != NULL)
+    {
+        free(env->map);
+        env->map = NULL;
+    }
+    env->size = 0;
+    env->capacity = 0;
+    env->mask = 0;
+    env->tombstones = 0;
+    reduct_rwmutex_destroy(&env->mutex);
+}
+
+REDUCT_API void reduct_atom_state_init(reduct_atom_state_t* state)
+{
+    assert(state != NULL);
+    state->atomStack = NULL;
+}
+
+REDUCT_API void reduct_atom_state_deinit(reduct_atom_state_t* state)
+{
+    assert(state != NULL);
+    state->atomStack = NULL;
+}
 
 static inline bool reduct_atom_map_is_alive(reduct_atom_t* slot)
 {
@@ -25,20 +62,20 @@ static inline size_t reduct_atom_map_find(reduct_t* reduct, uint32_t hash, const
 {
     assert(reduct != NULL);
     assert(str != NULL);
-    assert(reduct->atomMapCapacity != 0);
-    assert((reduct->atomMapCapacity & (reduct->atomMapCapacity - 1)) == 0);
-    assert(reduct->atomMapSize <= reduct->atomMapCapacity);
+    assert(reduct->env->atom.capacity != 0);
+    assert((reduct->env->atom.capacity & (reduct->env->atom.capacity - 1)) == 0);
+    assert(reduct->env->atom.size <= reduct->env->atom.capacity);
 
     bool wantQuoted = (flags & REDUCT_ATOM_LOOKUP_QUOTED) != 0;
 
-    size_t index = hash & reduct->atomMapMask;
+    size_t index = hash & reduct->env->atom.mask;
     size_t step = 1;
 
     size_t tombstoneIndex = REDUCT_ATOM_INDEX_NONE;
 
-    while (reduct->atomMap[index] != NULL)
+    while (reduct->env->atom.map[index] != NULL)
     {
-        reduct_atom_t* atom = reduct->atomMap[index];
+        reduct_atom_t* atom = reduct->env->atom.map[index];
 
         if (atom == REDUCT_ATOM_TOMBSTONE)
         {
@@ -57,7 +94,7 @@ static inline size_t reduct_atom_map_find(reduct_t* reduct, uint32_t hash, const
             }
         }
 
-        index = (index + step) & reduct->atomMapMask;
+        index = (index + step) & reduct->env->atom.mask;
         step++;
     }
 
@@ -75,29 +112,29 @@ static inline size_t reduct_atom_map_find_or_alloc(reduct_t* reduct, uint32_t ha
     assert(reduct != NULL);
     assert(str != NULL);
 
-    if (reduct->atomMapCapacity == 0)
+    if (reduct->env->atom.capacity == 0)
     {
-        reduct->atomMapCapacity = REDUCT_ATOM_MAP_INITIAL;
-        reduct->atomMapMask = reduct->atomMapCapacity - 1;
-        reduct->atomMapTombstones = 0;
-        reduct->atomMap = calloc(reduct->atomMapCapacity, sizeof(reduct_atom_t*));
-        if (reduct->atomMap == NULL)
+        reduct->env->atom.capacity = REDUCT_ATOM_MAP_INITIAL;
+        reduct->env->atom.mask = reduct->env->atom.capacity - 1;
+        reduct->env->atom.tombstones = 0;
+        reduct->env->atom.map = calloc(reduct->env->atom.capacity, sizeof(reduct_atom_t*));
+        if (reduct->env->atom.map == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
     }
 
-    size_t occupied = reduct->atomMapSize + reduct->atomMapTombstones;
-    if (occupied * 4 > reduct->atomMapCapacity * 3)
+    size_t occupied = reduct->env->atom.size + reduct->env->atom.tombstones;
+    if (occupied * 4 > reduct->env->atom.capacity * 3)
     {
-        size_t oldCapacity = reduct->atomMapCapacity;
-        reduct_atom_t** oldMap = reduct->atomMap;
+        size_t oldCapacity = reduct->env->atom.capacity;
+        reduct_atom_t** oldMap = reduct->env->atom.map;
 
-        reduct->atomMapCapacity = oldCapacity * REDUCT_ATOM_MAP_GROWTH;
-        reduct->atomMapMask = reduct->atomMapCapacity - 1;
-        reduct->atomMapTombstones = 0;
-        reduct->atomMap = calloc(reduct->atomMapCapacity, sizeof(reduct_atom_t*));
-        if (reduct->atomMap == NULL)
+        reduct->env->atom.capacity = oldCapacity * REDUCT_ATOM_MAP_GROWTH;
+        reduct->env->atom.mask = reduct->env->atom.capacity - 1;
+        reduct->env->atom.tombstones = 0;
+        reduct->env->atom.map = calloc(reduct->env->atom.capacity, sizeof(reduct_atom_t*));
+        if (reduct->env->atom.map == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
@@ -111,15 +148,15 @@ static inline size_t reduct_atom_map_find_or_alloc(reduct_t* reduct, uint32_t ha
                 continue;
             }
 
-            size_t index = atom->hash & reduct->atomMapMask;
+            size_t index = atom->hash & reduct->env->atom.mask;
             size_t step = 1;
-            while (reduct->atomMap[index] != NULL)
+            while (reduct->env->atom.map[index] != NULL)
             {
-                index = (index + step) & reduct->atomMapMask;
+                index = (index + step) & reduct->env->atom.mask;
                 step++;
             }
 
-            reduct->atomMap[index] = atom;
+            reduct->env->atom.map[index] = atom;
             atom->index = (uint32_t)index;
         }
 
@@ -131,17 +168,17 @@ static inline size_t reduct_atom_map_find_or_alloc(reduct_t* reduct, uint32_t ha
 
     size_t index = reduct_atom_map_find(reduct, hash, str, len, flags);
 
-    if (reduct_atom_map_is_alive(reduct->atomMap[index]))
+    if (reduct_atom_map_is_alive(reduct->env->atom.map[index]))
     {
         return index;
     }
 
-    if (reduct->atomMap[index] == REDUCT_ATOM_TOMBSTONE)
+    if (reduct->env->atom.map[index] == REDUCT_ATOM_TOMBSTONE)
     {
-        reduct->atomMapTombstones--;
+        reduct->env->atom.tombstones--;
     }
 
-    reduct->atomMapSize++;
+    reduct->env->atom.size++;
     return index;
 }
 
@@ -152,11 +189,11 @@ static inline void reduct_atom_map_update(reduct_t* reduct, reduct_atom_t* atom,
 
     if (atom->index != REDUCT_ATOM_INDEX_NONE)
     {
-        reduct->atomMap[atom->index] = REDUCT_ATOM_TOMBSTONE;
-        reduct->atomMapTombstones++;
+        reduct->env->atom.map[atom->index] = REDUCT_ATOM_TOMBSTONE;
+        reduct->env->atom.tombstones++;
     }
 
-    reduct->atomMap[newIndex] = atom;
+    reduct->env->atom.map[newIndex] = atom;
     atom->index = (uint32_t)newIndex;
     atom->hash = hash;
 }
@@ -185,13 +222,13 @@ static inline reduct_atom_stack_t* reduct_atom_stack_new(reduct_t* reduct, size_
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
 
-    stack->next = reduct->atomStack;
+    stack->next = reduct->atom.atomStack;
     stack->prev = NULL;
-    if (reduct->atomStack != NULL)
+    if (reduct->atom.atomStack != NULL)
     {
-        reduct->atomStack->prev = stack;
+        reduct->atom.atomStack->prev = stack;
     }
-    reduct->atomStack = stack;
+    reduct->atom.atomStack = stack;
     return stack;
 }
 
@@ -199,7 +236,7 @@ static inline char* reduct_atom_stack_alloc(reduct_t* reduct, size_t size, reduc
 {
     assert(reduct != NULL);
 
-    reduct_atom_stack_t* stack = reduct->atomStack;
+    reduct_atom_stack_t* stack = reduct->atom.atomStack;
     if (stack == NULL || stack->count + size > stack->capacity)
     {
         size_t capacity = REDUCT_ATOM_STACK_MIN;
@@ -329,16 +366,34 @@ REDUCT_API bool reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
         return true;
     }
 
-    atom->hash = reduct_hash(atom->string, atom->length);
-    size_t index = reduct_atom_map_find_or_alloc(reduct, atom->hash, atom->string, atom->length,
-        reduct_atom_get_lookup_flags(atom));
-    if (reduct_atom_map_is_alive(reduct->atomMap[index]))
+    uint32_t hash = reduct_hash(atom->string, atom->length);
+    reduct_atom_lookup_flags_t flags = reduct_atom_get_lookup_flags(atom);
+
+    reduct_rwmutex_read_lock(&reduct->env->atom.mutex);
+    if (REDUCT_LIKELY(reduct->env->atom.capacity != 0))
     {
+        size_t index = reduct_atom_map_find(reduct, hash, atom->string, atom->length, flags);
+        if (reduct_atom_map_is_alive(reduct->env->atom.map[index]))
+        {
+            reduct_rwmutex_read_unlock(&reduct->env->atom.mutex);
+            return false;
+        }
+    }
+    reduct_rwmutex_read_unlock(&reduct->env->atom.mutex);
+
+    reduct_rwmutex_write_lock(&reduct->env->atom.mutex);
+    size_t index = reduct_atom_map_find_or_alloc(reduct, hash, atom->string, atom->length, flags);
+    if (reduct_atom_map_is_alive(reduct->env->atom.map[index]))
+    {
+        atom->index = (uint32_t)index;
+        reduct_rwmutex_write_unlock(&reduct->env->atom.mutex);
         return false;
     }
 
-    reduct->atomMap[index] = atom;
+    reduct->env->atom.map[index] = atom;
     atom->index = (uint32_t)index;
+    atom->hash = hash;
+    reduct_rwmutex_write_unlock(&reduct->env->atom.mutex);
     return true;
 }
 
@@ -349,10 +404,28 @@ REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, 
     assert(str != NULL);
 
     uint32_t hash = reduct_hash(str, len);
-    size_t index = reduct_atom_map_find_or_alloc(reduct, hash, str, len, flags);
-    if (reduct->atomMap[index] != NULL && reduct->atomMap[index] != REDUCT_ATOM_TOMBSTONE)
+
+    reduct_rwmutex_read_lock(&reduct->env->atom.mutex);
+    if (REDUCT_LIKELY(reduct->env->atom.capacity != 0))
     {
-        return reduct->atomMap[index];
+        size_t index = reduct_atom_map_find(reduct, hash, str, len, flags);
+        reduct_atom_t* atom = reduct->env->atom.map[index];
+        if (reduct_atom_map_is_alive(atom))
+        {
+            reduct_rwmutex_read_unlock(&reduct->env->atom.mutex);
+            return atom;
+        }
+    }
+    reduct_rwmutex_read_unlock(&reduct->env->atom.mutex);
+
+    reduct_rwmutex_write_lock(&reduct->env->atom.mutex);
+
+    size_t index = reduct_atom_map_find_or_alloc(reduct, hash, str, len, flags);
+    if (reduct_atom_map_is_alive(reduct->env->atom.map[index]))
+    {
+        reduct_atom_t* atom = reduct->env->atom.map[index];
+        reduct_rwmutex_write_unlock(&reduct->env->atom.mutex);
+        return atom;
     }
 
     reduct_atom_t* atom = reduct_atom_new(reduct, len);
@@ -360,7 +433,7 @@ REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, 
 
     atom->hash = hash;
     atom->index = (uint32_t)index;
-    reduct->atomMap[index] = atom;
+    reduct->env->atom.map[index] = atom;
 
     if (flags & REDUCT_ATOM_LOOKUP_QUOTED)
     {
@@ -371,6 +444,7 @@ REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, 
         reduct_atom_map_update(reduct, atom, index, hash);
     }
 
+    reduct_rwmutex_write_unlock(&reduct->env->atom.mutex);
     return atom;
 }
 

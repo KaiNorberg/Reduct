@@ -166,13 +166,6 @@ int main(int argc, char **argv)
         ast = reduct_parse_file(reduct, filename);
     }
 
-    if (REDUCT_HANDLE_IS_NIL(ast))
-    {
-        fprintf(stderr, "error: nothing to evaluate\n");
-        result = 1;
-        goto cleanup;
-    }
-
     static char buffer[0x10000];
 
     if (parseOnly)
@@ -181,14 +174,14 @@ int main(int argc, char **argv)
         printf("%s", buffer);
         goto cleanup;
     }
-
+    
     reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
+    
+    reduct_handle_t node = reduct_build(reduct, ast);
+    reduct_optimize(reduct, node, optimizeFlags);
 
     if (irOutputFile != NULL)
     {
-        reduct_handle_t node = reduct_build(reduct, ast);
-        reduct_optimize(reduct, node, optimizeFlags);
-
         FILE* out = fopen(irOutputFile, "w");
         if (out == NULL)
         {
@@ -201,17 +194,15 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
+    reduct_handle_t function = reduct_emit(reduct, node);
+
     if (shouldDump)
     {
-        reduct_handle_t node = reduct_build(reduct, ast);
-        reduct_optimize(reduct, node, optimizeFlags);
-        reduct_handle_t function = reduct_emit(reduct, node);
-
         reduct_dump_function(reduct, function, stdout);
         goto cleanup;
     }
 
-    reduct_handle_t eval = reduct_eval(reduct, ast);
+    reduct_handle_t eval = reduct_eval(reduct, function);
     if (isSilent)
     {
         goto cleanup;

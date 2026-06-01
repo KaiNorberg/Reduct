@@ -34,6 +34,7 @@ typedef HMODULE reduct_lib_t;
 #define REDUCT_LIB_ERROR() "Windows Error"
 #else
 #include <dlfcn.h>
+#include <unistd.h>
 typedef void* reduct_lib_t;
 #define REDUCT_LIB_OPEN(_path) dlopen(_path, RTLD_NOW | RTLD_GLOBAL)
 #define REDUCT_LIB_CLOSE(_lib) dlclose(_lib)

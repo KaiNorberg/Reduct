@@ -160,9 +160,8 @@ typedef enum
  * @return Non-zero if the handle is number shaped, zero otherwise.
  */
 #define REDUCT_HANDLE_IS_NUMBER_SHAPED(_handle) \
-    (REDUCT_HANDLE_IS_NUMBER(_handle) || \
-        (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_IS_ATOM(_handle) && \
-            reduct_atom_is_number(REDUCT_HANDLE_TO_ATOM(_handle))))
+    (REDUCT_HANDLE_IS_NUMBER(_handle) || (REDUCT_HANDLE_IS_ATOM(_handle) && \
+        reduct_atom_is_number(REDUCT_HANDLE_TO_ATOM(_handle))))
 
 /**
  * @brief Get the high-level type of a handle.
@@ -513,16 +512,18 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
     { \
         reduct_handle_t _bVal = (_b); \
         reduct_handle_t _cVal = (_c); \
+        double _bv, _cv; \
         if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NUMBER(_bVal) && REDUCT_HANDLE_IS_NUMBER(_cVal))) \
         { \
-            *(_a) = REDUCT_HANDLE_FROM_NUMBER(REDUCT_HANDLE_TO_NUMBER(_bVal) _op REDUCT_HANDLE_TO_NUMBER(_cVal)); \
+            _bv = REDUCT_HANDLE_TO_NUMBER(_bVal); \
+            _cv = REDUCT_HANDLE_TO_NUMBER(_cVal); \
         } \
         else \
         { \
-            double _bv = reduct_handle_as_number(_reduct, _bVal); \
-            double _cv = reduct_handle_as_number(_reduct, _cVal); \
-            *(_a) = REDUCT_HANDLE_FROM_NUMBER(_bv _op _cv); \
+            _bv = reduct_handle_as_number(_reduct, _bVal); \
+            _cv = reduct_handle_as_number(_reduct, _cVal); \
         } \
+        *(_a) = REDUCT_HANDLE_FROM_NUMBER(_bv _op _cv); \
     } while (0)
 
 /**
@@ -538,26 +539,22 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
     { \
         reduct_handle_t _bVal = (_b); \
         reduct_handle_t _cVal = (_c); \
+        double _bv, _cv; \
         if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NUMBER(_bVal) && REDUCT_HANDLE_IS_NUMBER(_cVal))) \
         { \
-            double _bv = REDUCT_HANDLE_TO_NUMBER(_bVal); \
-            double _cv = REDUCT_HANDLE_TO_NUMBER(_cVal); \
-            if (REDUCT_UNLIKELY(_cv == 0.0)) \
-            { \
-                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
-            } \
-            *(_a) = REDUCT_HANDLE_FROM_NUMBER(_bv / _cv); \
+            _bv = REDUCT_HANDLE_TO_NUMBER(_bVal); \
+            _cv = REDUCT_HANDLE_TO_NUMBER(_cVal); \
         } \
         else \
         { \
-            double _bv = reduct_handle_as_number(_reduct, _bVal); \
-            double _cv = reduct_handle_as_number(_reduct, _cVal); \
-            if (REDUCT_UNLIKELY(_cv == 0.0)) \
-            { \
-                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
-            } \
-            *(_a) = REDUCT_HANDLE_FROM_NUMBER(_bv / _cv); \
+            _bv = reduct_handle_as_number(_reduct, _bVal); \
+            _cv = reduct_handle_as_number(_reduct, _cVal); \
         } \
+        if (REDUCT_UNLIKELY(_cv == 0.0)) \
+        { \
+            REDUCT_ERROR_THROW(_reduct, "division by zero"); \
+        } \
+        *(_a) = REDUCT_HANDLE_FROM_NUMBER(_bv / _cv); \
     } while (0)
 
 /**
@@ -573,26 +570,22 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
     { \
         reduct_handle_t _bVal = (_b); \
         reduct_handle_t _cVal = (_c); \
+        double _bv, _cv; \
         if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NUMBER(_bVal) && REDUCT_HANDLE_IS_NUMBER(_cVal))) \
         { \
-            double _bv = REDUCT_HANDLE_TO_NUMBER(_bVal); \
-            double _cv = REDUCT_HANDLE_TO_NUMBER(_cVal); \
-            if (REDUCT_UNLIKELY(_cv == 0.0)) \
-            { \
-                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
-            } \
-            *(_a) = REDUCT_HANDLE_FROM_NUMBER(fmod(_bv, _cv)); \
+            _bv = REDUCT_HANDLE_TO_NUMBER(_bVal); \
+            _cv = REDUCT_HANDLE_TO_NUMBER(_cVal); \
         } \
         else \
         { \
-            double _bv = reduct_handle_as_number(_reduct, _bVal); \
-            double _cv = reduct_handle_as_number(_reduct, _cVal); \
-            if (REDUCT_UNLIKELY(_cv == 0.0)) \
-            { \
-                REDUCT_ERROR_THROW(_reduct, "division by zero"); \
-            } \
-            *(_a) = REDUCT_HANDLE_FROM_NUMBER(fmod(_bv, _cv)); \
+            _bv = reduct_handle_as_number(_reduct, _bVal); \
+            _cv = reduct_handle_as_number(_reduct, _cVal); \
         } \
+        if (REDUCT_UNLIKELY(_cv == 0.0)) \
+        { \
+            REDUCT_ERROR_THROW(_reduct, "division by zero"); \
+        } \
+        *(_a) = REDUCT_HANDLE_FROM_NUMBER(fmod(_bv, _cv)); \
     } while (0)
 
 /**
@@ -607,8 +600,20 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
 #define REDUCT_HANDLE_BITWISE_FAST(_reduct, _a, _b, _c, _op) \
     do \
     { \
-        *(_a) = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)reduct_handle_as_number(_reduct, (_b)) _op(int64_t) \
-                reduct_handle_as_number(_reduct, (_c)))); \
+        reduct_handle_t _bVal = (_b); \
+        reduct_handle_t _cVal = (_c); \
+        double _bv, _cv; \
+        if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NUMBER(_bVal) && REDUCT_HANDLE_IS_NUMBER(_cVal))) \
+        { \
+            _bv = REDUCT_HANDLE_TO_NUMBER(_bVal); \
+            _cv = REDUCT_HANDLE_TO_NUMBER(_cVal); \
+        } \
+        else \
+        { \
+            _bv = reduct_handle_as_number(_reduct, _bVal); \
+            _cv = reduct_handle_as_number(_reduct, _cVal); \
+        } \
+        *(_a) = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)_bv _op(int64_t)_cv)); \
     } while (0)
 
 /**

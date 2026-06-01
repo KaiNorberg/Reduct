@@ -1,7 +1,8 @@
-(do
-    (def nums (1 2 3 4 5))
-    (def text "hello")
-
+(def nums (1 2 3 4 5))
+(def text "hello")
+(def data (("a" 1) ("b" 2) ("c" (("d" 3)))))
+(def alist (("a" 1) ("b" 2) ("c" 3)))
+(-> (world)
     (assert! (== (len nums) 5) "len should return the number of items in a list")
     (assert! (== (len text) 5) "len should return the number of characters in a string")
     (assert! (== (len ()) 0) "len of an empty list should be 0")
@@ -81,7 +82,6 @@
     (assert! (== (find nums (lambda (x) (> x 3))) 4) "find should return the first item that satisfies the predicate")
     (assert! (== (find nums (lambda (x) (> x 10))) nil) "find should return nil if no item satisfies the predicate")
 
-    (def data (("a" 1) ("b" 2) ("c" (("d" 3)))))
     (assert! (== (get-in data ("c" "d")) 3) "get-in should retrieve a value from a nested association list using path")
     (assert! (== (get-in data "a") 1) "get-in should work with a single atom path")
     (assert! (== (get-in data ("c" "x") 42) 42) "get-in should return the default value if the path is not found")
@@ -95,7 +95,6 @@
 
     (assert! (== (update-in data ("a") (lambda (x) (+ x 10))) (("a" 11) ("b" 2) ("c" (("d" 3))))) "update-in should apply a function to the value at the path")
 
-    (def alist (("a" 1) ("b" 2) ("c" 3)))
     (assert! (== (keys alist) ("a" "b" "c")) "keys should return the first item of every sub-list")
     (assert! (== (values alist) (1 2 3)) "values should return the second item of every sub-list")
 

@@ -3,6 +3,7 @@
 
 #include <reduct/defs.h>
 #include <reduct/rvsdg.h>
+#include <reduct/sync.h>
 
 struct reduct;
 struct reduct_builder;
@@ -38,6 +39,33 @@ typedef struct
 #define REDUCT_NATIVE_MAP_GROWTH 2    ///< The growth factor of the native map.
 
 /**
+ * @brief Global native-related environment structure.
+ * @struct reduct_native_env_t
+ */
+typedef struct
+{
+    struct reduct_native_entry* map;
+    size_t size;
+    size_t capacity;
+    size_t mask;
+    reduct_rwmutex_t mutex;
+} reduct_native_env_t;
+
+/**
+ * @brief Initialize a native environment.
+ *
+ * @param state Pointer to the native environment to initialize.
+ */
+REDUCT_API void reduct_native_env_init(reduct_native_env_t* env);
+
+/**
+ * @brief Deinitialize a native environment.
+ *
+ * @param state Pointer to the native environment to deinitialize.
+ */
+REDUCT_API void reduct_native_env_deinit(reduct_native_env_t* env);
+
+/**
  * @brief Native map entry.
  */
 typedef struct reduct_native_entry
@@ -68,7 +96,7 @@ REDUCT_API reduct_native_entry_t* reduct_native_map_find(struct reduct* reduct, 
  * @param array An array of native function definitions.
  * @param count The number of functions in the array.
  */
-REDUCT_API void reduct_native_register(struct reduct* reduct, reduct_native_t* array, size_t count);
+REDUCT_API void reduct_native_register(struct reduct* reduct, const reduct_native_t* array, size_t count);
 
 /** @} */
 
