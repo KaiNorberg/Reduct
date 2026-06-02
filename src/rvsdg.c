@@ -332,7 +332,7 @@ REDUCT_API bool reduct_rvsdg_node_is_identical(struct reduct* reduct, reduct_rvs
     }
     else if (nodeA->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
     {
-        if (!reduct_handle_is_equal(reduct, &nodeA->constant, &nodeB->constant))
+        if (!reduct_handle_is_equal(reduct, nodeA->constant, nodeB->constant))
         {
             return false;
         }
@@ -876,12 +876,22 @@ static reduct_rvsdg_node_t* reduct_rvsdg_node_copy_internal(reduct_t* reduct, re
     reduct_rvsdg_node_t* newNode = reduct_rvsdg_node_new(reduct);
     newNode->type = node->type;
     newNode->flags = node->flags;
-    newNode->opcode = node->opcode;
+
+    if (newNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+    {
+        newNode->opcode = node->opcode;
+    }
+    else if (newNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+    {
+        newNode->constant = node->constant;
+    }
 
     if (region != NULL)
     {
         reduct_rvsdg_region_add_node(region, newNode);
     }
+
+    reduct_rvsdg_copy_map_add(map, node->output, newNode->output);
 
     reduct_rvsdg_user_t* oldInput = node->firstInput;
     while (oldInput != NULL)
@@ -902,7 +912,6 @@ static reduct_rvsdg_node_t* reduct_rvsdg_node_copy_internal(reduct_t* reduct, re
         oldRegion = oldRegion->next;
     }
 
-    reduct_rvsdg_copy_map_add(map, node->output, newNode->output);
     return newNode;
 }
 

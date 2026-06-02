@@ -86,7 +86,7 @@ static bool reduct_optimize_constant_folding(reduct_t* reduct, reduct_rvsdg_node
     return true;
 }
 
-static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_node_t* node)
+/*static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_node_t* node)
 {
     assert(reduct != NULL);
     assert(node != NULL);
@@ -222,6 +222,19 @@ static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_nod
     }
 
     return true;
+}*/
+
+static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    assert(reduct != NULL);
+    assert(node != NULL);
+
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_LAMBDA)
+    {
+        return false;
+    }
+
+    return false;
 }
 
 static bool reduct_optimize_is_const(reduct_t* reduct, reduct_rvsdg_origin_t* origin, double value)
@@ -605,11 +618,6 @@ static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, re
     }
 
     bool changed = false;
-
-    if (flags & REDUCT_OPTIMIZE_FUNCTION_INLINING && reduct_optimize_function_inlining(reduct, node))
-    {
-        changed = true;
-    }
 
     if (flags & REDUCT_OPTIMIZE_CONSTANT_FOLDING && reduct_optimize_constant_folding(reduct, node))
     {

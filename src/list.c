@@ -62,6 +62,10 @@ REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t 
         {
             list->tail.handles[i] = handles[i];
         }
+        for (uint32_t i = count; i < REDUCT_LIST_WIDTH; i++)
+        {
+            list->tail.handles[i] = (reduct_handle_t){0};
+        }
         return list;
     }
 

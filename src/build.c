@@ -762,7 +762,7 @@ static reduct_rvsdg_origin_t* reduct_build_match(reduct_builder_t* builder, redu
         } \
         for (size_t i = 0; i < argc - 1; i++) \
         { \
-            if (!(reduct_handle_compare(reduct, &argv[i], &argv[i + 1]) _op 0)) \
+            if (!(reduct_handle_compare(reduct, argv[i], argv[i + 1]) _op 0)) \
             { \
                 return REDUCT_HANDLE_FALSE(reduct); \
             } \

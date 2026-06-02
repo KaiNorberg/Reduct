@@ -188,6 +188,37 @@ static inline size_t reduct_bitmap_next_clear(const reduct_bitmap_t* bitmap, siz
     return REDUCT_BITMAP_INDEX_NONE;
 }
 
+/**
+ * @brief Find the last set bit in a bitmap.
+ *
+ * @param bitmap The bitmap array.
+ * @param size The number of words in the bitmap array.
+ * @return The index of the last set bit, or `REDUCT_BITMAP_INDEX_NONE` if all bits are clear.
+ */
+static inline size_t reduct_bitmap_find_last_set(const reduct_bitmap_t* bitmap, size_t size)
+{
+    if (size == 0)
+    {
+        return REDUCT_BITMAP_INDEX_NONE;
+    }
+
+    for (size_t i = size; i > 0; i--)
+    {
+        size_t idx = i - 1;
+        if (bitmap[idx] != 0)
+        {
+            for (int32_t b = REDUCT_BITMAP_WIDTH - 1; b >= 0; b--)
+            {
+                if (bitmap[idx] & (1ULL << b))
+                {
+                    return idx * REDUCT_BITMAP_WIDTH + (size_t)b;
+                }
+            }
+        }
+    }
+    return REDUCT_BITMAP_INDEX_NONE;
+}
+
 /** @} */
 
 #endif

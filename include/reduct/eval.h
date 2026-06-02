@@ -31,6 +31,7 @@ typedef struct reduct_eval_frame
 {
     struct reduct_closure* closure; ///< The closure being evaluated.
     reduct_inst_t* ip;              ///< The current instruction pointer.
+    reduct_handle_t* constants;     ///< Cached pointer to closure constants.
     uint32_t base;                  ///< The base register, where the functions registers start.
     uint32_t prevRegCount;          ///< The previous register count to restore upon return.
 } reduct_eval_frame_t;

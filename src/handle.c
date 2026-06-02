@@ -118,33 +118,38 @@ REDUCT_API void reduct_handle_ensure_item(reduct_t* reduct, reduct_handle_t* han
     *handle = REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
 }
 
-REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t* a, reduct_handle_t* b)
+REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t a, reduct_handle_t b)
 {
     assert(reduct != NULL);
-    assert(a != NULL);
-    assert(b != NULL);
 
-    if (a->_value == b->_value)
+    if (a._value == b._value)
     {
         return true;
     }
 
-    if (REDUCT_HANDLE_IS_NUMBER_SHAPED(*a) && REDUCT_HANDLE_IS_NUMBER_SHAPED(*b))
+    if (REDUCT_HANDLE_IS_NUMBER_SHAPED(a) && REDUCT_HANDLE_IS_NUMBER_SHAPED(b))
     {
-        double da = reduct_handle_as_number(reduct, *a);
-        double db = reduct_handle_as_number(reduct, *b);
+        double da = reduct_handle_as_number(reduct, a);
+        double db = reduct_handle_as_number(reduct, b);
         return da == db;
     }
 
-    reduct_handle_ensure_item(reduct, a);
-    reduct_handle_ensure_item(reduct, b);
+    if (!REDUCT_HANDLE_IS_ITEM(a) || !REDUCT_HANDLE_IS_ITEM(b))
+    {
+        return false;
+    }
 
-    reduct_item_t* itemA = REDUCT_HANDLE_TO_ITEM(*a);
-    reduct_item_t* itemB = REDUCT_HANDLE_TO_ITEM(*b);
+    reduct_item_t* itemA = REDUCT_HANDLE_TO_ITEM(a);
+    reduct_item_t* itemB = REDUCT_HANDLE_TO_ITEM(b);
 
     if (itemA == itemB)
     {
         return true;
+    }
+
+    if (itemA == NULL || itemB == NULL)
+    {
+        return false;
     }
 
     if (itemA->type != itemB->type)
@@ -184,7 +189,7 @@ REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t* a, red
 
             for (size_t i = 0; i < chunkA.count && i < chunkB.count; i++)
             {
-                if (!reduct_handle_is_equal(reduct, &chunkA.handles[i], &chunkB.handles[i]))
+                if (!reduct_handle_is_equal(reduct, chunkA.handles[i], chunkB.handles[i]))
                 {
                     return false;
                 }
@@ -204,20 +209,19 @@ typedef struct
     reduct_item_t* item;
 } reduct_cmp_val_t;
 
-static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_t* out)
+static inline void reduct_handle_unpack(reduct_handle_t handle, reduct_cmp_val_t* out)
 {
-    assert(handle != NULL);
     assert(out != NULL);
 
-    if (REDUCT_HANDLE_IS_NUMBER(*handle))
+    if (REDUCT_HANDLE_IS_NUMBER(handle))
     {
         out->group = 0;
-        out->num = REDUCT_HANDLE_TO_NUMBER(*handle);
+        out->num = REDUCT_HANDLE_TO_NUMBER(handle);
         out->item = NULL;
         return;
     }
 
-    out->item = REDUCT_HANDLE_TO_ITEM(*handle);
+    out->item = REDUCT_HANDLE_TO_ITEM(handle);
     if (out->item == NULL)
     {
         out->group = 1;
@@ -240,13 +244,11 @@ static inline void reduct_handle_unpack(reduct_handle_t* handle, reduct_cmp_val_
     out->group = 1;
 }
 
-REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t* a, reduct_handle_t* b)
+REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t a, reduct_handle_t b)
 {
     assert(reduct != NULL);
-    assert(a != NULL);
-    assert(b != NULL);
 
-    if (a == b || a->_value == b->_value)
+    if (a._value == b._value)
     {
         return 0;
     }
@@ -302,7 +304,7 @@ REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t* a, r
     {
         reduct_handle_t ha = reduct_list_nth(reduct, listA, i);
         reduct_handle_t hb = reduct_list_nth(reduct, listB, i);
-        int64_t cmp = reduct_handle_compare(reduct, &ha, &hb);
+        int64_t cmp = reduct_handle_compare(reduct, ha, hb);
         if (cmp != 0)
         {
             return cmp;

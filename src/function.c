@@ -99,7 +99,7 @@ REDUCT_API reduct_const_t reduct_function_add_constant(reduct_t* reduct, reduct_
         if (func->constants[i].type == REDUCT_CONST_SLOT_TYPE_STATIC)
         {
             reduct_handle_t a = func->constants[i].handle;
-            if (reduct_handle_is_equal(reduct, &a, &handle))
+            if (reduct_handle_is_equal(reduct, a, handle))
             {
                 return i;
             }

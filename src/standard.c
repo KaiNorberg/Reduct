@@ -339,7 +339,7 @@ static void reduct_sort_merge(reduct_t* reduct, reduct_handle_t callable, reduct
                 }
                 else
                 {
-                    if (reduct_handle_compare(reduct, &a[i], &a[j]) <= 0)
+                    if (reduct_handle_compare(reduct, a[i], a[j]) <= 0)
                     {
                         useLeft = true;
                     }
@@ -502,7 +502,6 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, size_t argc, reduct_h
     assert(argv != NULL || argc == 0);
 
     bool resultIsList = false;
-
     for (size_t i = 0; i < argc; i++)
     {
         if (REDUCT_HANDLE_IS_LIST(argv[i]))
@@ -526,7 +525,14 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, size_t argc, reduct_h
 
         for (size_t i = 0; i < argc; i++)
         {
-            reduct_list_push(reduct, newList, argv[i]);
+            if (REDUCT_HANDLE_IS_LIST(argv[i]))
+            {
+                reduct_list_push_list(reduct, newList, REDUCT_HANDLE_TO_LIST(argv[i]));
+            }
+            else
+            {
+                reduct_list_push(reduct, newList, argv[i]);
+            }
         }
 
         return newHandle;
@@ -883,7 +889,7 @@ REDUCT_API reduct_handle_t reduct_index_of(reduct_t* reduct, reduct_handle_t han
         reduct_handle_t current;
         REDUCT_LIST_FOR_EACH(&current, &item->list)
         {
-            if (reduct_handle_compare(reduct, &current, &target) == 0)
+            if (reduct_handle_compare(reduct, current, target) == 0)
             {
                 return REDUCT_HANDLE_FROM_NUMBER((double)_index);
             }
@@ -1062,7 +1068,7 @@ REDUCT_API reduct_handle_t reduct_replace(struct reduct* reduct, reduct_handle_t
         reduct_handle_t handle;
         REDUCT_LIST_FOR_EACH(&handle, list)
         {
-            if (reduct_handle_compare(reduct, &handle, &oldVal) == 0)
+            if (reduct_handle_compare(reduct, handle, oldVal) == 0)
             {
                 reduct_list_push(reduct, result, newVal);
             }
@@ -1163,7 +1169,7 @@ REDUCT_API reduct_handle_t reduct_unique(struct reduct* reduct, reduct_handle_t 
         reduct_handle_t existing;
         REDUCT_LIST_FOR_EACH(&existing, newList)
         {
-            if (reduct_handle_compare(reduct, &current, &existing) == 0)
+            if (reduct_handle_compare(reduct, current, existing) == 0)
             {
                 found = true;
                 break;
@@ -1590,7 +1596,7 @@ static inline reduct_handle_t reduct_sequence_check_edge(reduct_t* reduct, reduc
         }
         size_t index = start ? 0 : list->length - 1;
         reduct_handle_t edge = reduct_list_nth(reduct, list, index);
-        return REDUCT_HANDLE_FROM_BOOL(reduct, reduct_handle_compare(reduct, &edge, &target) == 0);
+        return REDUCT_HANDLE_FROM_BOOL(reduct, reduct_handle_compare(reduct, edge, target) == 0);
     }
 
     const char *srcStr, *tgtStr;
@@ -2540,7 +2546,7 @@ static reduct_handle_t reduct_exact_equal_impl(reduct_t* reduct, size_t argc, re
     }
     for (size_t i = 0; i < argc - 1; i++)
     {
-        if (!reduct_handle_is_equal(reduct, &argv[i], &argv[i + 1]))
+        if (!reduct_handle_is_equal(reduct, argv[i], argv[i + 1]))
         {
             return REDUCT_HANDLE_FALSE(reduct);
         }
@@ -2557,7 +2563,7 @@ static reduct_handle_t reduct_exact_not_equal_impl(reduct_t* reduct, size_t argc
     }
     for (size_t i = 0; i < argc - 1; i++)
     {
-        if (reduct_handle_is_equal(reduct, &argv[i], &argv[i + 1]))
+        if (reduct_handle_is_equal(reduct, argv[i], argv[i + 1]))
         {
             return REDUCT_HANDLE_FALSE(reduct);
         }

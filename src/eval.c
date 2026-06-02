@@ -97,6 +97,7 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_push_frame(reduct_t* reduct,
     reduct_eval_frame_t* frame = &reduct->eval.frames[reduct->eval.frameCount++];
     frame->closure = closure;
     frame->ip = closure->function->insts;
+    frame->constants = closure->constants;
     frame->base = target;
     frame->prevRegCount = reduct->eval.regCount;
 
@@ -126,6 +127,7 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_tail_frame(reduct_t* reduct,
 
     frame->closure = closure;
     frame->ip = closure->function->insts;
+    frame->constants = closure->constants;
 }
 
 static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_ready(reduct_t* reduct)
@@ -178,8 +180,8 @@ static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCo
     reduct_eval_frame_t* frame = &reduct->eval.frames[reduct->eval.frameCount - 1];
     reduct_inst_t* ip = frame->ip;
     reduct_handle_t* regs = reduct->eval.regs;
-    reduct_handle_t* base = regs + frame->base;
-    reduct_handle_t* constants = frame->closure->constants;
+    reduct_handle_t* r = regs + frame->base;
+    reduct_handle_t* k = frame->constants;
     reduct_inst_t inst;
     reduct_handle_t result = REDUCT_HANDLE_NIL(reduct);
 
@@ -195,12 +197,12 @@ static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCo
     regs = reduct->eval.regs; \
     frame = &reduct->eval.frames[reduct->eval.frameCount - 1]; \
     ip = frame->ip; \
-    base = regs + frame->base; \
-    constants = frame->closure->constants
+    r = regs + frame->base; \
+    k = frame->constants
 
 #define UPDATE_BASE() \
     regs = reduct->eval.regs; \
-    base = regs + frame->base
+    r = regs + frame->base
 
 #define PREPARE_CALLABLE() \
     REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), "cannot call value of type %s", \
@@ -212,17 +214,17 @@ static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCo
 #define DECODE_C() uint32_t c = REDUCT_INST_GET_C(inst)
 #define DECODE_C_REG() \
     uint32_t c = REDUCT_INST_GET_C(inst); \
-    reduct_handle_t valC = base[c]
+    reduct_handle_t valC = r[c]
 #define DECODE_C_CONST() \
     uint32_t c = REDUCT_INST_GET_C(inst); \
-    reduct_handle_t valC = constants[c]
+    reduct_handle_t valC = k[c]
 #define DECODE_SAX() int32_t sax = REDUCT_INST_GET_SAX(inst)
 
 #define OP_BITWISE(_label, _op) \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    REDUCT_HANDLE_BITWISE_FAST(reduct, &base[a], base[b], valC, _op); \
+    REDUCT_HANDLE_BITWISE_FAST(reduct, &r[a], r[b], valC, _op); \
     DISPATCH(); \
 })
 
@@ -230,7 +232,7 @@ LABEL_C_OP(_label, { \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    base[a] = REDUCT_HANDLE_FROM_BOOL(reduct, REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], valC, _op)); \
+    r[a] = REDUCT_HANDLE_FROM_BOOL(reduct, REDUCT_HANDLE_COMPARE_FAST(reduct, r[b], valC, _op)); \
     DISPATCH(); \
 })
 
@@ -238,7 +240,7 @@ LABEL_C_OP(_label, { \
 LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
-    REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &base[a], base[b], valC, _op); \
+    REDUCT_HANDLE_ARITHMETIC_FAST(reduct, &r[a], r[b], valC, _op); \
     DISPATCH(); \
 })
 
@@ -247,8 +249,8 @@ LABEL_C_OP(_label, { \
     DECODE_A(); \
     DECODE_B(); \
     int64_t amount = reduct_handle_as_int(reduct, valC); \
-    REDUCT_ERROR_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_NUMBER_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", REDUCT_HANDLE_NUMBER_WIDTH - 1, amount); \
-    base[a] = REDUCT_HANDLE_FROM_NUMBER((double)(reduct_handle_as_int(reduct, base[b]) _op amount)); \
+    REDUCT_ERROR_ASSERT(reduct, amount >= 0 && amount < REDUCT_HANDLE_NUMBER_WIDTH - 1, _name " shift amount must be 0-%ld, got %ld", (long)(REDUCT_HANDLE_NUMBER_WIDTH - 1), (long)amount); \
+    r[a] = REDUCT_HANDLE_FROM_NUMBER((double)(reduct_handle_as_int(reduct, r[b]) _op amount)); \
     DISPATCH(); \
 })
 
@@ -257,7 +259,7 @@ LABEL_C_OP(_label, { \
     { \
         DECODE_B(); \
         DECODE_C(); \
-        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], base[c], _op)) \
+        if (REDUCT_HANDLE_COMPARE_FAST(reduct, r[b], r[c], _op)) \
         { \
             ip++; \
         } \
@@ -267,7 +269,7 @@ LABEL_C_OP(_label, { \
     { \
         DECODE_B(); \
         DECODE_C_CONST(); \
-        if (REDUCT_HANDLE_COMPARE_FAST(reduct, base[b], valC, _op)) \
+        if (REDUCT_HANDLE_COMPARE_FAST(reduct, r[b], valC, _op)) \
         { \
             ip++; \
         } \
@@ -342,7 +344,7 @@ label_list:
 {
     DECODE_A();
     DECODE_B();
-    base[a] = REDUCT_HANDLE_CREATE_HANDLES(reduct, b, &base[a]);
+    r[a] = REDUCT_HANDLE_CREATE_HANDLES(reduct, b, &r[a]);
     DISPATCH();
 }
 label_jmp:
@@ -355,7 +357,7 @@ label_jmpf:
 {
     DECODE_C();
     DECODE_SAX();
-    reduct_handle_t val = base[c];
+    reduct_handle_t val = r[c];
     if (!REDUCT_HANDLE_IS_TRUTHY(val))
     {
         ip += sax;
@@ -366,7 +368,7 @@ label_jmpt:
 {
     DECODE_C();
     DECODE_SAX();
-    reduct_handle_t val = base[c];
+    reduct_handle_t val = r[c];
     if (REDUCT_HANDLE_IS_TRUTHY(val))
     {
         ip += sax;
@@ -380,7 +382,7 @@ LABEL_C_OP(label_call, {
     if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_CLOSURE))
     {
         reduct_closure_t* closure = &item->closure;
-        b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
+        b = reduct_eval_bundle_args(reduct, closure->function, b, &r[a]);
 
         reduct_eval_push_frame(reduct, closure, frame->base + a);
         UPDATE_STATE();
@@ -388,10 +390,10 @@ LABEL_C_OP(label_call, {
     }
     if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_native(reduct, &item->atom)))
     {
-        reduct_handle_t* args = &base[a];
+        reduct_handle_t* args = &r[a];
         reduct_handle_t result = item->atom.native(reduct, b, args);
         UPDATE_BASE();
-        base[a] = result;
+        r[a] = result;
 
         reduct_gc_if_needed(reduct);
         DISPATCH();
@@ -406,14 +408,14 @@ LABEL_C_OP(label_tailcall, {
     if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_CLOSURE))
     {
         reduct_closure_t* closure = &item->closure;
-        b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
+        b = reduct_eval_bundle_args(reduct, closure->function, b, &r[a]);
 
         if (REDUCT_LIKELY(a != 0))
         {
-            reduct_handle_t* src = base + a;
+            reduct_handle_t* src = r + a;
             for (uint32_t i = 0; i < b; i++)
             {
-                base[i] = src[i];
+                r[i] = src[i];
             }
         }
 
@@ -425,7 +427,7 @@ LABEL_C_OP(label_tailcall, {
     }
     if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_native(reduct, &item->atom)))
     {
-        reduct_handle_t* args = &base[a];
+        reduct_handle_t* args = &r[a];
         reduct_handle_t res = item->atom.native(reduct, b, args);
 
         frame = &reduct->eval.frames[reduct->eval.frameCount - 1];
@@ -450,7 +452,7 @@ label_recur:
     DECODE_A();
     DECODE_B();
     reduct_closure_t* closure = frame->closure;
-    b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
+    b = reduct_eval_bundle_args(reduct, closure->function, b, &r[a]);
 
     reduct_eval_push_frame(reduct, closure, frame->base + a);
 
@@ -462,13 +464,13 @@ label_tailrecur:
     DECODE_A();
     DECODE_B();
     reduct_closure_t* closure = frame->closure;
-    b = reduct_eval_bundle_args(reduct, closure->function, b, &base[a]);
+    b = reduct_eval_bundle_args(reduct, closure->function, b, &r[a]);
     if (REDUCT_LIKELY(a != 0))
     {
-        reduct_handle_t* src = base + a;
+        reduct_handle_t* src = r + a;
         for (uint32_t i = 0; i < b; i++)
         {
-            base[i] = src[i];
+            r[i] = src[i];
         }
     }
     frame->ip = closure->function->insts;
@@ -477,7 +479,7 @@ label_tailrecur:
 }
 LABEL_C_OP(label_mov, {
     DECODE_A();
-    base[a] = valC;
+    r[a] = valC;
     DISPATCH();
 })
 LABEL_C_OP(label_ret, {
@@ -509,13 +511,13 @@ OP_ARITH(label_mul, *)
 LABEL_C_OP(label_div, {
     DECODE_A();
     DECODE_B();
-    REDUCT_HANDLE_DIV_FAST(reduct, &base[a], base[b], valC);
+    REDUCT_HANDLE_DIV_FAST(reduct, &r[a], r[b], valC);
     DISPATCH();
 })
 LABEL_C_OP(label_mod, {
     DECODE_A();
     DECODE_B();
-    REDUCT_HANDLE_MOD_FAST(reduct, &base[a], base[b], valC);
+    REDUCT_HANDLE_MOD_FAST(reduct, &r[a], r[b], valC);
     DISPATCH();
 })
 OP_BITWISE(label_band, &)
@@ -524,50 +526,50 @@ OP_BITWISE(label_bxor, ^)
 LABEL_C_OP(label_bnot, {
     DECODE_A();
     int64_t val = reduct_handle_as_int(reduct, valC);
-    base[a] = REDUCT_HANDLE_FROM_NUMBER((double)(~val));
+    r[a] = REDUCT_HANDLE_FROM_NUMBER((double)(~val));
     DISPATCH();
 })
 OP_SHIFT(label_shl, <<, "left")
 OP_SHIFT(label_shr, >>, "right")
 LABEL_C_OP(label_len, {
     DECODE_A();
-    base[a] = REDUCT_HANDLE_FROM_NUMBER(reduct_handle_as_item(reduct, valC)->length);
+    r[a] = REDUCT_HANDLE_FROM_NUMBER(reduct_handle_as_item(reduct, valC)->length);
     DISPATCH();
 })
 LABEL_C_OP(label_nth2, {
     DECODE_A();
     DECODE_B();
-    base[a] = reduct_nth(reduct, base[b], valC, REDUCT_HANDLE_NIL(reduct));
+    r[a] = reduct_nth(reduct, r[b], valC, REDUCT_HANDLE_NIL(reduct));
     DISPATCH();
 })
 LABEL_C_OP(label_nth3, {
     DECODE_A();
     DECODE_B();
-    base[a] = reduct_nth(reduct, base[a], base[b], valC);
+    r[a] = reduct_nth(reduct, r[a], r[b], valC);
     DISPATCH();
 })
 LABEL_C_OP(label_range1, {
     DECODE_A();
-    base[a] = reduct_range(reduct, REDUCT_HANDLE_FROM_NUMBER(0.0), valC, REDUCT_HANDLE_NIL(reduct));
+    r[a] = reduct_range(reduct, REDUCT_HANDLE_FROM_NUMBER(0.0), valC, REDUCT_HANDLE_NIL(reduct));
     DISPATCH();
 })
 LABEL_C_OP(label_range2, {
     DECODE_A();
     DECODE_B();
-    base[a] = reduct_range(reduct, base[b], valC, REDUCT_HANDLE_NIL(reduct));
+    r[a] = reduct_range(reduct, r[b], valC, REDUCT_HANDLE_NIL(reduct));
     DISPATCH();
 })
 LABEL_C_OP(label_range3, {
     DECODE_A();
     DECODE_B();
-    base[a] = reduct_range(reduct, base[a], base[b], valC);
+    r[a] = reduct_range(reduct, r[a], r[b], valC);
     DISPATCH();
 })
 LABEL_C_OP(label_fork, {
     assert(false);
     /**DECODE_A();
     DECODE_B();
-    base[a] = REDUCT_HANDLE_CREATE_TASK(reduct, valC, b, &base[a]);
+    r[a] = REDUCT_HANDLE_CREATE_TASK(reduct, valC, b, &r[a]);
     DISPATCH();*/
 })
 LABEL_C_OP(label_join, {
@@ -577,27 +579,27 @@ LABEL_C_OP(label_join, {
         REDUCT_HANDLE_GET_TYPE_STRING(valC));
     reduct_task_t* task = REDUCT_HANDLE_TO_TASK(valC);
     reduct_task_join(reduct, task);
-    base[a] = task->result;
+    r[a] = task->result;
     DISPATCH();*/
 })
 label_closure:
 {
     DECODE_A();
     DECODE_C();
-    reduct_handle_t protoHandle = constants[c];
+    reduct_handle_t protoHandle = k[c];
     assert(REDUCT_HANDLE_IS_ITEM(protoHandle));
 
     reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(protoHandle);
     assert(protoItem->type == REDUCT_ITEM_TYPE_FUNCTION);
 
     reduct_function_t* proto = &protoItem->function;
-    base[a] = REDUCT_HANDLE_FROM_CLOSURE(reduct_closure_new(reduct, proto));
+    r[a] = REDUCT_HANDLE_FROM_CLOSURE(reduct_closure_new(reduct, proto));
     DISPATCH();
 }
 LABEL_C_OP(label_capture, {
     DECODE_A();
     DECODE_B();
-    reduct_closure_t* closurePtr = &REDUCT_HANDLE_TO_ITEM(base[a])->closure;
+    reduct_closure_t* closurePtr = &REDUCT_HANDLE_TO_ITEM(r[a])->closure;
     closurePtr->constants[b] = valC;
     DISPATCH();
 })

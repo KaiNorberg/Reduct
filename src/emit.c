@@ -59,9 +59,8 @@ typedef struct reduct_emitter
     struct reduct* reduct;
     reduct_function_t* function;
     struct reduct_rvsdg_node* phiNode;
-    reduct_emitter_cache_entry_t* cache;
+    reduct_emitter_cache_entry_t cache[REDUCT_REGISTER_MAX];
     size_t cacheCount;
-    size_t cacheCapacity;
     struct reduct_item* lastItem;
 } reduct_emitter_t;
 
@@ -107,18 +106,14 @@ static inline void reduct_emitter_init(reduct_emitter_t* emitter, reduct_t* redu
 static inline void reduct_emitter_deinit(reduct_emitter_t* emitter)
 {
     assert(emitter != NULL);
-
-    if (emitter->cache != NULL)
-    {
-        free(emitter->cache);
-    }
+    REDUCT_UNUSED(emitter);
 }
 
 static inline reduct_reg_t reduct_emitter_alloc_register(reduct_emitter_t* emitter)
 {
     assert(emitter != NULL);
 
-    size_t index = reduct_bitmap_find_first_clear(emitter->registers, REDUCT_REGISTER_MAX);
+    size_t index = reduct_bitmap_find_first_clear(emitter->registers, REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX));
     if (index == REDUCT_BITMAP_INDEX_NONE)
     {
         REDUCT_ERROR_THROW(emitter->reduct, "out of registers");
@@ -137,38 +132,35 @@ static inline reduct_reg_t reduct_emitter_alloc_register_range(reduct_emitter_t*
 
     if (count == 0)
     {
-        return -1;
+        return REDUCT_REGISTER_INVALID;
     }
 
-    size_t consecutive = 0;
-    size_t startIndex = 0;
-
-    for (size_t i = 0; i < REDUCT_REGISTER_MAX; i++)
+    size_t index = reduct_bitmap_find_last_set(emitter->registers, REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX));
+    if (index == REDUCT_BITMAP_INDEX_NONE)
     {
-        if (!REDUCT_BITMAP_TEST(emitter->registers, i))
-        {
-            if (consecutive == 0)
-            {
-                startIndex = i;
-            }
-            if (++consecutive == count)
-            {
-                reduct_bitmap_set_range(emitter->registers, startIndex, count);
-                uint16_t required = (uint16_t)(startIndex + count);
-                if (required > emitter->function->registerCount)
-                {
-                    emitter->function->registerCount = required;
-                }
-                return startIndex;
-            }
-        }
-        else
-        {
-            consecutive = 0;
-        }
+        index = 0;
+    }
+    else
+    {
+        index++;
     }
 
-    REDUCT_ERROR_THROW(emitter->reduct, "out of registers");
+    if (index + count > REDUCT_REGISTER_MAX)
+    {
+        REDUCT_ERROR_THROW(emitter->reduct, "out of registers");
+    }
+
+    for (size_t i = 0; i < count; i++)
+    {
+        REDUCT_BITMAP_SET(emitter->registers, index + i);
+    }
+
+    if (index + count > emitter->function->registerCount)
+    {
+        emitter->function->registerCount = (uint16_t)(index + count);
+    }
+
+    return (reduct_reg_t)index;
 }
 
 static inline void reduct_emitter_set_register(reduct_emitter_t* emitter, reduct_reg_t reg)
@@ -189,7 +181,7 @@ static inline void reduct_emitter_free_register(reduct_emitter_t* emitter, reduc
 
 static inline reduct_emitter_expr_t reduct_emitter_cache_get(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin)
 {
-    if (emitter->cache == NULL || origin == NULL)
+    if (origin == NULL || emitter->cacheCount == 0)
     {
         return REDUCT_EMITTER_EXPR_NONE;
     }
@@ -207,7 +199,7 @@ static inline reduct_emitter_expr_t reduct_emitter_cache_get(reduct_emitter_t* e
 static inline reduct_emitter_cache_entry_t* reduct_emitter_get_cache_entry(reduct_emitter_t* emitter,
     reduct_rvsdg_origin_t* origin)
 {
-    if (emitter->cache == NULL || origin == NULL)
+    if (origin == NULL || emitter->cacheCount == 0)
         return NULL;
     for (size_t i = 0; i < emitter->cacheCount; i++)
     {
@@ -224,18 +216,20 @@ static inline void reduct_emitter_cache_put(reduct_emitter_t* emitter, reduct_rv
 {
     assert(origin != NULL);
 
-    if (emitter->cacheCount >= emitter->cacheCapacity)
+    for (size_t i = 0; i < emitter->cacheCount; i++)
     {
-        size_t newCapacity = emitter->cacheCapacity == 0 ? 16 : emitter->cacheCapacity * 2;
-        reduct_emitter_cache_entry_t* newCache =
-            realloc(emitter->cache, sizeof(reduct_emitter_cache_entry_t) * newCapacity);
-        if (newCache == NULL)
+        if (emitter->cache[i].remainingUses == 0)
         {
-            reduct_emitter_deinit(emitter);
-            REDUCT_ERROR_THROW(emitter->reduct, "out of memory for emitter cache");
+            emitter->cache[i].origin = origin;
+            emitter->cache[i].expr = expr;
+            emitter->cache[i].remainingUses = origin->useCount;
+            return;
         }
-        emitter->cache = newCache;
-        emitter->cacheCapacity = newCapacity;
+    }
+
+    if (REDUCT_UNLIKELY(emitter->cacheCount >= REDUCT_REGISTER_MAX))
+    {
+        REDUCT_ERROR_THROW(emitter->reduct, "emitter cache overflow");
     }
     emitter->cache[emitter->cacheCount].origin = origin;
     emitter->cache[emitter->cacheCount].expr = expr;
@@ -246,7 +240,7 @@ static inline void reduct_emitter_cache_put(reduct_emitter_t* emitter, reduct_rv
 static inline void reduct_emitter_cache_update(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
     reduct_emitter_expr_t expr)
 {
-    if (emitter->cache == NULL || origin == NULL)
+    if (origin == NULL || emitter->cacheCount == 0)
     {
         return;
     }
@@ -262,7 +256,7 @@ static inline void reduct_emitter_cache_update(reduct_emitter_t* emitter, reduct
 
 static inline void reduct_emitter_release_origin(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin)
 {
-    if (origin == NULL || emitter->cache == NULL)
+    if (origin == NULL || emitter->cacheCount == 0)
     {
         return;
     }
@@ -571,32 +565,22 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
         arity = node->inputCount;
     }
 
-    size_t allocCount = arity > 0 ? arity : 1;
-    reduct_reg_t a = REDUCT_REGISTER_INVALID;
-
-    if (allocCount == 1 && target < REDUCT_REGISTER_MAX && !REDUCT_BITMAP_TEST(emitter->registers, target))
-    {
-        a = target;
-        reduct_emitter_set_register(emitter, a);
-    }
-    else
-    {
-        a = reduct_emitter_alloc_register_range(emitter, allocCount);
-    }
-
-    if (a + (reduct_reg_t)allocCount > emitter->function->registerCount)
-    {
-        emitter->function->registerCount = (uint16_t)(a + allocCount);
-    }
+    size_t allocCount = REDUCT_MAX(arity, 1);
+    reduct_emitter_expr_t args[allocCount];
 
     for (uint32_t i = 0; i < arity; i++)
     {
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(inputIdx + i));
-        if (input != NULL && input->edge != NULL)
-        {
-            reduct_emitter_expr_t argExpr = reduct_emit_origin(emitter, input->edge->origin, (reduct_reg_t)(a + i));
-            reduct_emitter_expr_flush(emitter, &argExpr, (reduct_reg_t)(a + i));
-        }
+        args[i] = (input != NULL && input->edge != NULL)
+            ? reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID)
+            : REDUCT_EMITTER_EXPR_NONE;
+    }
+
+    reduct_reg_t a = reduct_emitter_alloc_register_range(emitter, allocCount);
+
+    for (uint32_t i = 0; i < arity; i++)
+    {
+        reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(a + i));
     }
 
     if (!isRecur && REDUCT_OPCODE_READS_C(op))
@@ -613,7 +597,6 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(inputIdx + i));
         if (input != NULL && input->edge != NULL)
         {
-            reduct_emitter_cache_update(emitter, input->edge->origin, REDUCT_EMITTER_EXPR_NONE);
             reduct_emitter_release_origin(emitter, input->edge->origin);
         }
     }
@@ -623,7 +606,6 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, 0);
         if (input != NULL && input->edge != NULL)
         {
-            reduct_emitter_cache_update(emitter, input->edge->origin, REDUCT_EMITTER_EXPR_NONE);
             reduct_emitter_release_origin(emitter, input->edge->origin);
         }
     }

@@ -496,7 +496,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
 #define REDUCT_HANDLE_COMPARE_FAST(_reduct, _a, _b, _op) \
     (REDUCT_LIKELY((_a)._value >= REDUCT_HANDLE_OFFSET_NUMBER && (_b)._value >= REDUCT_HANDLE_OFFSET_NUMBER) \
             ? (REDUCT_HANDLE_TO_NUMBER(_a) _op REDUCT_HANDLE_TO_NUMBER(_b)) \
-            : (reduct_handle_compare(_reduct, &(_a), &(_b)) _op 0))
+            : (reduct_handle_compare(_reduct, (_a), (_b)) _op 0))
 
 /**
  * @brief Perform a arithmetic operation on two handles with a fast path for numbers.
@@ -748,11 +748,11 @@ static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_handle_as_atom(struct r
  * @brief Check if two items are exactly equal string-wise or structurally.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param a Pointer to the first handle, will be upgraded.
- * @param b Pointer to the second handle, will be upgraded.
+ * @param a The first handle, will be upgraded.
+ * @param b The second handle, will be upgraded.
  * @return `true` if the items are strictly equal, `false` otherwise.
  */
-REDUCT_API bool reduct_handle_is_equal(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b);
+REDUCT_API bool reduct_handle_is_equal(struct reduct* reduct, reduct_handle_t a, reduct_handle_t b);
 
 /**
  * @brief Compare two items for ordering (less than, equal, or greater than).
@@ -760,11 +760,11 @@ REDUCT_API bool reduct_handle_is_equal(struct reduct* reduct, reduct_handle_t* a
  * Useful for sorting or range checks.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param a Pointer to the first handle.
- * @param b Pointer to the second handle.
+ * @param a The first handle.
+ * @param b The second handle.
  * @return A negative value if a < b, zero if a == b, and a positive value if a > b.
  */
-REDUCT_API int64_t reduct_handle_compare(struct reduct* reduct, reduct_handle_t* a, reduct_handle_t* b);
+REDUCT_API int64_t reduct_handle_compare(struct reduct* reduct, reduct_handle_t a, reduct_handle_t b);
 
 /**
  * @brief Get the string pointer and length from an atom handle.

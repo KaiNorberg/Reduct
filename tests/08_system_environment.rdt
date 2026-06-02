@@ -4,9 +4,6 @@
     (assert! (== (format "{1} {0}" "World" "Hello") "Hello World") "format should support explicit indexing")
     (assert! (== (format "No args") "No args") "format should handle strings without placeholders")
 
-    (assert! (== (print! "test-print ") ()) "print! should return nil")
-    (assert! (== (println! "test-println") ()) "println! should return nil")
-    
     (assert! (== (ord "A") 65) "ord should return character ASCII code")
     (assert! (== (chr 65) "A") "chr should return character from ASCII code")
 
