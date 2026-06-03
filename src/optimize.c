@@ -600,6 +600,7 @@ static bool reduct_optimize_auto_parallelization(reduct_t* reduct, reduct_rvsdg_
         {
             reduct_opcode_t mode = origin->node->opcode & REDUCT_OPCODE_MODE_CONST;
             origin->node->opcode = REDUCT_OPCODE_FORK | mode;
+            callAmount--;
         }
     }
 
@@ -639,10 +640,10 @@ static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, re
         changed = true;
     }
 
-    /*if (flags & REDUCT_OPTIMIZE_AUTO_PARALLELIZATION && reduct_optimize_auto_parallelization(reduct, node))
+    if (flags & REDUCT_OPTIMIZE_AUTO_PARALLELIZATION && reduct_optimize_auto_parallelization(reduct, node))
     {
         changed = true;
-    }*/
+    }
 
     return changed;
 }

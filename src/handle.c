@@ -68,6 +68,10 @@ REDUCT_API reduct_handle_type_t reduct_handle_get_type(reduct_handle_t handle)
     {
         return REDUCT_HANDLE_TYPE_RVSDG_EDGE;
     }
+    case REDUCT_ITEM_TYPE_FUTURE:
+    {
+        return REDUCT_HANDLE_TYPE_FUTURE;
+    }
     default:
     {
         return REDUCT_HANDLE_TYPE_UNKNOWN;
@@ -99,6 +103,8 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type)
         return "ir node";
     case REDUCT_HANDLE_TYPE_RVSDG_EDGE:
         return "ir edge";
+    case REDUCT_HANDLE_TYPE_FUTURE:
+        return "future";
     default:
         return "unknown";
     }

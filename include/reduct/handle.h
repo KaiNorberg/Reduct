@@ -50,6 +50,7 @@ typedef enum
     REDUCT_HANDLE_TYPE_LIST_NODE,  ///< Handle is a reference to a list node.
     REDUCT_HANDLE_TYPE_RVSDG_NODE, ///< Handle is a reference to an IR node.
     REDUCT_HANDLE_TYPE_RVSDG_EDGE, ///< Handle is a reference to an IR edge.
+    REDUCT_HANDLE_TYPE_FUTURE,     ///< Handle is a reference to a future.
     REDUCT_HANDLE_TYPE_UNKNOWN     ///< Handle is corrupt or otherwise invalid.
 } reduct_handle_type_t;
 
@@ -144,6 +145,15 @@ typedef enum
  * @param _cond The condition to evaluate.
  */
 #define REDUCT_HANDLE_FROM_BOOL(_reduct, _cond) ((_cond) ? REDUCT_HANDLE_TRUE() : REDUCT_HANDLE_FALSE(_reduct))
+
+/**
+ * @brief Create a handle from a future pointer.
+ * 
+ * @param _future The pointer to the reduct_future_t.
+ * @return The handle.
+ */
+#define REDUCT_HANDLE_FROM_FUTURE(_future) \
+    REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_future, reduct_item_t, future))
 
 /**
  * @brief Check if a handle is a number.
@@ -266,6 +276,14 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
     (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_RVSDG_EDGE)
 
 /**
+ * @brief Check if a handle is a future.
+ *
+ * @param _handle Pointer to the handle.
+ */
+#define REDUCT_HANDLE_IS_FUTURE(_handle) \
+    (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_FUTURE)
+
+/**
  * @brief Check if a handle is a lambda.
  *
  * @param _handle Pointer to the handle.
@@ -379,6 +397,13 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
 #define REDUCT_HANDLE_TO_RVSDG_EDGE(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->rvsdgEdge)
 
 /**
+ * @brief Get the future pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ */
+#define REDUCT_HANDLE_TO_FUTURE(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->future)
+
+/**
  * @brief Get the boolean value of a handle.
  *
  * @param _handle Pointer to the handle.
@@ -456,14 +481,34 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
 #define REDUCT_HANDLE_CREATE_NATIVE(_reduct, _fn) REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_native(_reduct, _fn))
 
 /**
+ * @brief Create a future handle.
+ * 
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _callable The callable handle.
+ * @param _argc The number of arguments.
+ * @param _argv Pointer to the arguments array.
+ */
+#define REDUCT_HANDLE_CREATE_FUTURE(_reduct, _callable, _argc, _argv) \
+    REDUCT_HANDLE_FROM_FUTURE(reduct_future_new(_reduct, _callable, _argc, _argv))
+
+/**
  * @brief Macro for iterating over all elements in a list handle.
  *
  * @param _handle The reduct_handle_t variable to store each element.
  * @param _list Pointer to the list handle.
  */
-#define REDUCT_HANDLE_LIST_FOR_EACH(_handle, _list) \
-    for (reduct_list_iter_t _iter = REDUCT_LIST_ITER(&REDUCT_HANDLE_TO_ITEM(_list)->list); \
-        reduct_list_iter_next(&_iter, (_handle));)
+#define REDUCT_HANDLE_FOR_EACH(_handle, _list) \
+    REDUCT_LIST_OF_EACH(_handle, REDUCT_HANDLE_TO_LIST(_list))
+
+/**
+ * @brief Get the value of the future referenced by the handle or the handle itself.
+ * 
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _handle The handle.
+ * @return The result of the future if the handle is a future, otherwise the handle itself.
+ */
+#define REDUCT_HANDLE_JOIN(_reduct, _handle) \
+    (REDUCT_HANDLE_IS_FUTURE(_handle) ? reduct_future_join(_reduct, REDUCT_HANDLE_TO_FUTURE(_handle)) : (_handle))
 
 /**
  * @brief Get the constant nil handle.

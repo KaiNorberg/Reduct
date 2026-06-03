@@ -51,6 +51,7 @@ set(REDUCT_SOURCES
     src/error.c
     src/eval.c
     src/function.c
+    src/future.c
     src/gc.c
     src/handle.c
     src/opcode.c

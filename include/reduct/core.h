@@ -71,6 +71,7 @@ typedef struct reduct_input
  */
 typedef struct reduct_env
 {
+    struct reduct* main;
     atomic_int refCount;
     int argc;
     char** argv;

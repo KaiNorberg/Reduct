@@ -8,6 +8,7 @@
 #include <reduct/list.h>
 #include <reduct/rvsdg.h>
 #include <reduct/task.h>
+#include <reduct/future.h>
 
 /**
  * @file item.h
@@ -37,6 +38,7 @@ typedef uint8_t reduct_item_type_t;
 #define REDUCT_ITEM_TYPE_RVSDG_REGION 9  ///< An IR region.
 #define REDUCT_ITEM_TYPE_RVSDG_USER 10   ///< An IR user (input/result).
 #define REDUCT_ITEM_TYPE_RVSDG_ORIGIN 11 ///< An IR origin (output/argument).
+#define REDUCT_ITEM_TYPE_FUTURE 12       ///< A future.
 
 /**
  * @brief Item flags enumeration.
@@ -75,6 +77,7 @@ typedef struct reduct_item
         reduct_rvsdg_user_t rvsdgUser;     ///< An ir user.
         reduct_rvsdg_origin_t rvsdgOrigin; ///< An ir origin.
         reduct_task_t task;                ///< A task.
+        reduct_future_t future;            ///< A future.
         struct reduct_item* free;          ///< The next free item in the free list.
         uint8_t _raw[REDUCT_ITEM_PAYLOAD_MAX];
     };

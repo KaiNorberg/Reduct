@@ -47,12 +47,13 @@ typedef void* reduct_lib_t;
 #define REDUCT_UNLIKELY(_x) __builtin_expect(!!(_x), 0)
 #define REDUCT_NORETURN __attribute__((noreturn))
 #define REDUCT_ALWAYS_INLINE __attribute__((always_inline))
-#define REDUCT_HAS_COMPUTED_GOTO
+#define REDUCT_ALIGNED(_x) __attribute__((aligned(_x)))
 #elif defined(_MSC_VER)
 #define REDUCT_LIKELY(_x) (_x)
 #define REDUCT_UNLIKELY(_x) (_x)
 #define REDUCT_NORETURN __declspec(noreturn)
 #define REDUCT_ALWAYS_INLINE __forceinline
+#define REDUCT_ALIGNED(_x) __declspec(align(_x))
 #else
 #define REDUCT_LIKELY(_x) (_x)
 #define REDUCT_UNLIKELY(_x) (_x)

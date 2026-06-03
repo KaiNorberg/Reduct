@@ -184,6 +184,7 @@ static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCo
     reduct_handle_t* k = frame->constants;
     reduct_inst_t inst;
     reduct_handle_t result = REDUCT_HANDLE_NIL(reduct);
+    bool shouldFork = reduct_task_queue_size(&reduct->env->task) < REDUCT_TASK_THREAD_MAX;
 
     // clang-format off
     /// @todo Write some macro magic to turn this into a switch case if not using GCC or Clang.
@@ -276,7 +277,7 @@ LABEL_C_OP(_label, { \
         DISPATCH(); \
     }
 
-    static const void* dispatchTable[256] = {
+    const void* dispatchTable[256] = {
         [REDUCT_OPCODE_NOP] = &&label_nop,
         [REDUCT_OPCODE_MOV] = &&label_mov, [REDUCT_OPCODE_MOV_CONST] = &&label_mov_k,
         [REDUCT_OPCODE_LIST] = &&label_list,
@@ -319,8 +320,8 @@ LABEL_C_OP(_label, { \
         [REDUCT_OPCODE_RANGE1] = &&label_range1, [REDUCT_OPCODE_RANGE1_CONST] = &&label_range1_k,
         [REDUCT_OPCODE_RANGE2] = &&label_range2, [REDUCT_OPCODE_RANGE2_CONST] = &&label_range2_k,
         [REDUCT_OPCODE_RANGE3] = &&label_range3, [REDUCT_OPCODE_RANGE3_CONST] = &&label_range3_k,
-        [REDUCT_OPCODE_FORK] = &&label_fork, [REDUCT_OPCODE_FORK_CONST] = &&label_fork_k,
-        [REDUCT_OPCODE_JOIN] = &&label_join, [REDUCT_OPCODE_JOIN_CONST] = &&label_join_k,
+        [REDUCT_OPCODE_FORK] = shouldFork ? &&label_call : &&label_fork, [REDUCT_OPCODE_FORK_CONST] = shouldFork ? &&label_fork_k : &&label_call_k,
+        [REDUCT_OPCODE_JOIN] = shouldFork ? &&label_join : &&label_mov, [REDUCT_OPCODE_JOIN_CONST] = shouldFork ? &&label_join_k : &&label_mov_k,
     };
 
 #define LABEL_C_OP(_label, ...) \
@@ -392,7 +393,7 @@ LABEL_C_OP(label_call, {
     {
         reduct_handle_t* args = &r[a];
         reduct_handle_t result = item->atom.native(reduct, b, args);
-        UPDATE_BASE();
+        UPDATE_STATE();
         r[a] = result;
 
         reduct_gc_if_needed(reduct);
@@ -566,21 +567,19 @@ LABEL_C_OP(label_range3, {
     DISPATCH();
 })
 LABEL_C_OP(label_fork, {
-    assert(false);
-    /**DECODE_A();
+    DECODE_A();
     DECODE_B();
-    r[a] = REDUCT_HANDLE_CREATE_TASK(reduct, valC, b, &r[a]);
-    DISPATCH();*/
+    reduct_handle_t future = REDUCT_HANDLE_CREATE_FUTURE(reduct, valC, b, &r[a]);
+    UPDATE_STATE();
+    r[a] = future;
+    DISPATCH();
 })
 LABEL_C_OP(label_join, {
-    assert(false);
-    /*DECODE_A();
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_TASK(valC), "join: expected task, got %s",
-        REDUCT_HANDLE_GET_TYPE_STRING(valC));
-    reduct_task_t* task = REDUCT_HANDLE_TO_TASK(valC);
-    reduct_task_join(reduct, task);
-    r[a] = task->result;
-    DISPATCH();*/
+    DECODE_A();
+    reduct_handle_t res = REDUCT_HANDLE_JOIN(reduct, valC);
+    UPDATE_STATE();
+    r[a] = res;
+    DISPATCH();
 })
 label_closure:
 {
@@ -662,21 +661,19 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     assert(reduct != NULL);
     assert(argv != NULL || argc == 0);
 
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(callable), NULL, "cannot call value");
+    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(callable), "cannot call value of type %s",
+        REDUCT_HANDLE_GET_TYPE_STRING(callable));
 
     reduct_eval_ensure_ready(reduct);
 
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(callable);
-    if (item->type == REDUCT_ITEM_TYPE_ATOM)
+    if (REDUCT_HANDLE_IS_NATIVE(reduct, callable))
     {
-        REDUCT_ERROR_ASSERT(reduct, reduct_atom_is_native(reduct, &item->atom), NULL,
-            "cannot call atom, only native functions and closures are callable");
-        return item->atom.native(reduct, argc, argv);
+        return REDUCT_HANDLE_TO_ATOM(callable)->native(reduct, argc, argv);
     }
 
-    if (item->type == REDUCT_ITEM_TYPE_CLOSURE)
+    if (REDUCT_HANDLE_IS_CLOSURE(callable))
     {
-        reduct_closure_t* closure = &item->closure;
+        reduct_closure_t* closure = REDUCT_HANDLE_TO_CLOSURE(callable);
         reduct_function_t* func = closure->function;
         uint32_t arity = (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC) ? func->arity : (uint32_t)argc;
         uint32_t target = reduct->eval.regCount;
@@ -708,7 +705,8 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
         return reduct_eval_run(reduct, initialFrameCount);
     }
 
-    REDUCT_ERROR_THROW(reduct, "cannot call value");
+    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s",
+        REDUCT_HANDLE_GET_TYPE_STRING(callable));
 }
 
 REDUCT_API reduct_handle_t reduct_eval_call_v(struct reduct* reduct, reduct_handle_t callable, size_t argc, ...)

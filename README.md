@@ -24,7 +24,7 @@
 </div>
 <br>
 
-Reduct is a functional, immutable, S-expression based configuration and scripting language. It aims to combine the flexibility of a Lisp with the ease-of-use and performance of a language like Lua.
+Reduct is a functional, immutable, S-expression based configuration and scripting language featuring automatic parallelization and an RVSDG inspired IR. It aims to combine the flexibility of a Lisp with the ease-of-use and performance of a language like Lua.
 
 ## Setup
 
@@ -156,7 +156,7 @@ For more examples, see the `bench/` and `tests/` directories.
 
 ## Motivation
 
-Reduct aims to provide a series of potential advantages that over existing languages.
+Reduct aims to provide a series of potential advantages over existing languages.
 
 ### Immutability
 
@@ -398,6 +398,48 @@ As an example, locals can be used to create a more traditional "function definit
 (def add (lambda (a b) (+ a b)))
 
 (add 1 2) // Evaluates to "3"
+```
+
+### Side Effects
+
+Reduct does not have traditional side effects and can generally be considered a pure and "lazy" language. This means that any operation is assumed to have the same result given the same arguments and that a operation is not executed until its result is needed, if its result is never needed, it is never executed.
+
+While Reduct does not have any build-in edge case handling for side effects, we can still achieve the same results by using state threading.
+
+State threading is a technique where we explicitly pass the state of the world as an argument to our functions, and return the new state. In practive, the "new state" might just some random meaningless value, but the fact that we have to return it and pass it around forces us, and the compiler, to acknowledge the side effect.
+
+For example, to print a set of messages, we could write:
+
+```lisp
+(-> (world)
+    (print! "Hello,")
+    (print! "World!")
+) 
+/// Expands to:
+(print! (print! (world) "Hello,") "World!")
+```
+
+The `world` function just returns a dummy value, but since we "thread" it through the `print!` calls, we can be sure that they will be executed in the correct order.
+
+### Automatic Parallelization
+
+There are two forms of parallelization in Reduct. Certain operations, such as `map` or `filter`, are simply implemented to run in parallel when given a large enough list.
+
+For example:
+
+```lisp
+(map (lambda (x) (* x x)) (range 1000000)) // Will run in parallel.
+```
+
+The second form of parallelization is performed by the optimizer when `-O3` is specified. The optimizer will attempt to find independent function calls utilizing the RVSDG IR and emit special `REDUCT_OPCODE_FORK` and `REDUCT_OPCODE_JOIN` opcodes.
+
+For example:
+
+```lisp
+(def result1 (my-expensive-func1))
+(def result2 (my-expensive-func2))
+(def result3 (my-expensive-func3))
+(+ result1 result2 result3) /// The optimizer will attempt to execute the three expensive functions in parallel, since they are independent of each other.
 ```
 
 ## Style Guide

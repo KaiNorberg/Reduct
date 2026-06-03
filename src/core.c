@@ -55,6 +55,7 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
     env->libCount = 0;
     env->libCapacity = 0;
 
+    env->main = reduct;
     reduct_atom_env_init(&env->atom);
     reduct_native_env_init(&env->native);
     reduct_item_env_init(&env->item);

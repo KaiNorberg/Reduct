@@ -186,6 +186,20 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         }
         break;
     }
+    case REDUCT_ITEM_TYPE_FUTURE:
+    {
+        if (item->future.error != NULL)
+        {
+            free(item->future.error);
+            item->future.error = NULL;
+        }
+        if (item->future.argv != item->future.smallArgv)
+        {
+            free(item->future.argv);
+            item->future.argv = item->future.smallArgv;
+        }
+        break;
+    }
     case REDUCT_ITEM_TYPE_FUNCTION:
     case REDUCT_ITEM_TYPE_CLOSURE:
     case REDUCT_ITEM_TYPE_RVSDG_NODE:
@@ -255,6 +269,8 @@ REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)
         return "ir user";
     case REDUCT_ITEM_TYPE_RVSDG_ORIGIN:
         return "ir origin";
+    case REDUCT_ITEM_TYPE_FUTURE:
+        return "future";
     default:
         return "unknown";
     }

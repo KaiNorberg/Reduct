@@ -1,4 +1,4 @@
-#include "reduct/error.h"
+#include <reduct/error.h>
 #include <reduct/core.h>
 #include <reduct/eval.h>
 #include <reduct/gc.h>
@@ -114,9 +114,17 @@ static int reduct_task_worker(void* arg)
 
     while (true)
     {
-        if (reduct_task_try_work(thread))
+        for (size_t i = 0; i < REDUCT_TASK_SPIN_MAX; i++)
         {
-            continue;
+            if (reduct_task_try_work(thread))
+            {
+                i = 0;
+                continue;
+            }
+            if (atomic_load_explicit(&env->shutdown, memory_order_relaxed))
+            {
+                break;
+            }
         }
 
         if (atomic_load_explicit(&env->shutdown, memory_order_acquire))
@@ -128,7 +136,7 @@ static int reduct_task_worker(void* arg)
         mtx_lock(&env->mutex);
         size_t head = atomic_load_explicit(&env->queueHead, memory_order_acquire);
         size_t tail = atomic_load_explicit(&env->queueTail, memory_order_acquire);
-        
+
         if (head == tail && !atomic_load_explicit(&env->shutdown, memory_order_relaxed))
         {
             cnd_wait(&env->cond, &env->mutex);
@@ -196,11 +204,11 @@ static size_t reduct_task_get_cpu_count(void)
 #endif
 }
 
-REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg),
-    void* arg)
+REDUCT_API bool reduct_task_create_try(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg),
+    void* arg, reduct_task_id_t* outId)
 {
     reduct_task_env_t* env = &reduct->env->task;
-    if (REDUCT_UNLIKELY(atomic_load_explicit(&env->threadCount, memory_order_acquire) == 0))
+    if (REDUCT_UNLIKELY(atomic_load_explicit(&env->threadCount, memory_order_acquire) == 0)) 
     {
         mtx_lock(&env->mutex);
 
@@ -210,7 +218,11 @@ REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(st
             size_t ideal = reduct_task_get_cpu_count();
             size_t limit = REDUCT_MIN(ideal, REDUCT_TASK_THREAD_MAX);
 
-            for (size_t i = 0; i < limit; i++)
+            env->threads[0].thrd = thrd_current();
+            env->threads[0].active = true;
+            count++;
+
+            for (size_t i = 1; i < limit; i++)
             {
                 if (thrd_create(&env->threads[i].thrd, reduct_task_worker, reduct) == thrd_success)
                 {
@@ -225,9 +237,15 @@ REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(st
     }
 
     size_t head;
-    while (!reduct_task_push(env, func, arg, &head))
+    if (!reduct_task_push(env, func, arg, &head))
     {
-        reduct_task_try_work(reduct);
+        return false;
+    }
+
+    if (outId != NULL)
+    {
+        outId->index = (uint16_t)(head % REDUCT_TASK_QUEUE_MAX);
+        outId->generation = (uint16_t)(head + 1);
     }
 
     if (atomic_load_explicit(&env->idleCount, memory_order_relaxed) > 0)
@@ -235,9 +253,19 @@ REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(st
         cnd_signal(&env->cond);
     }
 
+    return true;
+}
+
+REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg),
+    void* arg)
+{
     reduct_task_id_t id;
-    id.index = (uint32_t)(head % REDUCT_TASK_QUEUE_MAX);
-    id.generation = (uint32_t)(head + 1);
+
+    while (!reduct_task_create_try(reduct, func, arg, &id))
+    {
+        reduct_task_try_work(reduct);
+    }
+
     return id;
 }
 

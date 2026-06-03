@@ -19,9 +19,33 @@ struct reduct_task;
  * @{
  */
 
-#define REDUCT_TASK_THREAD_MAX 32 ///< The maximum number of threads.
+#define REDUCT_TASK_THREAD_MAX 16 ///< The maximum number of threads.
 
 #define REDUCT_TASK_QUEUE_MAX 256 ///< The maximum number of tasks.
+
+#define REDUCT_TASK_SPIN_MAX 1000 ///< The maximum number of times to spin while waiting for work to be ready.
+
+/**
+ * @brief Task ID structure.
+ * @struct reduct_task_id_t
+ */
+typedef struct
+{
+    uint16_t index; ///< The index within the queue.
+    uint16_t
+        generation; ///< Incrementally increasing counter to avoid ABA problems when reusing task slots in the queue.
+} reduct_task_id_t;
+
+/**
+ * @brief Task structure.
+ * @struct reduct_task_t
+ */
+typedef struct REDUCT_ALIGNED(64) reduct_task
+{
+    _Atomic(uint16_t) generation;
+    void (*func)(struct reduct* reduct, void* arg);
+    void* arg;
+} reduct_task_t;
 
 /**
  * @brief Thread structure.
@@ -34,29 +58,6 @@ typedef struct
 } reduct_thread_t;
 
 /**
- * @brief Task ID structure.
- * @struct reduct_task_id_t
- */
-typedef struct
-{
-    uint32_t index; ///< The index within the queue.
-    uint32_t
-        generation; ///< Incrementally increasing counter to avoid ABA problems when reusing task slots in the queue.
-} reduct_task_id_t;
-
-/**
- * @brief Task structure.
- * @struct reduct_task_t
- */
-typedef struct reduct_task
-{
-    _Atomic(uint32_t) generation;
-    _Atomic(bool) done;
-    void (*func)(struct reduct* reduct, void* arg);
-    void* arg;
-} reduct_task_t;
-
-/**
  * @brief Global thread environment structure.
  * @struct reduct_task_env_t
  */
@@ -65,12 +66,12 @@ typedef struct
     mtx_t mutex;
     cnd_t cond;
     reduct_thread_t threads[REDUCT_TASK_THREAD_MAX];
-    _Atomic(size_t) threadCount;
-    reduct_task_t queue[REDUCT_TASK_QUEUE_MAX];
-    _Atomic(size_t) queueHead;
-    _Atomic(size_t) queueTail;
+    REDUCT_ALIGNED(64) reduct_task_t queue[REDUCT_TASK_QUEUE_MAX];
     _Atomic(bool) shutdown;
-    _Atomic(int32_t) idleCount; ///< Number of workers currently waiting on the condition variable.
+    REDUCT_ALIGNED(64) _Atomic(size_t) queueHead;
+    REDUCT_ALIGNED(64) _Atomic(size_t) queueTail;
+    _Atomic(size_t) threadCount;
+    _Atomic(int32_t) idleCount;
 } reduct_task_env_t;
 
 /**
@@ -99,12 +100,37 @@ REDUCT_API reduct_task_id_t reduct_task_create(struct reduct* reduct, void (*fun
     void* arg);
 
 /**
+ * @brief Try to create a new task without blocking.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param func The function to execute in the task.
+ * @param arg The argument to pass to the function.
+ * @param outId Pointer to store the ID of the created task.
+ * @return `true` if the task was created, `false` if the queue is full.
+ */
+REDUCT_API bool reduct_task_create_try(struct reduct* reduct, void (*func)(struct reduct* reduct, void* arg),
+    void* arg, reduct_task_id_t* outId);
+
+/**
  * @brief Wait for a task to finish.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param id The id of the task to wait for.
  */
 REDUCT_API void reduct_task_join(struct reduct* reduct, reduct_task_id_t id);
+
+/**
+ * @brief Retrieve the number of pending tasks.
+ * 
+ * @param env Pointer to the thread environment.
+ * @return The number of pending tasks in the queue.
+ */
+static inline REDUCT_ALWAYS_INLINE uint64_t reduct_task_queue_size(reduct_task_env_t* env)
+{
+    size_t head = atomic_load_explicit(&env->queueHead, memory_order_acquire);
+    size_t tail = atomic_load_explicit(&env->queueTail, memory_order_acquire);
+    return head - tail;
+}
 
 /** @} */
 
