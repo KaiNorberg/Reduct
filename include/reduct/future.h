@@ -28,16 +28,15 @@ struct reduct;
 typedef struct reduct_future
 {
     reduct_error_t* error; ///< Error structure, will be `NULL` if no error occured.
-    union 
-    {
-        reduct_handle_t callable;  ///< The callable to execute.
-        reduct_handle_t result;    ///< The result of the execution.
+    union {
+        reduct_handle_t callable; ///< The callable to execute.
+        reduct_handle_t result;   ///< The result of the execution.
     };
     reduct_handle_t smallArgv[REDUCT_FUTURE_SMALL_MAX];
-    reduct_handle_t* argv;      ///< The arguments for the callable.
-    uint32_t argc;                ///< The number of arguments.
-    _Atomic(bool) done;        ///< Whether the future is finished.
-    reduct_task_id_t taskId;   ///< The task ID in the task system.
+    reduct_handle_t* argv;   ///< The arguments for the callable.
+    uint32_t argc;           ///< The number of arguments.
+    _Atomic(bool) done;      ///< Whether the future is finished.
+    reduct_task_id_t taskId; ///< The task ID in the task system.
 } reduct_future_t;
 
 /**
@@ -49,7 +48,8 @@ typedef struct reduct_future
  * @param argv Pointer to the arguments array.
  * @return Pointer to the new future.
  */
-REDUCT_API reduct_future_t* reduct_future_new(struct reduct* reduct, reduct_handle_t callable, size_t argc, reduct_handle_t* argv);
+REDUCT_API reduct_future_t* reduct_future_new(struct reduct* reduct, reduct_handle_t callable, size_t argc,
+    reduct_handle_t* argv);
 
 /**
  * @brief Wait for the future to complete and return its result.

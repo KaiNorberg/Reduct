@@ -115,8 +115,8 @@ if(REDUCT_USE_FUZZER AND NOT (WIN32 OR APPLE))
 endif()
 
 if(NOT WIN32)
-    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter)
-    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter)
+    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides)
+    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides)
 endif()
 
 add_subdirectory(tools/reduct-cli)

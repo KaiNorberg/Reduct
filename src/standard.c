@@ -25,7 +25,8 @@
 #include <sys/stat.h>
 #include <time.h>
 
-REDUCT_API reduct_handle_t reduct_assert(reduct_t* reduct, reduct_handle_t state, reduct_handle_t cond, reduct_handle_t msg)
+REDUCT_API reduct_handle_t reduct_assert(reduct_t* reduct, reduct_handle_t state, reduct_handle_t cond,
+    reduct_handle_t msg)
 {
     assert(reduct != NULL);
 
@@ -96,6 +97,7 @@ static void reduct_standard_worker(reduct_t* reduct, void* arg)
 {
     reduct_standard_task_t* task = (reduct_standard_task_t*)arg;
     task->result = reduct_eval_call(reduct, task->callable, 1, &task->arg);
+    REDUCT_HANDLE_RETAIN(reduct, task->result);
 }
 
 REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, reduct_handle_t callable)
@@ -139,11 +141,8 @@ REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, re
     for (size_t i = 0; i < sourceList->length; i++)
     {
         reduct_task_join(reduct, tasks[i].id);
-    }
-
-    for (size_t i = 0; i < sourceList->length; i++)
-    {
         reduct_list_push(reduct, REDUCT_HANDLE_TO_LIST(mapped), tasks[i].result);
+        REDUCT_HANDLE_RELEASE(reduct, tasks[i].result);
     }
 
     REDUCT_SCRATCH_PUT(reduct, tasks);
@@ -1969,7 +1968,8 @@ REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle
     return REDUCT_HANDLE_FROM_ATOM(atom);
 }
 
-REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t state, reduct_handle_t path, reduct_handle_t content)
+REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t state, reduct_handle_t path,
+    reduct_handle_t content)
 {
     assert(reduct != NULL);
 

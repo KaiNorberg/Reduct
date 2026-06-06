@@ -41,8 +41,10 @@ typedef enum
 /**
  * @brief Opcode enumeration.
  * @enum reduct_opcode_t
- * 
- * @warning Instructins that start a new frame such as `REDUCT_OPCODE_CALL` or `REDUCT_OPCODE_RECUR` will utilize the target register (R(A)) as the base of the new frame. As such, this register must be greater than any live register to avoid clobbering.
+ *
+ * @warning Instructins that start a new frame such as `REDUCT_OPCODE_CALL` or `REDUCT_OPCODE_RECUR` will utilize the
+ * target register (R(A)) as the base of the new frame. As such, this register must be greater than any live register to
+ * avoid clobbering.
  */
 typedef enum
 {

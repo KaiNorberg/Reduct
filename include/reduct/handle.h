@@ -148,12 +148,11 @@ typedef enum
 
 /**
  * @brief Create a handle from a future pointer.
- * 
+ *
  * @param _future The pointer to the reduct_future_t.
  * @return The handle.
  */
-#define REDUCT_HANDLE_FROM_FUTURE(_future) \
-    REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_future, reduct_item_t, future))
+#define REDUCT_HANDLE_FROM_FUTURE(_future) REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_future, reduct_item_t, future))
 
 /**
  * @brief Check if a handle is a number.
@@ -170,8 +169,8 @@ typedef enum
  * @return Non-zero if the handle is number shaped, zero otherwise.
  */
 #define REDUCT_HANDLE_IS_NUMBER_SHAPED(_handle) \
-    (REDUCT_HANDLE_IS_NUMBER(_handle) || (REDUCT_HANDLE_IS_ATOM(_handle) && \
-        reduct_atom_is_number(REDUCT_HANDLE_TO_ATOM(_handle))))
+    (REDUCT_HANDLE_IS_NUMBER(_handle) || \
+        (REDUCT_HANDLE_IS_ATOM(_handle) && reduct_atom_is_number(REDUCT_HANDLE_TO_ATOM(_handle))))
 
 /**
  * @brief Get the high-level type of a handle.
@@ -482,7 +481,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
 
 /**
  * @brief Create a future handle.
- * 
+ *
  * @param _reduct Pointer to the Reduct structure.
  * @param _callable The callable handle.
  * @param _argc The number of arguments.
@@ -497,12 +496,11 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @param _handle The reduct_handle_t variable to store each element.
  * @param _list Pointer to the list handle.
  */
-#define REDUCT_HANDLE_FOR_EACH(_handle, _list) \
-    REDUCT_LIST_OF_EACH(_handle, REDUCT_HANDLE_TO_LIST(_list))
+#define REDUCT_HANDLE_FOR_EACH(_handle, _list) REDUCT_LIST_OF_EACH(_handle, REDUCT_HANDLE_TO_LIST(_list))
 
 /**
  * @brief Get the value of the future referenced by the handle or the handle itself.
- * 
+ *
  * @param _reduct Pointer to the Reduct structure.
  * @param _handle The handle.
  * @return The result of the future if the handle is a future, otherwise the handle itself.
@@ -658,7 +656,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
             _bv = reduct_handle_as_number(_reduct, _bVal); \
             _cv = reduct_handle_as_number(_reduct, _cVal); \
         } \
-        *(_a) = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)_bv _op(int64_t)_cv)); \
+        *(_a) = REDUCT_HANDLE_FROM_NUMBER((double)((int64_t)_bv _op(int64_t) _cv)); \
     } while (0)
 
 /**
@@ -690,7 +688,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @brief Release a handle, allowing its referenced item to be collected by the garbage collector.
  *
  * @param _reduct Pointer to the Reduct structure.
- * @param _handle Pointer to the handle.
+ * @param _handle The handle.
  */
 #define REDUCT_HANDLE_RELEASE(_reduct, _handle) \
     do \
@@ -699,6 +697,25 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
         if (REDUCT_HANDLE_IS_ITEM(_h)) \
         { \
             reduct_gc_release((_reduct), REDUCT_HANDLE_TO_ITEM(_h)); \
+        } \
+    } while (0)
+
+/**
+ * @brief Free the item that a handle is referencing.
+ *
+ * Intended to be used by the GC or when it is known that a handle has no more users and its item was allocated by the
+ * current thread.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _handle The handle to the item.
+ */
+#define REDUCT_HANDLE_FREE(_reduct, _handle) \
+    do \
+    { \
+        reduct_handle_t _h = (_handle); \
+        if (REDUCT_HANDLE_IS_ITEM(_h)) \
+        { \
+            reduct_item_free((_reduct), REDUCT_HANDLE_TO_ITEM(_h)); \
         } \
     } while (0)
 

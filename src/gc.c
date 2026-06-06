@@ -2,280 +2,76 @@
 #include <reduct/core.h>
 #include <reduct/eval.h>
 #include <reduct/gc.h>
+#include <reduct/handle.h>
 #include <reduct/item.h>
 #include <reduct/list.h>
+#include <reduct/task.h>
 
-static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item);
-
-static void reduct_gc_mark_node(reduct_t* reduct, uint32_t shift, reduct_list_node_t* node);
-
-static void reduct_gc_mark_node_contents(reduct_t* reduct, uint32_t shift, reduct_list_node_t* node)
+REDUCT_API void reduct_gc_env_init(reduct_gc_env_t* env)
 {
-    if (shift == 0)
+    atomic_init(&env->count, 0);
+    env->completed = 0;
+    mtx_init(&env->mutex, mtx_plain);
+}
+
+REDUCT_API void reduct_gc_env_deinit(reduct_gc_env_t* env)
+{
+    mtx_destroy(&env->mutex);
+}
+
+REDUCT_API void reduct_gc_state_init(reduct_gc_state_t* state)
+{
+    state->retained = NULL;
+    state->retainedCount = 0;
+    state->retainedCapacity = 0;
+    state->lastCount = 0;
+}
+
+REDUCT_API void reduct_gc_state_deinit(reduct_gc_state_t* state)
+{
+    if (state->retained != NULL)
     {
-        for (uint32_t i = 0; i < REDUCT_LIST_WIDTH; i++)
+        free(state->retained);
+        state->retained = NULL;
+    }
+}
+
+static inline void reduct_gc_mark_state(reduct_t* state)
+{
+    reduct_item_mark(REDUCT_HANDLE_TO_ITEM(state->nil));
+
+    for (uint32_t j = 0; j < state->eval.regCount; j++)
+    {
+        if (REDUCT_HANDLE_IS_ITEM(state->eval.regs[j]))
         {
-            reduct_handle_t handle = node->handles[i];
-            if (REDUCT_HANDLE_IS_ITEM(handle))
-            {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(handle));
-            }
+            reduct_item_mark(REDUCT_HANDLE_TO_ITEM(state->eval.regs[j]));
         }
     }
-    else
+    for (uint32_t j = 0; j < state->eval.frameCount; j++)
     {
-        for (uint32_t i = 0; i < REDUCT_LIST_WIDTH; i++)
-        {
-            reduct_gc_mark_node(reduct, shift - REDUCT_LIST_BITS, node->children[i]);
-        }
+        reduct_item_mark(REDUCT_CONTAINER_OF(state->eval.frames[j].closure, reduct_item_t, closure));
     }
+
+    state->item.freeList = NULL;
+    state->item.freeCount = 0;
 }
 
-static void reduct_gc_mark_node(reduct_t* reduct, uint32_t shift, reduct_list_node_t* node)
+static inline void reduct_item_sweep(reduct_t* reduct)
 {
-    if (node == NULL)
-    {
-        return;
-    }
-
-    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, listNode);
-    if (item->flags & REDUCT_ITEM_FLAG_GC_MARK)
-    {
-        return;
-    }
-    item->flags |= REDUCT_ITEM_FLAG_GC_MARK;
-
-    reduct_gc_mark_node_contents(reduct, shift, node);
-}
-
-static void reduct_gc_mark_list(reduct_t* reduct, reduct_list_t* list)
-{
-    reduct_gc_mark_node(reduct, list->shift, list->root);
-    reduct_gc_mark_node_contents(reduct, 0, &list->tail);
-}
-
-static void reduct_gc_mark_atom(reduct_t* reduct, reduct_atom_t* atom)
-{
-    if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->stack != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(atom->stack, reduct_item_t, atomStack));
-    }
-}
-
-static void reduct_gc_mark_rvsdg_node(reduct_t* reduct, reduct_rvsdg_node_t* node)
-{
-    if (node->parent != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(node->parent, reduct_item_t, rvsdgRegion));
-    }
-
-    reduct_rvsdg_user_t* user = node->firstInput;
-    while (user != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user, reduct_item_t, rvsdgUser));
-        user = user->next;
-    }
-
-    if (node->output != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(node->output, reduct_item_t, rvsdgOrigin));
-    }
-
-    reduct_rvsdg_region_t* region = node->firstRegion;
-    while (region != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(region, reduct_item_t, rvsdgRegion));
-        region = region->next;
-    }
-
-    if (node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST && REDUCT_HANDLE_IS_ITEM(node->constant))
-    {
-        reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(node->constant));
-    }
-}
-
-static void reduct_gc_mark_rvsdg_edge(reduct_t* reduct, reduct_rvsdg_edge_t* edge)
-{
-    if (edge->origin != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(edge->origin, reduct_item_t, rvsdgOrigin));
-    }
-
-    if (edge->user != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(edge->user, reduct_item_t, rvsdgUser));
-    }
-}
-
-static void reduct_gc_mark_rvsdg_region(reduct_t* reduct, reduct_rvsdg_region_t* region)
-{
-    if (region->parent != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(region->parent, reduct_item_t, rvsdgNode));
-    }
-
-    reduct_rvsdg_origin_t* arg = region->firstArgument;
-    while (arg != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(arg, reduct_item_t, rvsdgOrigin));
-        arg = arg->next;
-    }
-
-    if (region->result != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(region->result, reduct_item_t, rvsdgUser));
-    }
-
-    reduct_rvsdg_node_t* node = region->firstNode;
-    while (node != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode));
-        node = node->next;
-    }
-}
-
-static void reduct_gc_mark_rvsdg_user(reduct_t* reduct, reduct_rvsdg_user_t* user)
-{
-    if (user->ownerKind == REDUCT_RVSDG_OWNER_NODE && user->node != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user->node, reduct_item_t, rvsdgNode));
-    }
-    else if (user->ownerKind == REDUCT_RVSDG_OWNER_REGION && user->region != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user->region, reduct_item_t, rvsdgRegion));
-    }
-
-    if (user->edge != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(user->edge, reduct_item_t, rvsdgEdge));
-    }
-}
-
-static void reduct_gc_mark_rvsdg_origin(reduct_t* reduct, reduct_rvsdg_origin_t* origin)
-{
-    if (origin->ownerKind == REDUCT_RVSDG_OWNER_NODE && origin->node != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(origin->node, reduct_item_t, rvsdgNode));
-    }
-    else if (origin->ownerKind == REDUCT_RVSDG_OWNER_REGION && origin->region != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(origin->region, reduct_item_t, rvsdgRegion));
-    }
-
-    reduct_rvsdg_edge_t* edge = origin->edges;
-    while (edge != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(edge, reduct_item_t, rvsdgEdge));
-        edge = edge->next;
-    }
-}
-
-static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
-{
-    assert(reduct != NULL);
-
-    /*if (REDUCT_UNLIKELY(item == NULL || (item->flags & REDUCT_ITEM_FLAG_GC_MARK)))
-    {
-        return;
-    }
-
-    item->flags |= REDUCT_ITEM_FLAG_GC_MARK;
-
-    if (item->type == REDUCT_ITEM_TYPE_LIST)
-    {
-        reduct_gc_mark_list(reduct, &item->list);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_ATOM)
-    {
-        reduct_gc_mark_atom(reduct, &item->atom);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_FUNCTION)
-    {
-        for (uint16_t i = 0; i < item->function.constantCount; i++)
-        {
-            if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_STATIC)
-            {
-                if (REDUCT_HANDLE_IS_ITEM(item->function.constants[i].handle))
-                {
-                    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(item->function.constants[i].handle));
-                }
-            }
-        }
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_CLOSURE)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(item->closure.function, reduct_item_t, function));
-        for (uint16_t i = 0; i < item->closure.function->constantCount; i++)
-        {
-            reduct_handle_t handle = item->closure.constants[i];
-            if (REDUCT_HANDLE_IS_ITEM(handle))
-            {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(handle));
-            }
-        }
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_NODE)
-    {
-        reduct_gc_mark_rvsdg_node(reduct, &item->rvsdgNode);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_EDGE)
-    {
-        reduct_gc_mark_rvsdg_edge(reduct, &item->rvsdgEdge);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_REGION)
-    {
-        reduct_gc_mark_rvsdg_region(reduct, &item->rvsdgRegion);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_USER)
-    {
-        reduct_gc_mark_rvsdg_user(reduct, &item->rvsdgUser);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_RVSDG_ORIGIN)
-    {
-        reduct_gc_mark_rvsdg_origin(reduct, &item->rvsdgOrigin);
-    }*/
-}
-
-REDUCT_API void reduct_gc(reduct_t* reduct)
-{
-    assert(reduct != NULL);
-
-    /*reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(reduct->nil));
-
-    for (size_t i = 0; i < reduct->retainedCount; i++)
-    {
-        reduct_gc_mark(reduct, reduct->retained[i]);
-    }
-
-    if (reduct != NULL)
-    {
-        for (uint32_t i = 0; i < reduct->regCount; i++)
-        {
-            reduct_handle_t child = reduct->regs[i];
-            if (REDUCT_HANDLE_IS_ITEM(child))
-            {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(child));
-            }
-        }
-        for (uint32_t i = 0; i < reduct->frameCount; i++)
-        {
-            reduct_closure_t* closure = reduct->frames[i].closure;
-            reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(closure, reduct_item_t, closure));
-        }
-    }
-
-    reduct->freeList = NULL;
-    reduct->freeCount = 0;
-
+    reduct_item_env_t* env = &reduct->env->item;
     reduct_item_block_t* prev = NULL;
-    reduct_item_block_t* block = reduct->block;
+    reduct_item_block_t* block = env->block;
+
+    reduct_item_t* globalFreeList = NULL;
+    size_t globalFreeCount = 0;
+
     while (block != NULL)
     {
         reduct_item_block_t* next = block->next;
         uint32_t count = 0;
         for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
         {
-            if (block->items[i].flags & REDUCT_ITEM_FLAG_GC_MARK)
+            if (atomic_load(&block->items[i].flags) & REDUCT_ITEM_FLAG_MARKED)
             {
                 count++;
             }
@@ -287,7 +83,7 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
             {
                 reduct_item_deinit(reduct, &block->items[i]);
             }
-            reduct->blockCount--;
+            env->blockCount--;
             free(block->allocated);
         }
         else
@@ -295,19 +91,25 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
             for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
             {
                 reduct_item_t* item = &block->items[i];
-                if (item->flags & REDUCT_ITEM_FLAG_GC_MARK)
+                if (atomic_load(&block->items[i].flags) & REDUCT_ITEM_FLAG_MARKED)
                 {
-                    item->flags &= ~REDUCT_ITEM_FLAG_GC_MARK;
+                    atomic_fetch_and(&item->flags, ~REDUCT_ITEM_FLAG_MARKED);
                 }
                 else
                 {
-                    reduct_item_free(reduct, item);
+                    if (item->type != REDUCT_ITEM_TYPE_NONE)
+                    {
+                        reduct_item_deinit(reduct, item);
+                    }
+                    item->free = globalFreeList;
+                    globalFreeList = item;
+                    globalFreeCount++;
                 }
             }
 
             if (prev == NULL)
             {
-                reduct->block = block;
+                env->block = block;
             }
             else
             {
@@ -324,51 +126,97 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
     }
     else
     {
-        reduct->block = NULL;
+        env->block = NULL;
     }
-    reduct->prevBlockCount = reduct->blockCount;*/
+
+    env->globalFreeList = globalFreeList;
+    env->globalFreeCount = globalFreeCount;
+    env->prevBlockCount = env->blockCount;
+}
+
+REDUCT_API void reduct_gc(reduct_t* reduct)
+{
+    assert(reduct != NULL);
+    reduct_gc_env_t* gc = &reduct->env->gc;
+
+    reduct_task_barrier_enter(reduct);
+    mtx_lock(&reduct->env->task.mutex);
+
+    mtx_lock(&gc->mutex);
+    uint32_t count = atomic_load(&gc->count);
+    if (gc->completed < count)
+    {
+        reduct_gc_mark_state(reduct);
+
+        for (size_t i = 0; i < reduct->gc.retainedCount; i++)
+        {
+            reduct_item_mark(reduct->gc.retained[i]);
+        }
+
+        for (size_t i = 0; i < reduct->env->task.threadCount; i++)
+        {
+            reduct_thread_t* thread = &reduct->env->task.threads[i];
+            if (!thread->active || thread->reduct == NULL || thread->reduct == reduct)
+            {
+                continue;
+            }
+
+            reduct_gc_mark_state(thread->reduct);
+            for (size_t j = 0; j < thread->reduct->gc.retainedCount; j++)
+            {
+                reduct_item_mark(thread->reduct->gc.retained[j]);
+            }
+        }
+
+        reduct_item_sweep(reduct);
+        gc->completed = count;
+    }
+
+    reduct->gc.lastCount = count;
+
+    mtx_unlock(&gc->mutex);
+    mtx_unlock(&reduct->env->task.mutex);
+    reduct_task_barrier_exit(reduct);
 }
 
 REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
 {
-    assert(reduct != NULL);
-    assert(item != NULL);
+    reduct_gc_state_t* gc = &reduct->gc;
 
-    /*for (size_t i = 0; i < reduct->retainedCount; i++)
+    for (size_t i = 0; i < gc->retainedCount; i++)
     {
-        if (reduct->retained[i] == item)
+        if (gc->retained[i] == item)
         {
             return;
         }
     }
 
-    if (reduct->retainedCount >= reduct->retainedCapacity)
+    if (gc->retainedCount >= gc->retainedCapacity)
     {
-        size_t newCapacity = reduct->retainedCapacity == 0 ? REDUCT_GC_RETAINED_INITAL
-                                                           : reduct->retainedCapacity * REDUCT_GC_RETAINED_GROWTH;
-        reduct_item_t** newRetained = (reduct_item_t**)realloc(reduct->retained, newCapacity * sizeof(reduct_item_t*));
+        size_t newCapacity =
+            gc->retainedCapacity == 0 ? REDUCT_GC_RETAINED_INITIAL : gc->retainedCapacity * REDUCT_GC_RETAINED_GROWTH;
+        reduct_item_t** newRetained = (reduct_item_t**)realloc(gc->retained, newCapacity * sizeof(reduct_item_t*));
         if (newRetained == NULL)
         {
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
-        reduct->retained = newRetained;
-        reduct->retainedCapacity = newCapacity;
+        gc->retained = newRetained;
+        gc->retainedCapacity = newCapacity;
     }
 
-    reduct->retained[reduct->retainedCount++] = item;*/
+    gc->retained[gc->retainedCount++] = item;
 }
 
 REDUCT_API void reduct_gc_release(reduct_t* reduct, reduct_item_t* item)
 {
-    assert(reduct != NULL);
-    assert(item != NULL);
+    reduct_gc_state_t* gc = &reduct->gc;
 
-    /*for (size_t i = 0; i < reduct->retainedCount; i++)
-     {
-         if (reduct->retained[i] == item)
-         {
-             reduct->retained[i] = reduct->retained[--reduct->retainedCount];
-             return;
-         }
-     }*/
+    for (size_t i = 0; i < gc->retainedCount; i++)
+    {
+        if (gc->retained[i] == item)
+        {
+            gc->retained[i] = gc->retained[--gc->retainedCount];
+            return;
+        }
+    }
 }

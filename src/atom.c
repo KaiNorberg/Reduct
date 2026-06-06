@@ -763,8 +763,11 @@ REDUCT_API void reduct_atom_check_native(reduct_t* reduct, reduct_atom_t* atom)
         return;
     }
 
-    atom->native = entry->nativeFn;
-    atom->flags |= REDUCT_ATOM_FLAG_NATIVE;
+    if (entry->nativeFn != NULL)
+    {
+        atom->native = entry->nativeFn;
+        atom->flags |= REDUCT_ATOM_FLAG_NATIVE;
+    }
 
     if (entry->intrinsicFn != NULL)
     {

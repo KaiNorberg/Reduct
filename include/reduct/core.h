@@ -1,3 +1,4 @@
+#include "reduct/emit.h"
 #ifndef REDUCT_CORE_H
 #define REDUCT_CORE_H 1
 
@@ -89,6 +90,7 @@ typedef struct reduct_env
     reduct_atom_env_t atom;
     reduct_native_env_t native;
     reduct_item_env_t item;
+    reduct_gc_env_t gc;
     reduct_schema_env_t schema;
     reduct_optimize_env_t optimize;
     reduct_task_env_t task;
@@ -105,6 +107,7 @@ typedef struct reduct
     reduct_handle_t nil;
     reduct_atom_state_t atom;
     reduct_item_state_t item;
+    reduct_gc_state_t gc;
     reduct_scratch_state_t scratch;
     reduct_eval_state_t eval;
     void* userdata;

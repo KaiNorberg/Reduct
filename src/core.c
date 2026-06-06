@@ -18,6 +18,7 @@ static inline void reduct_state_init(reduct_t* reduct, reduct_error_t* error, re
 
     reduct_atom_state_init(&reduct->atom);
     reduct_item_state_init(&reduct->item);
+    reduct_gc_state_init(&reduct->gc);
     reduct_scratch_state_init(&reduct->scratch);
     reduct_eval_state_init(&reduct->eval);
 }
@@ -59,6 +60,7 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
     reduct_atom_env_init(&env->atom);
     reduct_native_env_init(&env->native);
     reduct_item_env_init(&env->item);
+    reduct_gc_env_init(&env->gc);
     reduct_schema_env_init(&env->schema);
     reduct_optimize_env_init(&env->optimize);
     reduct_task_env_init(&env->task);
@@ -135,11 +137,17 @@ REDUCT_API void reduct_free(reduct_t* reduct)
 
     reduct_atom_state_deinit(&reduct->atom);
     reduct_item_state_deinit(&reduct->item);
+    reduct_gc_state_deinit(&reduct->gc);
     reduct_scratch_state_deinit(&reduct->scratch);
     reduct_eval_state_deinit(&reduct->eval);
 
     if (atomic_fetch_sub(&reduct->env->refCount, 1) == 1)
     {
+        reduct_atom_env_deinit(&reduct->env->atom);
+        reduct_native_env_deinit(&reduct->env->native);
+        reduct_item_env_deinit(reduct, &reduct->env->item);
+        reduct_gc_env_deinit(&reduct->env->gc);
+        reduct_schema_env_deinit(&reduct->env->schema);
         reduct_optimize_env_deinit(&reduct->env->optimize);
         reduct_task_env_deinit(&reduct->env->task);
 
@@ -181,11 +189,6 @@ REDUCT_API void reduct_free(reduct_t* reduct)
             }
             free(reduct->env->libs);
         }
-
-        reduct_atom_env_deinit(&reduct->env->atom);
-        reduct_native_env_deinit(&reduct->env->native);
-        reduct_item_env_deinit(&reduct->env->item);
-        reduct_schema_env_deinit(&reduct->env->schema);
 
         free(reduct->env);
     }

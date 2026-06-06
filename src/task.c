@@ -1,11 +1,17 @@
-#include <reduct/error.h>
 #include <reduct/core.h>
+#include <reduct/error.h>
 #include <reduct/eval.h>
 #include <reduct/gc.h>
 #include <reduct/item.h>
 #include <reduct/task.h>
 
 #include <string.h>
+
+typedef struct
+{
+    struct reduct* master;
+    uint64_t index;
+} reduct_worker_ctx_t;
 
 static bool reduct_task_push(reduct_task_env_t* env, void (*func)(struct reduct*, void*), void* arg, size_t* outHead)
 {
@@ -17,8 +23,8 @@ static bool reduct_task_push(reduct_task_env_t* env, void (*func)(struct reduct*
         head = atomic_load_explicit(&env->queueHead, memory_order_relaxed);
         slot = &env->queue[head % REDUCT_TASK_QUEUE_MAX];
 
-        uint32_t seq = atomic_load_explicit(&slot->generation, memory_order_acquire);
-        int32_t diff = (int32_t)(seq - (uint32_t)head);
+        uint16_t seq = atomic_load_explicit(&slot->generation, memory_order_acquire);
+        int16_t diff = (int16_t)(seq - (uint16_t)head);
 
         if (diff == 0)
         {
@@ -46,7 +52,7 @@ static bool reduct_task_push(reduct_task_env_t* env, void (*func)(struct reduct*
     return true;
 }
 
-static reduct_task_t* reduct_task_pop(reduct_task_env_t* env, size_t* outTail)
+static reduct_task_t* reduct_task_pop(reduct_t* reduct, reduct_task_env_t* env, size_t* outTail)
 {
     size_t tail;
     reduct_task_t* slot;
@@ -55,8 +61,8 @@ static reduct_task_t* reduct_task_pop(reduct_task_env_t* env, size_t* outTail)
         tail = atomic_load_explicit(&env->queueTail, memory_order_relaxed);
         slot = &env->queue[tail % REDUCT_TASK_QUEUE_MAX];
 
-        uint32_t seq = atomic_load_explicit(&slot->generation, memory_order_acquire);
-        int32_t diff = (int32_t)(seq - (uint32_t)(tail + 1));
+        uint16_t seq = atomic_load_explicit(&slot->generation, memory_order_acquire);
+        int16_t diff = (int16_t)(seq - (uint16_t)(tail + 1));
 
         if (diff == 0)
         {
@@ -70,6 +76,8 @@ static reduct_task_t* reduct_task_pop(reduct_task_env_t* env, size_t* outTail)
         {
             return NULL;
         }
+
+        REDUCT_GC_CHECK(reduct);
     }
 
     *outTail = tail;
@@ -85,7 +93,7 @@ static bool reduct_task_try_work(reduct_t* reduct)
 {
     reduct_task_env_t* env = &reduct->env->task;
     size_t tail;
-    reduct_task_t* slot = reduct_task_pop(env, &tail);
+    reduct_task_t* slot = reduct_task_pop(reduct, env, &tail);
     if (slot == NULL)
     {
         return false;
@@ -95,14 +103,18 @@ static bool reduct_task_try_work(reduct_t* reduct)
     void* arg = slot->arg;
     func(reduct, arg);
 
-    atomic_store_explicit(&slot->generation, (uint32_t)(tail + REDUCT_TASK_QUEUE_MAX), memory_order_release);
+    atomic_store_explicit(&slot->generation, (uint16_t)(tail + REDUCT_TASK_QUEUE_MAX), memory_order_release);
 
     return true;
 }
 
 static int reduct_task_worker(void* arg)
 {
-    reduct_t* master = (reduct_t*)arg;
+    reduct_worker_ctx_t* ctx = (reduct_worker_ctx_t*)arg;
+    reduct_t* master = (reduct_t*)ctx->master;
+    size_t index = ctx->index;
+    free(ctx);
+
     reduct_task_env_t* env = &master->env->task;
     reduct_error_t err = REDUCT_ERROR();
     reduct_t* thread = reduct_new_thread(master, &err);
@@ -112,10 +124,15 @@ static int reduct_task_worker(void* arg)
         return thrd_error;
     }
 
+    thread->env->task.threads[index].reduct = thread;
+    thread->env->task.threads[index].active = true;
+
     while (true)
     {
         for (size_t i = 0; i < REDUCT_TASK_SPIN_MAX; i++)
         {
+            REDUCT_GC_CHECK(thread);
+
             if (reduct_task_try_work(thread))
             {
                 i = 0;
@@ -132,21 +149,37 @@ static int reduct_task_worker(void* arg)
             break;
         }
 
-        atomic_fetch_add_explicit(&env->idleCount, 1, memory_order_relaxed);
         mtx_lock(&env->mutex);
         size_t head = atomic_load_explicit(&env->queueHead, memory_order_acquire);
         size_t tail = atomic_load_explicit(&env->queueTail, memory_order_acquire);
 
         if (head == tail && !atomic_load_explicit(&env->shutdown, memory_order_relaxed))
         {
+            atomic_fetch_add_explicit(&env->idleCount, 1, memory_order_release);
             cnd_wait(&env->cond, &env->mutex);
+            atomic_fetch_sub_explicit(&env->idleCount, 1, memory_order_release);
         }
         mtx_unlock(&env->mutex);
-        atomic_fetch_sub_explicit(&env->idleCount, 1, memory_order_relaxed);
+
+        REDUCT_GC_CHECK(thread);
     }
 
+    env->threads[index].active = false;
+    env->threads[index].reduct = NULL;
     reduct_free(thread);
     return 0;
+}
+
+static size_t reduct_task_get_cpu_count(void)
+{
+#ifdef _WIN32
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    return sysinfo.dwNumberOfProcessors > 0 ? (size_t)sysinfo.dwNumberOfProcessors : 1;
+#else
+    long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+    return nprocs > 0 ? (size_t)nprocs : 1;
+#endif
 }
 
 REDUCT_API void reduct_task_env_init(reduct_task_env_t* env)
@@ -159,8 +192,10 @@ REDUCT_API void reduct_task_env_init(reduct_task_env_t* env)
     atomic_store(&env->queueHead, 0);
     atomic_store(&env->queueTail, 0);
     atomic_store(&env->threadCount, 0);
-    atomic_store(&env->shutdown, false);
     atomic_store(&env->idleCount, 0);
+    atomic_store(&env->barrierWaiters, 0);
+    atomic_store(&env->shutdown, false);
+    env->cpuCount = reduct_task_get_cpu_count();
 
     for (size_t i = 0; i < REDUCT_TASK_THREAD_MAX; i++)
     {
@@ -192,45 +227,42 @@ REDUCT_API void reduct_task_env_deinit(reduct_task_env_t* env)
     }
 }
 
-static size_t reduct_task_get_cpu_count(void)
-{
-#ifdef _WIN32
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo(&sysinfo);
-    return sysinfo.dwNumberOfProcessors > 0 ? (size_t)sysinfo.dwNumberOfProcessors : 1;
-#else
-    long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
-    return nprocs > 0 ? (size_t)nprocs : 1;
-#endif
-}
-
-REDUCT_API bool reduct_task_create_try(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg),
-    void* arg, reduct_task_id_t* outId)
+REDUCT_API bool reduct_task_create_try(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg), void* arg,
+    reduct_task_id_t* outId)
 {
     reduct_task_env_t* env = &reduct->env->task;
-    if (REDUCT_UNLIKELY(atomic_load_explicit(&env->threadCount, memory_order_acquire) == 0)) 
+    if (REDUCT_UNLIKELY(atomic_load_explicit(&env->threadCount, memory_order_acquire) == 0))
     {
         mtx_lock(&env->mutex);
 
         if (atomic_load_explicit(&env->threadCount, memory_order_relaxed) == 0)
         {
-            size_t count = 0;
-            size_t ideal = reduct_task_get_cpu_count();
-            size_t limit = REDUCT_MIN(ideal, REDUCT_TASK_THREAD_MAX);
+            size_t limit = REDUCT_MIN(env->cpuCount, REDUCT_TASK_THREAD_MAX);
 
             env->threads[0].thrd = thrd_current();
             env->threads[0].active = true;
-            count++;
+            env->threads[0].reduct = reduct;
+
+            atomic_store_explicit(&env->threadCount, 1, memory_order_release);
 
             for (size_t i = 1; i < limit; i++)
             {
-                if (thrd_create(&env->threads[i].thrd, reduct_task_worker, reduct) == thrd_success)
+                reduct_worker_ctx_t* ctx = (reduct_worker_ctx_t*)malloc(sizeof(reduct_worker_ctx_t));
+                if (ctx == NULL)
                 {
-                    env->threads[i].active = true;
-                    count++;
+                    break;
                 }
+                ctx->master = reduct;
+                ctx->index = i;
+
+                if (thrd_create(&env->threads[i].thrd, reduct_task_worker, ctx) != thrd_success)
+                {
+                    free(ctx);
+                    mtx_unlock(&env->mutex);
+                    REDUCT_ERROR_THROW(reduct, "failed to create thread");
+                }
+                atomic_fetch_add_explicit(&env->threadCount, 1, memory_order_release);
             }
-            atomic_store_explicit(&env->threadCount, count, memory_order_release);
         }
 
         mtx_unlock(&env->mutex);
@@ -248,10 +280,7 @@ REDUCT_API bool reduct_task_create_try(reduct_t* reduct, void (*func)(struct red
         outId->generation = (uint16_t)(head + 1);
     }
 
-    if (atomic_load_explicit(&env->idleCount, memory_order_relaxed) > 0)
-    {
-        cnd_signal(&env->cond);
-    }
+    cnd_signal(&env->cond);
 
     return true;
 }
@@ -263,7 +292,11 @@ REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(st
 
     while (!reduct_task_create_try(reduct, func, arg, &id))
     {
-        reduct_task_try_work(reduct);
+        if (!reduct_task_try_work(reduct))
+        {
+            REDUCT_GC_CHECK(reduct);
+            thrd_yield();
+        }
     }
 
     return id;
@@ -273,6 +306,38 @@ REDUCT_API void reduct_task_join(reduct_t* reduct, reduct_task_id_t id)
 {
     while (!reduct_task_done(&reduct->env->task, id))
     {
-        reduct_task_try_work(reduct);
+        if (!reduct_task_try_work(reduct))
+        {
+            REDUCT_GC_CHECK(reduct);
+            thrd_yield();
+        }
     }
+}
+
+REDUCT_API void reduct_task_barrier_enter(reduct_t* reduct)
+{
+    reduct_task_env_t* env = &reduct->env->task;
+
+    atomic_fetch_add_explicit(&env->barrierWaiters, 1, memory_order_release);
+
+    while (true)
+    {
+        uint32_t waiters = atomic_load_explicit(&env->barrierWaiters, memory_order_acquire);
+        uint32_t idle = atomic_load_explicit(&env->idleCount, memory_order_acquire);
+        uint32_t total = atomic_load_explicit(&env->threadCount, memory_order_acquire);
+
+        if (waiters + idle >= total)
+        {
+            break;
+        }
+
+        thrd_yield();
+    }
+}
+
+REDUCT_API void reduct_task_barrier_exit(reduct_t* reduct)
+{
+    reduct_task_env_t* env = &reduct->env->task;
+
+    atomic_fetch_sub_explicit(&env->barrierWaiters, 1, memory_order_release);
 }

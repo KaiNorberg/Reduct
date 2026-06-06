@@ -35,7 +35,8 @@ typedef enum
     REDUCT_STDLIB_ALL = 0xFFFF,
 } reduct_stdlib_sets_t;
 
-REDUCT_API reduct_handle_t reduct_assert(struct reduct* reduct, reduct_handle_t state, reduct_handle_t cond, reduct_handle_t msg);
+REDUCT_API reduct_handle_t reduct_assert(struct reduct* reduct, reduct_handle_t state, reduct_handle_t cond,
+    reduct_handle_t msg);
 REDUCT_API reduct_handle_t reduct_throw(struct reduct* reduct, reduct_handle_t msg);
 REDUCT_API reduct_handle_t reduct_try(struct reduct* reduct, reduct_handle_t callable, reduct_handle_t catchFn);
 
@@ -111,7 +112,8 @@ REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t han
 REDUCT_API reduct_handle_t reduct_import(struct reduct* reduct, reduct_handle_t path, reduct_handle_t compiler,
     reduct_handle_t compilerArgs);
 REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle_t path);
-REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t state, reduct_handle_t path, reduct_handle_t content);
+REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t state, reduct_handle_t path,
+    reduct_handle_t content);
 REDUCT_API reduct_handle_t reduct_read_char(struct reduct* reduct);
 REDUCT_API reduct_handle_t reduct_read_line(struct reduct* reduct);
 REDUCT_API reduct_handle_t reduct_print(struct reduct* reduct, size_t argc, reduct_handle_t* argv);

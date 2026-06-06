@@ -184,7 +184,7 @@ static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCo
     reduct_handle_t* k = frame->constants;
     reduct_inst_t inst;
     reduct_handle_t result = REDUCT_HANDLE_NIL(reduct);
-    bool shouldFork = reduct_task_queue_size(&reduct->env->task) < REDUCT_TASK_THREAD_MAX;
+    bool shouldFork = reduct_task_queue_size(&reduct->env->task) < reduct->env->task.cpuCount;
 
     // clang-format off
     /// @todo Write some macro magic to turn this into a switch case if not using GCC or Clang.
@@ -204,11 +204,6 @@ static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCo
 #define UPDATE_BASE() \
     regs = reduct->eval.regs; \
     r = regs + frame->base
-
-#define PREPARE_CALLABLE() \
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(valC), "cannot call value of type %s", \
-        REDUCT_HANDLE_GET_TYPE_STRING(valC)); \
-    reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(valC)
 
 #define DECODE_A() uint32_t a = REDUCT_INST_GET_A(inst)
 #define DECODE_B() uint32_t b = REDUCT_INST_GET_B(inst)
@@ -278,6 +273,7 @@ LABEL_C_OP(_label, { \
     }
 
     const void* dispatchTable[256] = {
+        [0 ... 255] = &&label_invalid,
         [REDUCT_OPCODE_NOP] = &&label_nop,
         [REDUCT_OPCODE_MOV] = &&label_mov, [REDUCT_OPCODE_MOV_CONST] = &&label_mov_k,
         [REDUCT_OPCODE_LIST] = &&label_list,
@@ -320,7 +316,7 @@ LABEL_C_OP(_label, { \
         [REDUCT_OPCODE_RANGE1] = &&label_range1, [REDUCT_OPCODE_RANGE1_CONST] = &&label_range1_k,
         [REDUCT_OPCODE_RANGE2] = &&label_range2, [REDUCT_OPCODE_RANGE2_CONST] = &&label_range2_k,
         [REDUCT_OPCODE_RANGE3] = &&label_range3, [REDUCT_OPCODE_RANGE3_CONST] = &&label_range3_k,
-        [REDUCT_OPCODE_FORK] = shouldFork ? &&label_call : &&label_fork, [REDUCT_OPCODE_FORK_CONST] = shouldFork ? &&label_fork_k : &&label_call_k,
+        [REDUCT_OPCODE_FORK] = shouldFork ? &&label_fork : &&label_call, [REDUCT_OPCODE_FORK_CONST] = shouldFork ? &&label_fork_k : &&label_call_k,
         [REDUCT_OPCODE_JOIN] = shouldFork ? &&label_join : &&label_mov, [REDUCT_OPCODE_JOIN_CONST] = shouldFork ? &&label_join_k : &&label_mov_k,
     };
 
@@ -337,6 +333,10 @@ LABEL_C_OP(_label, { \
     }
 
     DISPATCH();
+label_invalid:
+{
+    REDUCT_ERROR_THROW(reduct, "invalid opcode 0x%02X", REDUCT_INST_GET_OP(inst));
+}
 label_nop:
 {
     DISPATCH();
@@ -379,36 +379,38 @@ label_jmpt:
 LABEL_C_OP(label_call, {
     DECODE_A();
     DECODE_B();
-    PREPARE_CALLABLE();
-    if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_CLOSURE))
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_CLOSURE(valC)))
     {
-        reduct_closure_t* closure = &item->closure;
+        reduct_closure_t* closure = REDUCT_HANDLE_TO_CLOSURE(valC);
         b = reduct_eval_bundle_args(reduct, closure->function, b, &r[a]);
 
         reduct_eval_push_frame(reduct, closure, frame->base + a);
         UPDATE_STATE();
+
         DISPATCH();
     }
-    if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_native(reduct, &item->atom)))
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NATIVE(reduct, valC)))
     {
-        reduct_handle_t* args = &r[a];
-        reduct_handle_t result = item->atom.native(reduct, b, args);
-        UPDATE_STATE();
-        r[a] = result;
+        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(valC);
 
-        reduct_gc_if_needed(reduct);
+        assert(atom->native != NULL);
+        reduct_handle_t res = atom->native(reduct, b, &r[a]);
+
+        UPDATE_STATE();
+        r[a] = res;
+
+        REDUCT_GC_CHECK(reduct);
         DISPATCH();
     }
 
-    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", reduct_item_type_str(item));
+    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(valC));
 })
 LABEL_C_OP(label_tailcall, {
     DECODE_A();
     DECODE_B();
-    PREPARE_CALLABLE();
-    if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_CLOSURE))
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_CLOSURE(valC)))
     {
-        reduct_closure_t* closure = &item->closure;
+        reduct_closure_t* closure = REDUCT_HANDLE_TO_CLOSURE(valC);
         b = reduct_eval_bundle_args(reduct, closure->function, b, &r[a]);
 
         if (REDUCT_LIKELY(a != 0))
@@ -426,10 +428,12 @@ LABEL_C_OP(label_tailcall, {
 
         DISPATCH();
     }
-    if (REDUCT_LIKELY(item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_native(reduct, &item->atom)))
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NATIVE(reduct, valC)))
     {
-        reduct_handle_t* args = &r[a];
-        reduct_handle_t res = item->atom.native(reduct, b, args);
+        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(valC);
+
+        assert(atom->native != NULL);
+        reduct_handle_t res = atom->native(reduct, b, &r[a]);
 
         frame = &reduct->eval.frames[reduct->eval.frameCount - 1];
         reduct->eval.regs[frame->base] = res;
@@ -442,11 +446,12 @@ LABEL_C_OP(label_tailcall, {
         }
 
         UPDATE_STATE();
-        reduct_gc_if_needed(reduct);
+
+        REDUCT_GC_CHECK(reduct);
         DISPATCH();
     }
 
-    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", reduct_item_type_str(item));
+    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(valC));
 })
 label_recur:
 {
@@ -489,9 +494,11 @@ LABEL_C_OP(label_ret, {
     if (REDUCT_UNLIKELY(reduct->eval.frameCount == initialFrameCount))
     {
         result = valC;
+        REDUCT_GC_CHECK(reduct);
         goto eval_end;
     }
     UPDATE_STATE();
+    REDUCT_GC_CHECK(reduct);
     DISPATCH();
 })
 OP_COMPARE(label_eq, ==)
@@ -576,9 +583,20 @@ LABEL_C_OP(label_fork, {
 })
 LABEL_C_OP(label_join, {
     DECODE_A();
-    reduct_handle_t res = REDUCT_HANDLE_JOIN(reduct, valC);
+    reduct_handle_t res;
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_FUTURE(valC)))
+    {
+        reduct_future_t* future = REDUCT_HANDLE_TO_FUTURE(valC);
+        res = reduct_future_join(reduct, future);
+        REDUCT_HANDLE_FREE(reduct, valC);
+    }
+    else
+    {
+        res = valC;
+    }
     UPDATE_STATE();
     r[a] = res;
+    REDUCT_GC_CHECK(reduct);
     DISPATCH();
 })
 label_closure:
@@ -668,7 +686,10 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
 
     if (REDUCT_HANDLE_IS_NATIVE(reduct, callable))
     {
-        return REDUCT_HANDLE_TO_ATOM(callable)->native(reduct, argc, argv);
+        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(callable);
+
+        assert(atom->native != NULL);
+        return atom->native(reduct, argc, argv);
     }
 
     if (REDUCT_HANDLE_IS_CLOSURE(callable))
@@ -693,6 +714,7 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
             }
         }
 
+        reduct->eval.regCount = target + needed;
         if (argc > 0)
         {
             memmove(reduct->eval.regs + target, argv, argc * sizeof(reduct_handle_t));
@@ -705,8 +727,7 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
         return reduct_eval_run(reduct, initialFrameCount);
     }
 
-    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s",
-        REDUCT_HANDLE_GET_TYPE_STRING(callable));
+    REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(callable));
 }
 
 REDUCT_API reduct_handle_t reduct_eval_call_v(struct reduct* reduct, reduct_handle_t callable, size_t argc, ...)

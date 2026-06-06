@@ -15,48 +15,6 @@
  * @{
  */
 
-typedef mtx_t reduct_mutex_t; ///< Mutex structure.
-
-/**
- * @brief Initialize a mutex.
- *
- * @param mutex Pointer to the mutex to initialize.
- */
-static inline void reduct_mutex_init(reduct_mutex_t* mutex)
-{
-    mtx_init(mutex, mtx_plain);
-}
-
-/**
- * @brief Destroy a mutex.
- *
- * @param mutex Pointer to the mutex to destroy.
- */
-static inline void reduct_mutex_destroy(reduct_mutex_t* mutex)
-{
-    mtx_destroy(mutex);
-}
-
-/**
- * @brief Lock a mutex.
- *
- * @param mutex Pointer to the mutex to lock.
- */
-static inline void reduct_mutex_lock(reduct_mutex_t* mutex)
-{
-    mtx_lock(mutex);
-}
-
-/**
- * @brief Unlock a mutex.
- *
- * @param mutex Pointer to the mutex to unlock.
- */
-static inline void reduct_mutex_unlock(reduct_mutex_t* mutex)
-{
-    mtx_unlock(mutex);
-}
-
 /**
  * @brief Read-Write Mutex structure.
  * @struct reduct_rwmutex_t

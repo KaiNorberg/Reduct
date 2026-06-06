@@ -5,10 +5,10 @@
 #include <reduct/closure.h>
 #include <reduct/defs.h>
 #include <reduct/function.h>
+#include <reduct/future.h>
 #include <reduct/list.h>
 #include <reduct/rvsdg.h>
 #include <reduct/task.h>
-#include <reduct/future.h>
 
 /**
  * @file item.h
@@ -40,12 +40,10 @@ typedef uint8_t reduct_item_type_t;
 #define REDUCT_ITEM_TYPE_RVSDG_ORIGIN 11 ///< An IR origin (output/argument).
 #define REDUCT_ITEM_TYPE_FUTURE 12       ///< A future.
 
-/**
- * @brief Item flags enumeration.
- */
-typedef uint8_t reduct_item_flags_t;
-#define REDUCT_ITEM_FLAG_NONE 0           ///< No flags.
-#define REDUCT_ITEM_FLAG_GC_MARK (1 << 0) ///< Item is marked by GC.
+typedef uint8_t reduct_item_flags_t;     ///< Item flags enumeration.
+#define REDUCT_ITEM_FLAG_NONE 0          ///< No flags.
+#define REDUCT_ITEM_FLAG_MARKED (1 << 0) ///< Item is marked by the GC.
+// #define REDUCT_ITEM_FLAG_IMMUTABLE (1 << 1) ///< Item is immutable, i.e the GC can safely trace it.
 
 #define REDUCT_ITEM_PAYLOAD_MAX 56 ///< The maximum size of the item payload.
 
@@ -59,10 +57,10 @@ typedef uint8_t reduct_item_flags_t;
  */
 typedef struct reduct_item
 {
-    uint32_t position;         ///< The position in the input buffer where the item was parsed.
-    reduct_item_flags_t flags; ///< Flags for the item.
-    reduct_item_type_t type;   ///< The type of the item.
-    reduct_input_id_t inputId; ///< The input ID of the item.
+    uint32_t position;                  ///< The position in the input buffer where the item was parsed.
+    _Atomic(reduct_item_flags_t) flags; ///< Flags for the item.
+    reduct_item_type_t type;            ///< The type of the item.
+    reduct_input_id_t inputId;          ///< The input ID of the item.
     union {
         uint32_t length;                   ///< Common length for the item. (Stored in the union due to padding rules.)
         reduct_atom_t atom;                ///< An atom.
@@ -76,7 +74,6 @@ typedef struct reduct_item
         reduct_rvsdg_region_t rvsdgRegion; ///< An ir region.
         reduct_rvsdg_user_t rvsdgUser;     ///< An ir user.
         reduct_rvsdg_origin_t rvsdgOrigin; ///< An ir origin.
-        reduct_task_t task;                ///< A task.
         reduct_future_t future;            ///< A future.
         struct reduct_item* free;          ///< The next free item in the free list.
         uint8_t _raw[REDUCT_ITEM_PAYLOAD_MAX];
@@ -87,7 +84,9 @@ typedef struct reduct_item
 _Static_assert(sizeof(reduct_item_t) == REDUCT_ALIGNMENT, "reduct_item_t must be aligned");
 #endif
 
-#define REDUCT_ITEM_BLOCK_MAX 126 ///< The maximum number of items in a block.
+#define REDUCT_ITEM_BLOCK_MAX 126       ///< The maximum number of items in a block.
+#define REDUCT_ITEM_RETAINED_INITIAL 16 ///< Initial capacity for the retained items array.
+#define REDUCT_ITEM_RETAINED_GROWTH 2   ///< Growth factor for the retained items array.
 
 /**
  * @brief Item block structure.
@@ -119,6 +118,8 @@ typedef struct
     size_t blockCount;
     reduct_item_block_t* block;
     reduct_rwmutex_t mutex;
+    struct reduct_item* globalFreeList;
+    size_t globalFreeCount;
 } reduct_item_env_t;
 
 /**
@@ -141,9 +142,10 @@ REDUCT_API void reduct_item_env_init(reduct_item_env_t* env);
 /**
  * @brief Deinitialize an item environment.
  *
+ * @param reduct Pointer to the Reduct structure.
  * @param env Pointer to the item environment to deinitialize.
  */
-REDUCT_API void reduct_item_env_deinit(reduct_item_env_t* env);
+REDUCT_API void reduct_item_env_deinit(struct reduct* reduct, reduct_item_env_t* env);
 
 /**
  * @brief Initialize an item state.
@@ -178,6 +180,9 @@ REDUCT_API void reduct_item_deinit(struct reduct* reduct, reduct_item_t* item);
 /**
  * @brief Free an item.
  *
+ * Intended to be used by the GC or when it is known that an item has no more users and was allocated by the current
+ * thread.
+ *
  * @param reduct Pointer to the Reduct structure.
  * @param item Pointer to the item to free.
  */
@@ -190,6 +195,15 @@ REDUCT_API void reduct_item_free(struct reduct* reduct, reduct_item_t* item);
  * @return The string representation of the item type.
  */
 REDUCT_API const char* reduct_item_type_str(reduct_item_t* item);
+
+/**
+ * @brief Mark an item as reachable.
+ *
+ * Used by the garbage collector.
+ *
+ * @param item Pointer to the item to mark.
+ */
+REDUCT_API void reduct_item_mark(reduct_item_t* item);
 
 /** @} */
 

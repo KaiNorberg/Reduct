@@ -32,8 +32,8 @@ typedef enum reduct_optimize_flags
 
     REDUCT_OPTIMIZE_O1 = REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION, ///< Level 1 optimizations.
     REDUCT_OPTIMIZE_O2 = REDUCT_OPTIMIZE_CONSTANT_FOLDING | REDUCT_OPTIMIZE_CSE |
-        REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION | REDUCT_OPTIMIZE_GAMMA_FOLDING,                 ///< Level 2 optimizations.
-    REDUCT_OPTIMIZE_O3 = REDUCT_OPTIMIZE_ALL, ///< Level 3 optimizations (maximum).
+        REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION | REDUCT_OPTIMIZE_GAMMA_FOLDING, ///< Level 2 optimizations.
+    REDUCT_OPTIMIZE_O3 = REDUCT_OPTIMIZE_ALL,                                     ///< Level 3 optimizations (maximum).
 } reduct_optimize_flags_t;
 
 /**
