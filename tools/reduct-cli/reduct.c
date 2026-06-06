@@ -9,18 +9,7 @@
 int main(int argc, char **argv)
 {    
     static int result = 0;
-
-    static reduct_t* reduct = NULL;
     const char* irOutputFile = NULL;
-
-    reduct_error_t error = REDUCT_ERROR();
-    if (REDUCT_ERROR_CATCH(&error))
-    {
-        reduct_error_print(&error, stderr);
-        result = 1;
-        goto cleanup;
-    }
-
     int isSilent = 0;
     int parseOnly = 0;
     int shouldDump = 0;
@@ -140,76 +129,125 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    reduct = reduct_new(&error);
-
-    for (int i = 1; i < argc; ++i)
+    reduct_t* reduct = reduct_new();
+    if (reduct == NULL)
     {
-        if (strcmp(argv[i], "-I") == 0 && i + 1 < argc)
+        fprintf(stderr, "error: out of memory\n");
+        return 1;
+    }
+
+    reduct_error_t error = REDUCT_ERROR();
+    REDUCT_ERROR_TRY(reduct, &error)
+    {
+        char* envp = getenv("REDUCT_PATH");
+        if (envp != NULL)
         {
-            reduct_add_import_path(reduct, argv[++i]);
+            size_t envLen = strlen(envp);
+            size_t start = 0;
+            for (size_t pos = 0; pos <= envLen; pos++)
+            {
+                if (envp[pos] == ':' || envp[pos] == ';' || envp[pos] == '\0')
+                {
+                    if (pos > start)
+                    {
+                        size_t tokLen = pos - start;
+                        char* token = (char*)malloc(tokLen + 1);
+                        if (token != NULL)
+                        {
+                            memcpy(token, envp + start, tokLen);
+                            token[tokLen] = '\0';
+                            reduct_add_import_path(reduct, token);
+                            free(token);
+                        }
+                    }
+                    start = pos + 1;
+                }
+            }
         }
-        else if ((strcmp(argv[i], "-e") == 0 || strcmp(argv[i], "--ir") == 0) && i + 1 < argc)
+
+#if defined(__linux__) || defined(__APPLE__)
+        reduct_add_import_path(reduct, "/usr/local/lib/reduct");
+        reduct_add_import_path(reduct, "/usr/lib/reduct");
+        reduct_add_import_path(reduct, "/lib/reduct");
+#endif
+
+        for (int i = 1; i < argc; ++i)
         {
-            i++;
+            if (strcmp(argv[i], "-I") == 0 && i + 1 < argc)
+            {
+                reduct_add_import_path(reduct, argv[++i]);
+            }
+            else if ((strcmp(argv[i], "-e") == 0 || strcmp(argv[i], "--ir") == 0) && i + 1 < argc)
+            {
+                i++;
+            }
         }
-    }
 
-    reduct_args_set(reduct, argc, argv);
+        reduct_args_set(reduct, argc, argv);
 
-    reduct_handle_t ast = REDUCT_HANDLE_NIL(reduct);
-    if (evalExpr != NULL)
-    {
-        ast = reduct_parse(reduct, evalExpr, strlen(evalExpr), "<eval>");
-    }
-    else if (filename != NULL)
-    {
-        ast = reduct_parse_file(reduct, filename);
-    }
+        reduct_handle_t ast = REDUCT_HANDLE_NIL(reduct);
+        if (evalExpr != NULL)
+        {
+            ast = reduct_parse(reduct, evalExpr, strlen(evalExpr), "<eval>");
+        }
+        else if (filename != NULL)
+        {
+            ast = reduct_parse_file(reduct, filename);
+        }
 
-    static char buffer[0x10000];
+        static char buffer[0x10000];
 
-    if (parseOnly)
-    {    
-        reduct_stringify(reduct, ast, buffer, sizeof(buffer));
+        if (parseOnly)
+        {    
+            reduct_stringify(reduct, ast, buffer, sizeof(buffer));
+            printf("%s", buffer);
+            goto cleanup;
+        }
+        
+        reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
+        
+        reduct_handle_t node = reduct_build(reduct, ast);
+        reduct_optimize(reduct, node, optimizeFlags);
+
+        if (irOutputFile != NULL)
+        {
+            FILE* out = fopen(irOutputFile, "w");
+            if (out == NULL)
+            {
+                fprintf(stderr, "error: could not open '%s' for writing\n", irOutputFile);
+                result = 1;
+                goto cleanup;
+            }
+            reduct_dump_rvsdg(reduct, node, out);
+            fclose(out);
+            goto cleanup;
+        }
+
+        reduct_handle_t function = reduct_emit(reduct, node);
+
+        if (shouldDump)
+        {
+            reduct_dump_function(reduct, function, stdout);
+            goto cleanup;
+        }
+
+        reduct_handle_t eval = reduct_eval(reduct, function);
+        if (isSilent)
+        {
+            goto cleanup;
+        }
+
+        reduct_stringify(reduct, eval, buffer, sizeof(buffer));
         printf("%s", buffer);
         goto cleanup;
     }
-    
-    reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
-    
-    reduct_handle_t node = reduct_build(reduct, ast);
-    reduct_optimize(reduct, node, optimizeFlags);
 
-    if (irOutputFile != NULL)
+    if (!REDUCT_ERROR_SUCCESS(&error))
     {
-        FILE* out = fopen(irOutputFile, "w");
-        if (out == NULL)
-        {
-            fprintf(stderr, "error: could not open '%s' for writing\n", irOutputFile);
-            result = 1;
-            goto cleanup;
-        }
-        reduct_dump_rvsdg(reduct, node, out);
-        fclose(out);
+        fprintf(stderr, "error: %s\n", error.message);
+        result = 1;
         goto cleanup;
     }
-
-    reduct_handle_t function = reduct_emit(reduct, node);
-
-    if (shouldDump)
-    {
-        reduct_dump_function(reduct, function, stdout);
-        goto cleanup;
-    }
-
-    reduct_handle_t eval = reduct_eval(reduct, function);
-    if (isSilent)
-    {
-        goto cleanup;
-    }
-
-    reduct_stringify(reduct, eval, buffer, sizeof(buffer));
-    printf("%s", buffer);
 
 cleanup:
     reduct_free(reduct);

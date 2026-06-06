@@ -680,7 +680,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
         reduct_handle_t _h = (_handle); \
         if (REDUCT_HANDLE_IS_ITEM(_h)) \
         { \
-            reduct_gc_retain((_reduct), REDUCT_HANDLE_TO_ITEM(_h)); \
+            reduct_item_retain(REDUCT_HANDLE_TO_ITEM(_h)); \
         } \
     } while (0)
 
@@ -696,7 +696,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
         reduct_handle_t _h = (_handle); \
         if (REDUCT_HANDLE_IS_ITEM(_h)) \
         { \
-            reduct_gc_release((_reduct), REDUCT_HANDLE_TO_ITEM(_h)); \
+            reduct_item_release(REDUCT_HANDLE_TO_ITEM(_h)); \
         } \
     } while (0)
 

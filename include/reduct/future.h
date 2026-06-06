@@ -1,4 +1,3 @@
-#include "reduct/error.h"
 #ifndef REDUCT_FUTURE_H
 #define REDUCT_FUTURE_H 1
 
@@ -58,7 +57,20 @@ REDUCT_API reduct_future_t* reduct_future_new(struct reduct* reduct, reduct_hand
  * @param future Pointer to the future.
  * @return The result handle.
  */
-REDUCT_API reduct_handle_t reduct_future_join(struct reduct* reduct, reduct_future_t* future);
+static inline REDUCT_ALWAYS_INLINE reduct_handle_t reduct_future_join(struct reduct* reduct, reduct_future_t* future)
+{
+    if (!atomic_load_explicit(&future->done, memory_order_acquire))
+    {
+        reduct_task_join(reduct, future->taskId);
+    }
+
+    if (REDUCT_UNLIKELY(future->error != NULL))
+    {
+        REDUCT_ERROR_RETHROW(reduct, future->error);
+    }
+
+    return future->result;
+}
 
 /**
  * @brief Check if the future is finished.
@@ -67,7 +79,15 @@ REDUCT_API reduct_handle_t reduct_future_join(struct reduct* reduct, reduct_futu
  * @param future Pointer to the future.
  * @return `true` if done, `false` otherwise.
  */
-REDUCT_API bool reduct_future_is_done(struct reduct* reduct, reduct_future_t* future);
+static inline REDUCT_ALWAYS_INLINE bool reduct_future_is_done(struct reduct* reduct, reduct_future_t* future)
+{
+    assert(reduct != NULL);
+    assert(future != NULL);
+
+    REDUCT_UNUSED(reduct);
+
+    return atomic_load_explicit(&future->done, memory_order_relaxed);
+}
 
 /** @} */
 

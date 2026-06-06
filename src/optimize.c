@@ -12,16 +12,16 @@
 #include <stdio.h>
 #include <string.h>
 
-REDUCT_API void reduct_optimize_env_init(reduct_optimize_env_t* env)
+REDUCT_API void reduct_optimize_global_init(reduct_optimize_global_t* global)
 {
-    assert(env != NULL);
-    env->lastFlags = REDUCT_OPTIMIZE_NONE;
+    assert(global != NULL);
+    global->lastFlags = REDUCT_OPTIMIZE_NONE;
 }
 
-REDUCT_API void reduct_optimize_env_deinit(reduct_optimize_env_t* env)
+REDUCT_API void reduct_optimize_global_deinit(reduct_optimize_global_t* global)
 {
-    assert(env != NULL);
-    env->lastFlags = REDUCT_OPTIMIZE_NONE;
+    assert(global != NULL);
+    global->lastFlags = REDUCT_OPTIMIZE_NONE;
 }
 
 static bool reduct_optimize_constant_folding(reduct_t* reduct, reduct_rvsdg_node_t* node)
@@ -552,6 +552,48 @@ static bool reduct_optimize_gamma_folding(reduct_t* reduct, reduct_rvsdg_node_t*
     return true;
 }
 
+static bool reduct_optimize_is_parallelization_candidate(reduct_t* reduct, reduct_rvsdg_origin_t* origin)
+{
+    if (origin == NULL)
+    {
+        return false;
+    }
+
+    if (origin->ownerKind != REDUCT_RVSDG_OWNER_NODE)
+    {
+        return false;
+    }
+
+    reduct_rvsdg_node_t* node = origin->node;
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+    {
+        return false;
+    }
+
+    if (!REDUCT_OPCODE_IS_CALL(node->opcode) || REDUCT_OPCODE_IS_FORK(node->opcode))
+    {
+        return false;
+    }
+
+    reduct_rvsdg_edge_t* output = node->output->edges;
+    while (output != NULL)
+    {
+        if (output->user->ownerKind != REDUCT_RVSDG_OWNER_NODE)
+        {
+            return false;
+        }
+
+        reduct_rvsdg_node_t* input = output->user->node;
+        if (input->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+        {
+            return false;
+        }
+        output = output->next;
+    }
+
+    return true;
+}
+
 static bool reduct_optimize_auto_parallelization(reduct_t* reduct, reduct_rvsdg_node_t* node)
 {
     assert(reduct != NULL);
@@ -562,7 +604,7 @@ static bool reduct_optimize_auto_parallelization(reduct_t* reduct, reduct_rvsdg_
         return false;
     }
 
-    uint64_t callAmount = 0;
+    uint64_t candidates = 0;
     for (uint8_t i = 0; i < node->inputCount; i++)
     {
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, i);
@@ -572,15 +614,13 @@ static bool reduct_optimize_auto_parallelization(reduct_t* reduct, reduct_rvsdg_
         }
 
         reduct_rvsdg_origin_t* origin = input->edge->origin;
-        if (origin->ownerKind == REDUCT_RVSDG_OWNER_NODE &&
-            origin->node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE && REDUCT_OPCODE_IS_CALL(origin->node->opcode) &&
-            !REDUCT_OPCODE_IS_FORK(origin->node->opcode))
+        if (reduct_optimize_is_parallelization_candidate(reduct, origin))
         {
-            callAmount++;
+            candidates++;
         }
     }
 
-    if (callAmount <= 1)
+    if (candidates <= 1)
     {
         return false;
     }
@@ -594,17 +634,32 @@ static bool reduct_optimize_auto_parallelization(reduct_t* reduct, reduct_rvsdg_
         }
 
         reduct_rvsdg_origin_t* origin = input->edge->origin;
-        if (origin->ownerKind == REDUCT_RVSDG_OWNER_NODE &&
-            origin->node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE && REDUCT_OPCODE_IS_CALL(origin->node->opcode) &&
-            !REDUCT_OPCODE_IS_FORK(origin->node->opcode))
+        if (reduct_optimize_is_parallelization_candidate(reduct, origin))
         {
             reduct_opcode_t mode = origin->node->opcode & REDUCT_OPCODE_MODE_CONST;
             origin->node->opcode = REDUCT_OPCODE_FORK | mode;
-            callAmount--;
+            candidates--;
         }
     }
 
     return true;
+}
+
+static void reduct_optimize_parallelization_region(reduct_t* reduct, reduct_rvsdg_region_t* region)
+{
+    reduct_rvsdg_node_t* curr = region->firstNode;
+    while (curr != NULL)
+    {
+        reduct_rvsdg_region_t* sub = curr->firstRegion;
+        while (sub != NULL)
+        {
+            reduct_optimize_parallelization_region(reduct, sub);
+            sub = sub->next;
+        }
+
+        reduct_optimize_auto_parallelization(reduct, curr);
+        curr = curr->next;
+    }
 }
 
 static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, reduct_optimize_flags_t flags)
@@ -636,11 +691,6 @@ static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, re
     }
 
     if (flags & REDUCT_OPTIMIZE_CSE && reduct_optimize_cse(reduct, node))
-    {
-        changed = true;
-    }
-
-    if (flags & REDUCT_OPTIMIZE_AUTO_PARALLELIZATION && reduct_optimize_auto_parallelization(reduct, node))
     {
         changed = true;
     }
@@ -681,6 +731,7 @@ static void reduct_optimize_graph(reduct_t* reduct, reduct_rvsdg_node_t* root, r
     bool changed = true;
     uint32_t iterations = 0;
     const uint32_t MAX_ITERATIONS = 16;
+    reduct_optimize_flags_t iterativeFlags = flags;
 
     while (changed && iterations < MAX_ITERATIONS)
     {
@@ -692,6 +743,14 @@ static void reduct_optimize_graph(reduct_t* reduct, reduct_rvsdg_node_t* root, r
         }
 
         iterations++;
+    }
+
+    if (flags & REDUCT_OPTIMIZE_AUTO_PARALLELIZATION)
+    {
+        if (root->type == REDUCT_RVSDG_NODE_TYPE_LAMBDA)
+        {
+            reduct_optimize_parallelization_region(reduct, root->firstRegion);
+        }
     }
 }
 
@@ -711,5 +770,5 @@ REDUCT_API void reduct_optimize(reduct_t* reduct, reduct_handle_t handle, reduct
 
     reduct_rvsdg_node_t* node = REDUCT_HANDLE_TO_RVSDG_NODE(handle);
     reduct_optimize_graph(reduct, node, flags);
-    reduct->env->optimize.lastFlags = flags;
+    reduct->global->optimize.lastFlags = flags;
 }

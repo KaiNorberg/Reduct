@@ -17,7 +17,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
         return 0;
     }
 
-    reduct = reduct_new(&error);
+    reduct = reduct_new();
 
     reduct_handle_t parsed = reduct_parse(reduct, (const char*)data, size, "<test>");
     reduct_handle_t graph = reduct_build(reduct, parsed);

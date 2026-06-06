@@ -438,7 +438,7 @@ REDUCT_API void reduct_dump_rvsdg(reduct_t* reduct, reduct_handle_t graph, FILE*
     assert(out != NULL);
 
     size_t nodeCount = 0;
-    reduct_item_block_t* block = reduct->env->item.block;
+    reduct_item_block_t* block = reduct->global->item.block;
     while (block != NULL)
     {
         for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
@@ -453,7 +453,7 @@ REDUCT_API void reduct_dump_rvsdg(reduct_t* reduct, reduct_handle_t graph, FILE*
 
     REDUCT_SCRATCH_GET(reduct, nodes, reduct_rvsdg_node_t*, nodeCount);
     size_t idx = 0;
-    block = reduct->env->item.block;
+    block = reduct->global->item.block;
     while (block != NULL)
     {
         for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)

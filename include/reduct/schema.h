@@ -65,8 +65,8 @@ typedef uint32_t reduct_schema_index_t; ///< Schema index type.
 #define REDUCT_SCHEMA_INDEX_NONE ((reduct_schema_index_t) - 1) ///< Invalid schema index.
 
 /**
- * @brief Global schema-related environment structure.
- * @struct reduct_schema_env_t
+ * @brief Global schema-related state structure.
+ * @struct reduct_schema_global_t
  */
 typedef struct
 {
@@ -74,21 +74,21 @@ typedef struct
     size_t count;
     size_t capacity;
     reduct_rwmutex_t mutex;
-} reduct_schema_env_t;
+} reduct_schema_global_t;
 
 /**
- * @brief Initialize a schema environment.
+ * @brief Initialize a global schema state.
  *
- * @param env Pointer to the schema environment to initialize.
+ * @param global Pointer to the global schema state to initialize.
  */
-REDUCT_API void reduct_schema_env_init(reduct_schema_env_t* env);
+REDUCT_API void reduct_schema_global_init(reduct_schema_global_t* global);
 
 /**
- * @brief Deinitialize a schema environment.
+ * @brief Deinitialize a global schema state.
  *
- * @param env Pointer to the schema environment to deinitialize.
+ * @param global Pointer to the global schema state to deinitialize.
  */
-REDUCT_API void reduct_schema_env_deinit(reduct_schema_env_t* env);
+REDUCT_API void reduct_schema_global_deinit(reduct_schema_global_t* global);
 
 /**
  * @brief Create a new schema.

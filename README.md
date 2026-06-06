@@ -553,24 +553,23 @@ char buffer[0x10000];
 
 int main(int argc, char **argv)
 {    
-    reduct_t* reduct = NULL;
-
+    reduct_t* reduct = reduct_new();
+    
     reduct_error_t error = REDUCT_ERROR();
-    if (REDUCT_ERROR_CATCH(&error)) // Setup setjmp.h based error handler.
+    REDUCT_ERROR_TRY(reduct, &error)
     {
-        // We will return to here if an error occurs.
-        reduct_error_print(&error, stderr);
-        reduct_free(reduct);
-        return 1;
+        reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
+
+        reduct_handle_t result = reduct_eval_file(reduct, "my_file.rdt", REDUCT_OPTIMIZE_ALL);
+
+        reduct_stringify(reduct, &result, buffer, sizeof(buffer));
+        printf("%s\n", buffer);
     }
 
-    reduct = reduct_new(&error);
-    reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
-
-    reduct_handle_t result = reduct_eval_file(reduct, "my_file.rdt", REDUCT_OPTIMIZE_ALL);
-
-    reduct_stringify(reduct, &result, buffer, sizeof(buffer));
-    printf("%s\n", buffer);
+    if (!REDUCT_ERROR_SUCCESS(&error))
+    {
+        fprintf(stderr, "error: %s\n", error.message);
+    }
 
     reduct_free(reduct);
     return 0;

@@ -10,30 +10,30 @@
 #include <stdlib.h>
 #include <string.h>
 
-REDUCT_API void reduct_schema_env_init(reduct_schema_env_t* env)
+REDUCT_API void reduct_schema_global_init(reduct_schema_global_t* global)
 {
-    assert(env != NULL);
-    env->schemas = NULL;
-    env->count = 0;
-    env->capacity = 0;
-    reduct_rwmutex_init(&env->mutex);
+    assert(global != NULL);
+    global->schemas = NULL;
+    global->count = 0;
+    global->capacity = 0;
+    reduct_rwmutex_init(&global->mutex);
 }
 
-REDUCT_API void reduct_schema_env_deinit(reduct_schema_env_t* env)
+REDUCT_API void reduct_schema_global_deinit(reduct_schema_global_t* global)
 {
-    assert(env != NULL);
-    if (env->schemas != NULL)
+    assert(global != NULL);
+    if (global->schemas != NULL)
     {
-        for (size_t i = 0; i < env->count; i++)
+        for (size_t i = 0; i < global->count; i++)
         {
-            if (env->schemas[i] != NULL)
+            if (global->schemas[i] != NULL)
             {
-                free(env->schemas[i]);
+                free(global->schemas[i]);
             }
         }
-        free(env->schemas);
+        free(global->schemas);
     }
-    reduct_rwmutex_destroy(&env->mutex);
+    reduct_rwmutex_destroy(&global->mutex);
 }
 
 REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t count, ...)
@@ -63,30 +63,30 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
     assert(reduct != NULL);
     assert(count > 0);
 
-    reduct_rwmutex_write_lock(&reduct->env->schema.mutex);
+    reduct_rwmutex_write_lock(&reduct->global->schema.mutex);
 
-    if (reduct->env->schema.count >= reduct->env->schema.capacity)
+    if (reduct->global->schema.count >= reduct->global->schema.capacity)
     {
-        size_t oldCapacity = reduct->env->schema.capacity;
-        reduct->env->schema.capacity *= REDUCT_SCHEMA_GROWTH;
-        if (reduct->env->schema.capacity == 0)
+        size_t oldCapacity = reduct->global->schema.capacity;
+        reduct->global->schema.capacity *= REDUCT_SCHEMA_GROWTH;
+        if (reduct->global->schema.capacity == 0)
         {
-            reduct->env->schema.capacity = REDUCT_SCHEMA_INITIAL;
+            reduct->global->schema.capacity = REDUCT_SCHEMA_INITIAL;
         }
-        reduct_schema_internal_t** newSchemas = (reduct_schema_internal_t**)realloc(reduct->env->schema.schemas,
-            reduct->env->schema.capacity * sizeof(reduct_schema_internal_t*));
+        reduct_schema_internal_t** newSchemas = (reduct_schema_internal_t**)realloc(reduct->global->schema.schemas,
+            reduct->global->schema.capacity * sizeof(reduct_schema_internal_t*));
         if (newSchemas == NULL)
         {
-            reduct_rwmutex_write_unlock(&reduct->env->schema.mutex);
+            reduct_rwmutex_write_unlock(&reduct->global->schema.mutex);
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
 
         memset(newSchemas + oldCapacity, 0,
-            (reduct->env->schema.capacity - oldCapacity) * sizeof(reduct_schema_internal_t*));
-        reduct->env->schema.schemas = newSchemas;
+            (reduct->global->schema.capacity - oldCapacity) * sizeof(reduct_schema_internal_t*));
+        reduct->global->schema.schemas = newSchemas;
     }
 
-    reduct_schema_id_t id = (reduct_schema_id_t)reduct->env->schema.count++;
+    reduct_schema_id_t id = (reduct_schema_id_t)reduct->global->schema.count++;
     reduct_schema_internal_t* schema =
         (reduct_schema_internal_t*)malloc(sizeof(reduct_schema_internal_t) + count * sizeof(reduct_schema_t));
     if (schema == NULL)
@@ -100,7 +100,7 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
         schema->fields[i] = fields[i];
     }
 
-    reduct->env->schema.schemas[id] = schema;
+    reduct->global->schema.schemas[id] = schema;
 
     for (size_t i = 0; i < count; i++)
     {
@@ -137,10 +137,10 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
         atom->schemaCount = (uint32_t)newSchemaCount;
 
         atom->schema[id] = i;
-        reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
+        reduct_item_retain(REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
     }
 
-    reduct_rwmutex_write_unlock(&reduct->env->schema.mutex);
+    reduct_rwmutex_write_unlock(&reduct->global->schema.mutex);
     return id;
 }
 
@@ -297,24 +297,24 @@ REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
     assert(reduct != NULL);
     assert(out != NULL);
 
-    reduct_rwmutex_read_lock(&reduct->env->schema.mutex);
+    reduct_rwmutex_read_lock(&reduct->global->schema.mutex);
 
-    if (id >= reduct->env->schema.count)
+    if (id >= reduct->global->schema.count)
     {
-        reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         return false;
     }
 
-    reduct_schema_internal_t* schema = reduct->env->schema.schemas[id];
+    reduct_schema_internal_t* schema = reduct->global->schema.schemas[id];
     if (schema == NULL)
     {
-        reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         return false;
     }
 
     if (!REDUCT_HANDLE_IS_LIST(listHandle))
     {
-        reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         return false;
     }
 
@@ -372,21 +372,21 @@ REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
             reduct_schema_apply_primitive(reduct, field->type, field->size, target, valueHandle);
         }
     }
-    reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+    reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
     return true;
 }
 
 REDUCT_API size_t reduct_schema_get_count(struct reduct* reduct, reduct_schema_id_t id)
 {
     assert(reduct != NULL);
-    reduct_rwmutex_read_lock(&reduct->env->schema.mutex);
-    if (id >= reduct->env->schema.count || reduct->env->schema.schemas[id] == NULL)
+    reduct_rwmutex_read_lock(&reduct->global->schema.mutex);
+    if (id >= reduct->global->schema.count || reduct->global->schema.schemas[id] == NULL)
     {
-        reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         return 0;
     }
-    size_t count = reduct->env->schema.schemas[id]->count;
-    reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+    size_t count = reduct->global->schema.schemas[id]->count;
+    reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
     return count;
 }
 
@@ -395,18 +395,18 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
     assert(reduct != NULL);
     assert(in != NULL);
 
-    reduct_rwmutex_read_lock(&reduct->env->schema.mutex);
+    reduct_rwmutex_read_lock(&reduct->global->schema.mutex);
 
-    if (id >= reduct->env->schema.count)
+    if (id >= reduct->global->schema.count)
     {
-        reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
 
-    reduct_schema_internal_t* schema = reduct->env->schema.schemas[id];
+    reduct_schema_internal_t* schema = reduct->global->schema.schemas[id];
     if (schema == NULL)
     {
-        reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
 
@@ -444,6 +444,6 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
         reduct_list_push(reduct, list, REDUCT_HANDLE_FROM_LIST(pair));
     }
 
-    reduct_rwmutex_read_unlock(&reduct->env->schema.mutex);
+    reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
     return REDUCT_HANDLE_FROM_LIST(list);
 }

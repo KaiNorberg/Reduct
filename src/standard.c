@@ -1928,11 +1928,11 @@ load_shared_lib:
             REDUCT_ERROR_THROW(reduct, "could not find %s in %s", REDUCT_LIB_ENTRY, pathString);
         }
 
-        reduct_env_lib_add(reduct, lib);
+        reduct_global_lib_add(reduct, lib);
         return init(reduct);
     }
 
-    return reduct_eval_file(reduct, pathString, reduct->env->optimize.lastFlags);
+    return reduct_eval_file(reduct, pathString, reduct->global->optimize.lastFlags);
 }
 
 REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle_t path)
@@ -2304,16 +2304,17 @@ REDUCT_API reduct_handle_t reduct_args(struct reduct* reduct)
 {
     assert(reduct != NULL);
 
-    if (reduct->env->argc == 0)
+    if (reduct->global->argc == 0)
     {
         return REDUCT_HANDLE_NIL(reduct);
     }
 
     reduct_list_t* list = reduct_list_new(reduct);
-    for (int i = 0; i < reduct->env->argc; i++)
+    for (int i = 0; i < reduct->global->argc; i++)
     {
         reduct_list_push(reduct, list,
-            REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_copy(reduct, reduct->env->argv[i], strlen(reduct->env->argv[i]))));
+            REDUCT_HANDLE_FROM_ATOM(
+                reduct_atom_new_copy(reduct, reduct->global->argv[i], strlen(reduct->global->argv[i]))));
     }
 
     return REDUCT_HANDLE_FROM_LIST(list);

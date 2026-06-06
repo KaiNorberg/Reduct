@@ -7,115 +7,147 @@
 
 #include <sys/stat.h>
 
-static inline void reduct_state_init(reduct_t* reduct, reduct_error_t* error, reduct_env_t* env)
+static size_t reduct_get_cpu_count(void)
 {
-    reduct->env = env;
-
-    reduct->error = error;
-    error->reduct = reduct;
-
-    reduct->nil = REDUCT_HANDLE_CREATE_LIST(reduct);
-
-    reduct_atom_state_init(&reduct->atom);
-    reduct_item_state_init(&reduct->item);
-    reduct_gc_state_init(&reduct->gc);
-    reduct_scratch_state_init(&reduct->scratch);
-    reduct_eval_state_init(&reduct->eval);
+#ifdef _WIN32
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    return sysinfo.dwNumberOfProcessors > 0 ? (size_t)sysinfo.dwNumberOfProcessors : 1;
+#else
+    long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+    return nprocs > 0 ? (size_t)nprocs : 1;
+#endif
 }
 
-REDUCT_API reduct_t* reduct_new(reduct_error_t* error)
+static inline void reduct_input_global_init(reduct_input_global_t* global)
 {
-    reduct_t* reduct = calloc(1, sizeof(reduct_t));
-    if (reduct == NULL)
+    reduct_rwmutex_init(&global->mutex);
+    global->head = NULL;
+    global->nextId = 0;
+}
+
+static inline void reduct_input_global_deinit(reduct_input_global_t* global)
+{
+    reduct_rwmutex_destroy(&global->mutex);
+    reduct_input_t* input = global->head;
+    while (input != NULL)
     {
-        REDUCT_ERROR_GENERIC(NULL, error, NULL, INTERNAL, "out of memory");
-    }
-
-    reduct_env_t* env = calloc(1, sizeof(reduct_env_t));
-    if (env == NULL)
-    {
-        free(reduct);
-        REDUCT_ERROR_GENERIC(NULL, error, NULL, INTERNAL, "out of memory");
-    }
-
-    atomic_init(&env->refCount, 1);
-    env->argc = 0;
-    env->argv = NULL;
-
-    reduct_rwmutex_init(&env->inputMutex);
-    env->input = NULL;
-    env->newInputId = 0;
-
-    reduct_rwmutex_init(&env->importMutex);
-    env->importPaths = NULL;
-    env->importPathCount = 0;
-    env->importPathCapacity = 0;
-
-    reduct_rwmutex_init(&env->libMutex);
-    env->libs = NULL;
-    env->libCount = 0;
-    env->libCapacity = 0;
-
-    env->main = reduct;
-    reduct_atom_env_init(&env->atom);
-    reduct_native_env_init(&env->native);
-    reduct_item_env_init(&env->item);
-    reduct_gc_env_init(&env->gc);
-    reduct_schema_env_init(&env->schema);
-    reduct_optimize_env_init(&env->optimize);
-    reduct_task_env_init(&env->task);
-
-    reduct_state_init(reduct, error, env);
-
-    reduct_build_register_intrinsics(reduct);
-
-    char* envp = getenv("REDUCT_PATH");
-    if (envp != NULL)
-    {
-        size_t envLen = strlen(envp);
-        size_t start = 0;
-        for (size_t pos = 0; pos <= envLen; pos++)
+        reduct_input_t* next = input->prev;
+        if (input->flags & REDUCT_INPUT_FLAG_OWNED)
         {
-            if (envp[pos] == ':' || envp[pos] == ';' || envp[pos] == '\0')
+            free((void*)input->buffer);
+        }
+        free(input);
+        input = next;
+    }
+}
+
+static inline void reduct_import_global_init(reduct_import_global_t* global)
+{
+    reduct_rwmutex_init(&global->mutex);
+    global->paths = NULL;
+    global->count = 0;
+    global->capacity = 0;
+}
+
+static inline void reduct_import_global_deinit(reduct_import_global_t* global)
+{
+    reduct_rwmutex_destroy(&global->mutex);
+    if (global->paths != NULL)
+    {
+        for (size_t i = 0; i < global->count; i++)
+        {
+            free(global->paths[i]);
+        }
+        free(global->paths);
+    }
+}
+
+static inline void reduct_lib_global_init(reduct_lib_global_t* global)
+{
+    reduct_rwmutex_init(&global->mutex);
+    global->array = NULL;
+    global->count = 0;
+    global->capacity = 0;
+}
+
+static inline void reduct_lib_global_deinit(reduct_t* reduct, reduct_lib_global_t* global)
+{
+    REDUCT_UNUSED(reduct);
+    reduct_rwmutex_destroy(&global->mutex);
+    if (global->array != NULL)
+    {
+        for (size_t i = 0; i < global->count; i++)
+        {
+            if (global->array[i] != NULL)
             {
-                if (pos > start)
-                {
-                    size_t tokLen = pos - start;
-                    char* token = (char*)malloc(tokLen + 1);
-                    if (token != NULL)
-                    {
-                        memcpy(token, envp + start, tokLen);
-                        token[tokLen] = '\0';
-                        reduct_add_import_path(reduct, token);
-                        free(token);
-                    }
-                }
-                start = pos + 1;
+                REDUCT_LIB_CLOSE(global->array[i]);
             }
+        }
+        free(global->array);
+    }
+}
+
+REDUCT_API reduct_t* reduct_new(void)
+{
+    reduct_global_t* global = calloc(1, sizeof(reduct_global_t));
+    if (global == NULL)
+    {
+        return NULL;
+    }
+
+    global->argc = 0;
+    global->argv = NULL;
+
+    reduct_input_global_init(&global->input);
+    reduct_import_global_init(&global->import);
+    reduct_lib_global_init(&global->lib);
+
+    global->threadCount = reduct_get_cpu_count();
+    global->threads = calloc(global->threadCount, sizeof(reduct_t));
+    if (global->threads == NULL)
+    {
+        free(global);
+        return NULL;
+    }
+
+    reduct_atom_global_init(&global->atom);
+    reduct_native_global_init(&global->native);
+    reduct_item_global_init(&global->item);
+    reduct_gc_global_init(&global->gc);
+    reduct_schema_global_init(&global->schema);
+    reduct_optimize_global_init(&global->optimize);
+    reduct_task_global_init(&global->task);
+
+    for (size_t i = 0; i < global->threadCount; i++)
+    {
+        reduct_t* thread = &global->threads[i];
+
+        thread->global = global;
+        reduct_atom_local_init(&thread->atom);
+        reduct_item_local_init(&thread->item);
+        reduct_scratch_local_init(&thread->scratch);
+        reduct_eval_local_init(&thread->eval);
+        thread->nil = REDUCT_HANDLE_CREATE_LIST(thread);
+    }
+
+    reduct_t* master = &global->threads[0];
+    master->thrd = thrd_current();
+
+    for (size_t i = 1; i < global->threadCount; i++)
+    {
+        reduct_t* thread = &global->threads[i];
+        if (thrd_create(&thread->thrd, reduct_task_worker, thread) != thrd_success)
+        {
+            free(global->threads);
+            free(global);
+            return NULL;
         }
     }
 
-#if defined(__linux__) || defined(__APPLE__)
-    reduct_add_import_path(reduct, "/usr/local/lib/reduct");
-    reduct_add_import_path(reduct, "/usr/lib/reduct");
-    reduct_add_import_path(reduct, "/lib/reduct");
-#endif
+    reduct_build_register_intrinsics(master);
 
-    return reduct;
-}
-
-REDUCT_API reduct_t* reduct_new_thread(reduct_t* reduct, reduct_error_t* error)
-{
-    reduct_t* thread = calloc(1, sizeof(reduct_t));
-    if (thread == NULL)
-    {
-        REDUCT_ERROR_GENERIC(reduct, error, NULL, INTERNAL, "out of memory");
-    }
-
-    atomic_fetch_add(&reduct->env->refCount, 1);
-    reduct_state_init(thread, error, reduct->env);
-
-    return thread;
+    return master;
 }
 
 REDUCT_API void reduct_userdata_set(reduct_t* reduct, void* userdata)
@@ -135,97 +167,73 @@ REDUCT_API void reduct_free(reduct_t* reduct)
         return;
     }
 
-    reduct_atom_state_deinit(&reduct->atom);
-    reduct_item_state_deinit(&reduct->item);
-    reduct_gc_state_deinit(&reduct->gc);
-    reduct_scratch_state_deinit(&reduct->scratch);
-    reduct_eval_state_deinit(&reduct->eval);
+    reduct_global_t* global = reduct->global;
 
-    if (atomic_fetch_sub(&reduct->env->refCount, 1) == 1)
+    reduct_task_global_deinit(&global->task);
+
+    for (size_t i = 0; i < global->threadCount; i++)
     {
-        reduct_atom_env_deinit(&reduct->env->atom);
-        reduct_native_env_deinit(&reduct->env->native);
-        reduct_item_env_deinit(reduct, &reduct->env->item);
-        reduct_gc_env_deinit(&reduct->env->gc);
-        reduct_schema_env_deinit(&reduct->env->schema);
-        reduct_optimize_env_deinit(&reduct->env->optimize);
-        reduct_task_env_deinit(&reduct->env->task);
-
-        reduct_rwmutex_destroy(&reduct->env->inputMutex);
-        reduct_input_t* input = reduct->env->input;
-        while (input != NULL)
+        reduct_t* thread = &global->threads[i];
+        if (thread->thrd != thrd_current())
         {
-            reduct_input_t* next = input->prev;
-            if (input->flags & REDUCT_INPUT_FLAG_OWNED)
-            {
-                free((void*)input->buffer);
-            }
-            free(input);
-            input = next;
+            thrd_join(thread->thrd, NULL);
         }
-
-        reduct_rwmutex_destroy(&reduct->env->importMutex);
-        if (reduct->env->importPaths != NULL)
-        {
-            for (size_t i = 0; i < reduct->env->importPathCount; i++)
-            {
-                free(reduct->env->importPaths[i]);
-            }
-            free(reduct->env->importPaths);
-            reduct->env->importPaths = NULL;
-            reduct->env->importPathCount = 0;
-            reduct->env->importPathCapacity = 0;
-        }
-
-        reduct_rwmutex_destroy(&reduct->env->libMutex);
-        if (reduct->env->libs != NULL)
-        {
-            for (size_t i = 0; i < reduct->env->libCount; i++)
-            {
-                if (reduct->env->libs[i] != NULL)
-                {
-                    REDUCT_LIB_CLOSE(reduct->env->libs[i]);
-                }
-            }
-            free(reduct->env->libs);
-        }
-
-        free(reduct->env);
     }
 
-    free(reduct);
+    reduct_item_global_deinit(reduct, &global->item);
+    reduct_atom_global_deinit(&global->atom);
+    reduct_native_global_deinit(&global->native);
+    reduct_gc_global_deinit(&global->gc);
+    reduct_schema_global_deinit(&global->schema);
+    reduct_optimize_global_deinit(&global->optimize);
+
+    for (size_t i = 0; i < global->threadCount; i++)
+    {
+        reduct_t* thread = &global->threads[i];
+        reduct_atom_local_deinit(&thread->atom);
+        reduct_item_local_deinit(&thread->item);
+        reduct_scratch_local_deinit(&thread->scratch);
+        reduct_eval_local_deinit(&thread->eval);
+    }
+
+    reduct_input_global_deinit(&global->input);
+    reduct_import_global_deinit(&global->import);
+    reduct_lib_global_deinit(reduct, &global->lib);
+
+    free(global->threads);
+    free(global);
 }
 
-REDUCT_API void reduct_env_lib_add(reduct_t* reduct, reduct_lib_t lib)
+REDUCT_API void reduct_global_lib_add(reduct_t* reduct, reduct_lib_t lib)
 {
     assert(reduct != NULL);
 
-    reduct_rwmutex_write_lock(&reduct->env->libMutex);
-    if (reduct->env->libs == NULL)
+    reduct_rwmutex_write_lock(&reduct->global->lib.mutex);
+    if (reduct->global->lib.array == NULL)
     {
-        reduct->env->libCapacity = REDUCT_LIBS_INITIAL;
-        reduct->env->libs = (reduct_lib_t*)calloc(reduct->env->libCapacity, sizeof(reduct_lib_t));
+        reduct->global->lib.capacity = REDUCT_LIBS_INITIAL;
+        reduct->global->lib.array = (reduct_lib_t*)calloc(reduct->global->lib.capacity, sizeof(reduct_lib_t));
     }
-    else if (reduct->env->libCount >= reduct->env->libCapacity)
+    else if (reduct->global->lib.count >= reduct->global->lib.capacity)
     {
-        reduct->env->libCapacity *= REDUCT_LIBS_GROWTH;
+        reduct->global->lib.capacity *= REDUCT_LIBS_GROWTH;
         reduct_lib_t* newLibs =
-            (reduct_lib_t*)realloc(reduct->env->libs, reduct->env->libCapacity * sizeof(reduct_lib_t));
+            (reduct_lib_t*)realloc(reduct->global->lib.array, reduct->global->lib.capacity * sizeof(reduct_lib_t));
         if (newLibs == NULL)
         {
-            reduct_rwmutex_write_unlock(&reduct->env->libMutex);
+            reduct_rwmutex_write_unlock(&reduct->global->lib.mutex);
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
-        reduct->env->libs = newLibs;
+        reduct->global->lib.array = newLibs;
     }
-    reduct->env->libs[reduct->env->libCount++] = lib;
-    reduct_rwmutex_write_unlock(&reduct->env->libMutex);
+    reduct->global->lib.array[reduct->global->lib.count++] = lib;
+    reduct_rwmutex_write_unlock(&reduct->global->lib.mutex);
 }
 
 REDUCT_API void reduct_args_set(reduct_t* reduct, int argc, char** argv)
 {
-    reduct->env->argc = argc;
-    reduct->env->argv = argv;
+    reduct->global->argc = argc;
+    reduct->global->argv = argv;
 }
 
 REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer, size_t length, const char* path,
@@ -241,11 +249,11 @@ REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
 
-    reduct_rwmutex_write_lock(&reduct->env->inputMutex);
-    input->prev = reduct->env->input;
-    input->id = reduct->env->newInputId++;
-    reduct->env->input = input;
-    reduct_rwmutex_write_unlock(&reduct->env->inputMutex);
+    reduct_rwmutex_write_lock(&reduct->global->input.mutex);
+    input->prev = reduct->global->input.head;
+    input->id = reduct->global->input.nextId++;
+    reduct->global->input.head = input;
+    reduct_rwmutex_write_unlock(&reduct->global->input.mutex);
 
     input->buffer = buffer;
     input->end = buffer + length;
@@ -259,18 +267,18 @@ REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id
 {
     assert(reduct != NULL);
 
-    reduct_rwmutex_read_lock(&reduct->env->inputMutex);
-    reduct_input_t* input = reduct->env->input;
+    reduct_rwmutex_read_lock(&reduct->global->input.mutex);
+    reduct_input_t* input = reduct->global->input.head;
     while (input != NULL)
     {
         if (input->id == id)
         {
-            reduct_rwmutex_read_unlock(&reduct->env->inputMutex);
+            reduct_rwmutex_read_unlock(&reduct->global->input.mutex);
             return input;
         }
         input = input->prev;
     }
-    reduct_rwmutex_read_unlock(&reduct->env->inputMutex);
+    reduct_rwmutex_read_unlock(&reduct->global->input.mutex);
 
     return NULL;
 }
@@ -289,33 +297,34 @@ REDUCT_API void reduct_add_import_path(reduct_t* reduct, const char* path)
     memcpy(pathCopy, path, len);
     pathCopy[len] = '\0';
 
-    reduct_rwmutex_write_lock(&reduct->env->importMutex);
-    if (reduct->env->importPaths == NULL)
+    reduct_rwmutex_write_lock(&reduct->global->import.mutex);
+    if (reduct->global->import.paths == NULL)
     {
-        reduct->env->importPathCapacity = REDUCT_IMPORT_PATHS_INITIAL;
-        reduct->env->importPaths = (char**)malloc(reduct->env->importPathCapacity * sizeof(char*));
-        if (reduct->env->importPaths == NULL)
+        reduct->global->import.capacity = REDUCT_IMPORT_PATHS_INITIAL;
+        reduct->global->import.paths = (char**)malloc(reduct->global->import.capacity * sizeof(char*));
+        if (reduct->global->import.paths == NULL)
         {
-            reduct_rwmutex_write_unlock(&reduct->env->importMutex);
+            reduct_rwmutex_write_unlock(&reduct->global->import.mutex);
             free(pathCopy);
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
     }
-    else if (reduct->env->importPathCount >= reduct->env->importPathCapacity)
+    else if (reduct->global->import.count >= reduct->global->import.capacity)
     {
-        reduct->env->importPathCapacity *= REDUCT_IMPORT_PATHS_GROWTH;
-        char** newPaths = (char**)realloc(reduct->env->importPaths, reduct->env->importPathCapacity * sizeof(char*));
+        reduct->global->import.capacity *= REDUCT_IMPORT_PATHS_GROWTH;
+        char** newPaths =
+            (char**)realloc(reduct->global->import.paths, reduct->global->import.capacity * sizeof(char*));
         if (newPaths == NULL)
         {
-            reduct_rwmutex_write_unlock(&reduct->env->importMutex);
+            reduct_rwmutex_write_unlock(&reduct->global->import.mutex);
             free(pathCopy);
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
-        reduct->env->importPaths = newPaths;
+        reduct->global->import.paths = newPaths;
     }
 
-    reduct->env->importPaths[reduct->env->importPathCount++] = pathCopy;
-    reduct_rwmutex_write_unlock(&reduct->env->importMutex);
+    reduct->global->import.paths[reduct->global->import.count++] = pathCopy;
+    reduct_rwmutex_write_unlock(&reduct->global->import.mutex);
 }
 
 static void reduct_path_normalize(char* path, size_t* outLen)
@@ -476,10 +485,10 @@ REDUCT_API void reduct_resolve_path(reduct_t* reduct, const char* path, size_t p
 
     if (reduct != NULL)
     {
-        reduct_rwmutex_read_lock(&reduct->env->importMutex);
-        for (size_t i = 0; i < reduct->env->importPathCount; i++)
+        reduct_rwmutex_read_lock(&reduct->global->import.mutex);
+        for (size_t i = 0; i < reduct->global->import.count; i++)
         {
-            const char* includeDir = reduct->env->importPaths[i];
+            const char* includeDir = reduct->global->import.paths[i];
             size_t dirLen = strlen(includeDir);
             size_t needSep = (dirLen > 0 && includeDir[dirLen - 1] != '/' && includeDir[dirLen - 1] != '\\') ? 1 : 0;
             size_t totalLen = dirLen + needSep + pathLen;
@@ -495,18 +504,18 @@ REDUCT_API void reduct_resolve_path(reduct_t* reduct, const char* path, size_t p
 
                 if (!checkExistence)
                 {
-                    reduct_rwmutex_read_unlock(&reduct->env->importMutex);
+                    reduct_rwmutex_read_unlock(&reduct->global->import.mutex);
                     return;
                 }
                 struct stat st;
                 if (stat(outPath, &st) == 0)
                 {
-                    reduct_rwmutex_read_unlock(&reduct->env->importMutex);
+                    reduct_rwmutex_read_unlock(&reduct->global->import.mutex);
                     return;
                 }
             }
         }
-        reduct_rwmutex_read_unlock(&reduct->env->importMutex);
+        reduct_rwmutex_read_unlock(&reduct->global->import.mutex);
     }
 
     strncpy(outPath, normalized, maxLen - 1);

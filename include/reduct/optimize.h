@@ -37,27 +37,27 @@ typedef enum reduct_optimize_flags
 } reduct_optimize_flags_t;
 
 /**
- * @brief Global optimization-related environment structure.
- * @struct reduct_optimize_env_t
+ * @brief Global optimization-related state structure.
+ * @struct reduct_optimize_global_t
  */
 typedef struct
 {
     reduct_optimize_flags_t lastFlags;
-} reduct_optimize_env_t;
+} reduct_optimize_global_t;
 
 /**
- * @brief Initialize an optimize environment.
+ * @brief Initialize a global optimize state.
  *
- * @param env Pointer to the optimize environment to initialize.
+ * @param global Pointer to the global optimize state to initialize.
  */
-REDUCT_API void reduct_optimize_env_init(reduct_optimize_env_t* env);
+REDUCT_API void reduct_optimize_global_init(reduct_optimize_global_t* global);
 
 /**
- * @brief Deinitialize an optimize environment.
+ * @brief Deinitialize a global optimize state.
  *
- * @param env Pointer to the optimize environment to deinitialize.
+ * @param global Pointer to the global optimize state to deinitialize.
  */
-REDUCT_API void reduct_optimize_env_deinit(reduct_optimize_env_t* env);
+REDUCT_API void reduct_optimize_global_deinit(reduct_optimize_global_t* global);
 
 /**
  * @brief Optimize a built IR graph.

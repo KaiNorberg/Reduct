@@ -1,19 +1,19 @@
 #include <reduct/scratch.h>
 
-REDUCT_API void reduct_scratch_state_init(reduct_scratch_state_t* state)
+REDUCT_API void reduct_scratch_local_init(reduct_scratch_local_t* local)
 {
-    assert(state != NULL);
-    state->size = 0;
+    assert(local != NULL);
+    local->size = 0;
 }
 
-REDUCT_API void reduct_scratch_state_deinit(reduct_scratch_state_t* state)
+REDUCT_API void reduct_scratch_local_deinit(reduct_scratch_local_t* local)
 {
-    assert(state != NULL);
-    for (size_t i = 0; i < state->size; i++)
+    assert(local != NULL);
+    for (size_t i = 0; i < local->size; i++)
     {
-        free(state->buffers[i].buffer);
-        state->buffers[i].buffer = NULL;
-        state->buffers[i].length = 0;
+        free(local->buffers[i].buffer);
+        local->buffers[i].buffer = NULL;
+        local->buffers[i].length = 0;
     }
-    state->size = 0;
+    local->size = 0;
 }

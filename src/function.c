@@ -128,7 +128,7 @@ REDUCT_API void reduct_function_retain(reduct_t* reduct, reduct_function_t* func
     assert(reduct != NULL);
     assert(function != NULL);
 
-    reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(function, reduct_item_t, function));
+    reduct_item_retain(REDUCT_CONTAINER_OF(function, reduct_item_t, function));
 }
 
 REDUCT_API void reduct_function_release(reduct_t* reduct, reduct_function_t* function)
@@ -136,5 +136,5 @@ REDUCT_API void reduct_function_release(reduct_t* reduct, reduct_function_t* fun
     assert(reduct != NULL);
     assert(function != NULL);
 
-    reduct_gc_release(reduct, REDUCT_CONTAINER_OF(function, reduct_item_t, function));
+    reduct_item_release(REDUCT_CONTAINER_OF(function, reduct_item_t, function));
 }

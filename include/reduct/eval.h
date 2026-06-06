@@ -38,7 +38,7 @@ typedef struct reduct_eval_frame
 
 /**
  * @brief Per-thread eval-related state structure.
- * @struct reduct_eval_state_t
+ * @struct reduct_eval_local_t
  */
 typedef struct reduct_eval_state
 {
@@ -48,21 +48,21 @@ typedef struct reduct_eval_state
     reduct_handle_t* regs;
     size_t regCount;
     size_t regCapacity;
-} reduct_eval_state_t;
+} reduct_eval_local_t;
 
 /**
- * @brief Initialize an eval state.
+ * @brief Initialize a local eval state.
  *
- * @param state Pointer to the eval state to initialize.
+ * @param local Pointer to the local eval state to initialize.
  */
-REDUCT_API void reduct_eval_state_init(reduct_eval_state_t* state);
+REDUCT_API void reduct_eval_local_init(reduct_eval_local_t* local);
 
 /**
- * @brief Deinitialize an eval state.
+ * @brief Deinitialize a local eval state.
  *
- * @param state Pointer to the eval state to deinitialize.
+ * @param local Pointer to the local eval state to deinitialize.
  */
-REDUCT_API void reduct_eval_state_deinit(reduct_eval_state_t* state);
+REDUCT_API void reduct_eval_local_deinit(reduct_eval_local_t* local);
 
 /**
  * @brief Evaluates a handle.

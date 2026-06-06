@@ -60,6 +60,41 @@ typedef struct reduct_input
     char path[REDUCT_PATH_MAX];
 } reduct_input_t;
 
+/**
+ * @brief Global input-related state structure.
+ * @struct reduct_input_global_t
+ */
+typedef struct
+{
+    reduct_rwmutex_t mutex;
+    reduct_input_t* head;
+    reduct_input_id_t nextId;
+} reduct_input_global_t;
+
+/**
+ * @brief Global import-related state structure.
+ * @struct reduct_import_global_t
+ */
+typedef struct
+{
+    reduct_rwmutex_t mutex;
+    char** paths;
+    size_t count;
+    size_t capacity;
+} reduct_import_global_t;
+
+/**
+ * @brief Global library-related state structure.
+ * @struct reduct_lib_global_t
+ */
+typedef struct
+{
+    reduct_rwmutex_t mutex;
+    reduct_lib_t* array;
+    size_t count;
+    size_t capacity;
+} reduct_lib_global_t;
+
 #define REDUCT_SCRATCH_INITIAL 128 ///< Initial scratch buffer size.
 #define REDUCT_SCRATCH_MAX 16      ///< The maximum number of scratch buffers.
 
@@ -67,34 +102,26 @@ typedef struct reduct_input
 #define REDUCT_LIBS_GROWTH 2  ///< Growth factor of the library array.
 
 /**
- * @brief Global environment structure.
- * @struct reduct_env_t
+ * @brief Global state structure.
+ * @struct reduct_global_t
  */
-typedef struct reduct_env
+typedef struct reduct_global
 {
-    struct reduct* main;
-    atomic_int refCount;
     int argc;
     char** argv;
-    reduct_rwmutex_t inputMutex;
-    reduct_input_t* input;
-    reduct_input_id_t newInputId;
-    reduct_rwmutex_t importMutex;
-    char** importPaths;
-    size_t importPathCount;
-    size_t importPathCapacity;
-    reduct_rwmutex_t libMutex;
-    reduct_lib_t* libs;
-    size_t libCount;
-    size_t libCapacity;
-    reduct_atom_env_t atom;
-    reduct_native_env_t native;
-    reduct_item_env_t item;
-    reduct_gc_env_t gc;
-    reduct_schema_env_t schema;
-    reduct_optimize_env_t optimize;
-    reduct_task_env_t task;
-} reduct_env_t;
+    reduct_input_global_t input;
+    reduct_import_global_t import;
+    reduct_lib_global_t lib;
+    struct reduct* threads;
+    uint64_t threadCount;
+    reduct_atom_global_t atom;
+    reduct_native_global_t native;
+    reduct_item_global_t item;
+    reduct_gc_global_t gc;
+    reduct_schema_global_t schema;
+    reduct_optimize_global_t optimize;
+    reduct_task_global_t task;
+} reduct_global_t;
 
 /**
  * @brief Per-thread state structure.
@@ -102,24 +129,23 @@ typedef struct reduct_env
  */
 typedef struct reduct
 {
-    reduct_env_t* env;
+    thrd_t thrd;
+    reduct_global_t* global;
     reduct_error_t* error;
     reduct_handle_t nil;
-    reduct_atom_state_t atom;
-    reduct_item_state_t item;
-    reduct_gc_state_t gc;
-    reduct_scratch_state_t scratch;
-    reduct_eval_state_t eval;
+    reduct_atom_local_t atom;
+    reduct_item_local_t item;
+    reduct_scratch_local_t scratch;
+    reduct_eval_local_t eval;
     void* userdata;
 } reduct_t;
 
 /**
  * @brief Create a new Reduct environment.
  *
- * @param error Pointer to the error structure to be used for error reporting.
- * @return A pointer to the first per thread state structure of the new environment.
+ * @return A pointer to the first per thread state structure of the new environment or `NULL`.
  */
-REDUCT_API reduct_t* reduct_new(reduct_error_t* error);
+REDUCT_API reduct_t* reduct_new(void);
 
 /**
  * @brief Free the Reduct structure.
@@ -129,23 +155,12 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error);
 REDUCT_API void reduct_free(reduct_t* reduct);
 
 /**
- * @brief Create a new Reduct structure within the same environment as another for use by another thread.
- *
- * The new thread should call `reduct_free` with the returned structure when it is done.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param error Pointer to the error structure to be used for error reporting.
- * @return A pointer to the new Reduct structure for the new thread.
- */
-REDUCT_API reduct_t* reduct_new_thread(reduct_t* reduct, reduct_error_t* error);
-
-/**
- * @brief Add a loaded library handle to the global environment.
+ * @brief Add a loaded library handle to the global state.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param lib The library handle.
  */
-REDUCT_API void reduct_env_lib_add(reduct_t* reduct, reduct_lib_t lib);
+REDUCT_API void reduct_global_lib_add(reduct_t* reduct, reduct_lib_t lib);
 
 /**
  * @brief Set the user data pointer for the Reduct structure.

@@ -10,34 +10,34 @@
 #include <reduct/standard.h>
 #include <stdarg.h>
 
-REDUCT_API void reduct_eval_state_init(reduct_eval_state_t* state)
+REDUCT_API void reduct_eval_local_init(reduct_eval_local_t* local)
 {
-    assert(state != NULL);
-    state->frames = NULL;
-    state->frameCount = 0;
-    state->frameCapacity = 0;
-    state->regs = NULL;
-    state->regCount = 0;
-    state->regCapacity = 0;
+    assert(local != NULL);
+    local->frames = NULL;
+    local->frameCount = 0;
+    local->frameCapacity = 0;
+    local->regs = NULL;
+    local->regCount = 0;
+    local->regCapacity = 0;
 }
 
-REDUCT_API void reduct_eval_state_deinit(reduct_eval_state_t* state)
+REDUCT_API void reduct_eval_local_deinit(reduct_eval_local_t* local)
 {
-    assert(state != NULL);
-    if (state->frames != NULL)
+    assert(local != NULL);
+    if (local->frames != NULL)
     {
-        free(state->frames);
-        state->frames = NULL;
+        free(local->frames);
+        local->frames = NULL;
     }
-    if (state->regs != NULL)
+    if (local->regs != NULL)
     {
-        free(state->regs);
-        state->regs = NULL;
+        free(local->regs);
+        local->regs = NULL;
     }
-    state->frameCount = 0;
-    state->frameCapacity = 0;
-    state->regCount = 0;
-    state->regCapacity = 0;
+    local->frameCount = 0;
+    local->frameCapacity = 0;
+    local->regCount = 0;
+    local->regCapacity = 0;
 }
 
 static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct, uint32_t neededRegs)
@@ -184,7 +184,7 @@ static reduct_handle_t reduct_eval_run(reduct_t* reduct, uint32_t initialFrameCo
     reduct_handle_t* k = frame->constants;
     reduct_inst_t inst;
     reduct_handle_t result = REDUCT_HANDLE_NIL(reduct);
-    bool shouldFork = reduct_task_queue_size(&reduct->env->task) < reduct->env->task.cpuCount;
+    bool shouldFork = reduct_task_queue_size(&reduct->global->task) <= reduct->global->threadCount * 2;
 
     // clang-format off
     /// @todo Write some macro magic to turn this into a switch case if not using GCC or Clang.
@@ -463,6 +463,7 @@ label_recur:
     reduct_eval_push_frame(reduct, closure, frame->base + a);
 
     UPDATE_STATE();
+    REDUCT_GC_CHECK(reduct);
     DISPATCH();
 }
 label_tailrecur:
@@ -481,6 +482,7 @@ label_tailrecur:
     }
     frame->ip = closure->function->insts;
     ip = frame->ip;
+    REDUCT_GC_CHECK(reduct);
     DISPATCH();
 }
 LABEL_C_OP(label_mov, {
@@ -588,7 +590,6 @@ LABEL_C_OP(label_join, {
     {
         reduct_future_t* future = REDUCT_HANDLE_TO_FUTURE(valC);
         res = reduct_future_join(reduct, future);
-        REDUCT_HANDLE_FREE(reduct, valC);
     }
     else
     {
@@ -632,7 +633,7 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t handle)
     if (!REDUCT_HANDLE_IS_FUNCTION(handle))
     {
         reduct_handle_t graph = reduct_build(reduct, handle);
-        reduct_optimize(reduct, graph, reduct->env->optimize.lastFlags);
+        reduct_optimize(reduct, graph, reduct->global->optimize.lastFlags);
         reduct_handle_t function = reduct_emit(reduct, graph);
         return reduct_eval(reduct, function);
     }
@@ -679,20 +680,9 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     assert(reduct != NULL);
     assert(argv != NULL || argc == 0);
 
-    REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ITEM(callable), "cannot call value of type %s",
-        REDUCT_HANDLE_GET_TYPE_STRING(callable));
-
     reduct_eval_ensure_ready(reduct);
 
-    if (REDUCT_HANDLE_IS_NATIVE(reduct, callable))
-    {
-        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(callable);
-
-        assert(atom->native != NULL);
-        return atom->native(reduct, argc, argv);
-    }
-
-    if (REDUCT_HANDLE_IS_CLOSURE(callable))
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_CLOSURE(callable)))
     {
         reduct_closure_t* closure = REDUCT_HANDLE_TO_CLOSURE(callable);
         reduct_function_t* func = closure->function;
@@ -725,6 +715,14 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
         reduct_eval_push_frame(reduct, closure, target);
 
         return reduct_eval_run(reduct, initialFrameCount);
+    }
+
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NATIVE(reduct, callable)))
+    {
+        reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(callable);
+
+        assert(atom->native != NULL);
+        return atom->native(reduct, argc, argv);
     }
 
     REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(callable));

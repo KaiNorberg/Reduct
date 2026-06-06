@@ -39,8 +39,8 @@ typedef struct
 #define REDUCT_NATIVE_MAP_GROWTH 2    ///< The growth factor of the native map.
 
 /**
- * @brief Global native-related environment structure.
- * @struct reduct_native_env_t
+ * @brief Global native-related state structure.
+ * @struct reduct_native_global_t
  */
 typedef struct
 {
@@ -49,21 +49,21 @@ typedef struct
     size_t capacity;
     size_t mask;
     reduct_rwmutex_t mutex;
-} reduct_native_env_t;
+} reduct_native_global_t;
 
 /**
- * @brief Initialize a native environment.
+ * @brief Initialize a global native state.
  *
- * @param state Pointer to the native environment to initialize.
+ * @param global Pointer to the global native state to initialize.
  */
-REDUCT_API void reduct_native_env_init(reduct_native_env_t* env);
+REDUCT_API void reduct_native_global_init(reduct_native_global_t* global);
 
 /**
- * @brief Deinitialize a native environment.
+ * @brief Deinitialize a global native state.
  *
- * @param state Pointer to the native environment to deinitialize.
+ * @param global Pointer to the global native state to deinitialize.
  */
-REDUCT_API void reduct_native_env_deinit(reduct_native_env_t* env);
+REDUCT_API void reduct_native_global_deinit(reduct_native_global_t* global);
 
 /**
  * @brief Native map entry.

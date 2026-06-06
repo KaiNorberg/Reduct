@@ -32,27 +32,27 @@ typedef struct reduct_scratch
 
 /**
  * @brief Per-thread scratch-related state structure.
- * @struct reduct_scratch_state_t
+ * @struct reduct_scratch_local_t
  */
 typedef struct reduct_scratch_state
 {
     size_t size;
     reduct_scratch_t buffers[REDUCT_SCRATCH_MAX];
-} reduct_scratch_state_t;
+} reduct_scratch_local_t;
 
 /**
- * @brief Initialize a scratch state.
+ * @brief Initialize a local scratch state.
  *
- * @param state Pointer to the scratch state to initialize.
+ * @param local Pointer to the local scratch state to initialize.
  */
-REDUCT_API void reduct_scratch_state_init(reduct_scratch_state_t* state);
+REDUCT_API void reduct_scratch_local_init(reduct_scratch_local_t* local);
 
 /**
- * @brief Deinitialize a scratch state.
+ * @brief Deinitialize a local scratch state.
  *
- * @param state Pointer to the scratch state to deinitialize.
+ * @param local Pointer to the local scratch state to deinitialize.
  */
-REDUCT_API void reduct_scratch_state_deinit(reduct_scratch_state_t* state);
+REDUCT_API void reduct_scratch_local_deinit(reduct_scratch_local_t* local);
 
 /**
  * @brief Allocate a scratch buffer.

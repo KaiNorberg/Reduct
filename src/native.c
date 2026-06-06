@@ -3,53 +3,53 @@
 #include <reduct/intrinsic.h>
 #include <reduct/native.h>
 
-REDUCT_API void reduct_native_env_init(reduct_native_env_t* env)
+REDUCT_API void reduct_native_global_init(reduct_native_global_t* global)
 {
-    assert(env != NULL);
-    env->map = NULL;
-    env->size = 0;
-    env->capacity = 0;
-    env->mask = 0;
-    reduct_rwmutex_init(&env->mutex);
+    assert(global != NULL);
+    global->map = NULL;
+    global->size = 0;
+    global->capacity = 0;
+    global->mask = 0;
+    reduct_rwmutex_init(&global->mutex);
 }
 
-REDUCT_API void reduct_native_env_deinit(reduct_native_env_t* env)
+REDUCT_API void reduct_native_global_deinit(reduct_native_global_t* global)
 {
-    assert(env != NULL);
-    if (env->map != NULL)
+    assert(global != NULL);
+    if (global->map != NULL)
     {
-        for (size_t i = 0; i < env->capacity; i++)
+        for (size_t i = 0; i < global->capacity; i++)
         {
-            if (env->map[i].name != NULL)
+            if (global->map[i].name != NULL)
             {
-                free(env->map[i].name);
+                free(global->map[i].name);
             }
         }
-        free(env->map);
+        free(global->map);
     }
-    reduct_rwmutex_destroy(&env->mutex);
+    reduct_rwmutex_destroy(&global->mutex);
 }
 
 static inline reduct_native_entry_t* reduct_native_map_find_unlocked(reduct_t* reduct, uint32_t hash, const char* str,
     size_t len)
 {
-    reduct_native_env_t* env = &reduct->env->native;
-    if (env->map == NULL)
+    reduct_native_global_t* global = &reduct->global->native;
+    if (global->map == NULL)
     {
         return NULL;
     }
 
-    size_t index = hash & env->mask;
+    size_t index = hash & global->mask;
     size_t step = 1;
 
-    while (env->map[index].name != NULL)
+    while (global->map[index].name != NULL)
     {
-        reduct_native_entry_t* entry = &env->map[index];
+        reduct_native_entry_t* entry = &global->map[index];
         if (entry->hash == hash && entry->length == len && memcmp(entry->name, str, len) == 0)
         {
             return entry;
         }
-        index = (index + step) & env->mask;
+        index = (index + step) & global->mask;
         step++;
     }
 
@@ -58,18 +58,18 @@ static inline reduct_native_entry_t* reduct_native_map_find_unlocked(reduct_t* r
 
 static inline bool reduct_native_map_grow(reduct_t* reduct)
 {
-    reduct_native_env_t* env = &reduct->env->native;
-    size_t oldCapacity = env->capacity;
-    reduct_native_entry_t* oldMap = env->map;
+    reduct_native_global_t* global = &reduct->global->native;
+    size_t oldCapacity = global->capacity;
+    reduct_native_entry_t* oldMap = global->map;
 
-    env->capacity = oldCapacity * REDUCT_NATIVE_MAP_GROWTH;
-    env->mask = env->capacity - 1;
-    env->map = calloc(env->capacity, sizeof(reduct_native_entry_t));
-    if (env->map == NULL)
+    global->capacity = oldCapacity * REDUCT_NATIVE_MAP_GROWTH;
+    global->mask = global->capacity - 1;
+    global->map = calloc(global->capacity, sizeof(reduct_native_entry_t));
+    if (global->map == NULL)
     {
-        env->capacity = oldCapacity;
-        env->mask = oldCapacity - 1;
-        env->map = oldMap;
+        global->capacity = oldCapacity;
+        global->mask = oldCapacity - 1;
+        global->map = oldMap;
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
 
@@ -80,14 +80,14 @@ static inline bool reduct_native_map_grow(reduct_t* reduct)
             continue;
         }
 
-        size_t index = oldMap[i].hash & env->mask;
+        size_t index = oldMap[i].hash & global->mask;
         size_t step = 1;
-        while (env->map[index].name != NULL)
+        while (global->map[index].name != NULL)
         {
-            index = (index + step) & env->mask;
+            index = (index + step) & global->mask;
             step++;
         }
-        env->map[index] = oldMap[i];
+        global->map[index] = oldMap[i];
     }
 
     if (oldMap != NULL)
@@ -100,7 +100,7 @@ static inline bool reduct_native_map_grow(reduct_t* reduct)
 static inline reduct_native_entry_t* reduct_native_map_insert(reduct_t* reduct, uint32_t hash, const char* name,
     size_t len)
 {
-    reduct_native_env_t* env = &reduct->env->native;
+    reduct_native_global_t* env = &reduct->global->native;
     if (env->map == NULL)
     {
         env->capacity = REDUCT_NATIVE_MAP_INITIAL;
@@ -145,9 +145,9 @@ REDUCT_API reduct_native_entry_t* reduct_native_map_find(reduct_t* reduct, uint3
 {
     assert(reduct != NULL);
 
-    reduct_rwmutex_read_lock(&reduct->env->native.mutex);
+    reduct_rwmutex_read_lock(&reduct->global->native.mutex);
     reduct_native_entry_t* entry = reduct_native_map_find_unlocked(reduct, hash, str, len);
-    reduct_rwmutex_read_unlock(&reduct->env->native.mutex);
+    reduct_rwmutex_read_unlock(&reduct->global->native.mutex);
     return entry;
 }
 
@@ -156,7 +156,7 @@ REDUCT_API void reduct_native_register(reduct_t* reduct, const reduct_native_t* 
     assert(reduct != NULL);
     assert(array != NULL || count == 0);
 
-    reduct_rwmutex_write_lock(&reduct->env->native.mutex);
+    reduct_rwmutex_write_lock(&reduct->global->native.mutex);
 
     for (size_t i = 0; i < count; i++)
     {
@@ -177,5 +177,5 @@ REDUCT_API void reduct_native_register(reduct_t* reduct, const reduct_native_t* 
         entry->intrinsicFn = native->intrinsicFn;
     }
 
-    reduct_rwmutex_write_unlock(&reduct->env->native.mutex);
+    reduct_rwmutex_write_unlock(&reduct->global->native.mutex);
 }

@@ -142,7 +142,7 @@ typedef struct reduct_atom
 
 /**
  * @brief Global atom-related environment structure.
- * @struct reduct_atom_env_t
+ * @struct reduct_atom_global_t
  */
 typedef struct
 {
@@ -152,44 +152,44 @@ typedef struct
     uint32_t mask;
     uint32_t tombstones;
     reduct_rwmutex_t mutex;
-} reduct_atom_env_t;
+} reduct_atom_global_t;
 
 /**
  * @brief Per-thread atom-related state structure.
- * @struct reduct_atom_state_t
+ * @struct reduct_atom_local_t
  */
 typedef struct
 {
     reduct_atom_stack_t* atomStack;
-} reduct_atom_state_t;
+} reduct_atom_local_t;
 
 /**
- * @brief Initialize an atom environment.
+ * @brief Initialize a global atom state.
  *
- * @param env Pointer to the atom environment to initialize.
+ * @param global Pointer to the global atom state to initialize.
  */
-REDUCT_API void reduct_atom_env_init(reduct_atom_env_t* env);
+REDUCT_API void reduct_atom_global_init(reduct_atom_global_t* global);
 
 /**
- * @brief Deinitialize an atom environment.
+ * @brief Deinitialize a global atom state.
  *
- * @param env Pointer to the atom environment to deinitialize.
+ * @param global Pointer to the global atom state to deinitialize.
  */
-REDUCT_API void reduct_atom_env_deinit(reduct_atom_env_t* env);
+REDUCT_API void reduct_atom_global_deinit(reduct_atom_global_t* global);
 
 /**
- * @brief Initialize an atom state.
+ * @brief Initialize a local atom state.
  *
- * @param state Pointer to the atom state to initialize.
+ * @param local Pointer to the local atom state to initialize.
  */
-REDUCT_API void reduct_atom_state_init(reduct_atom_state_t* state);
+REDUCT_API void reduct_atom_local_init(reduct_atom_local_t* local);
 
 /**
- * @brief Deinitialize an atom state.
+ * @brief Deinitialize a local atom state.
  *
- * @param state Pointer to the atom state to deinitialize.
+ * @param local Pointer to the local atom state to deinitialize.
  */
-REDUCT_API void reduct_atom_state_deinit(reduct_atom_state_t* state);
+REDUCT_API void reduct_atom_local_deinit(reduct_atom_local_t* local);
 
 /**
  * @brief Check if an atom is equal to a string.

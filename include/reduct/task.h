@@ -20,22 +20,10 @@ struct reduct_task;
  * @{
  */
 
-#define REDUCT_TASK_THREAD_MAX 16 ///< The maximum number of threads dedicated to tasks.
-
 #define REDUCT_TASK_QUEUE_MAX 256 ///< The maximum number of tasks.
 
 #define REDUCT_TASK_SPIN_MAX 1000 ///< The maximum number of times to spin while waiting for work to be ready.
 
-/**
- * @brief Thread structure.
- * @struct reduct_thread_t
- */
-typedef struct
-{
-    struct reduct* reduct;
-    thrd_t thrd;
-    bool active;
-} reduct_thread_t;
 /**
  * @brief Task ID structure.
  * @struct reduct_task_id_t
@@ -59,37 +47,42 @@ typedef struct REDUCT_ALIGNED(64) reduct_task
 } reduct_task_t;
 
 /**
- * @brief Global thread environment structure.
- * @struct reduct_task_env_t
+ * @brief Global thread-related state structure.
+ * @struct reduct_task_global_t
  */
 typedef struct
 {
     mtx_t mutex;
     cnd_t cond;
-    reduct_thread_t threads[REDUCT_TASK_THREAD_MAX];
     _Atomic(bool) shutdown;
     REDUCT_ALIGNED(64) reduct_task_t queue[REDUCT_TASK_QUEUE_MAX];
     REDUCT_ALIGNED(64) _Atomic(size_t) queueHead;
     REDUCT_ALIGNED(64) _Atomic(size_t) queueTail;
-    uint32_t cpuCount;
-    _Atomic(uint32_t) threadCount;
     _Atomic(uint32_t) idleCount;
-    _Atomic(uint32_t) barrierWaiters;
-} reduct_task_env_t;
+    _Atomic(uint32_t) barrierCount;
+    _Atomic(uint32_t) barrierGen;
+} reduct_task_global_t;
 
 /**
- * @brief Initialize an thread environment.
+ * @brief Worker thread main loop..
  *
- * @param env Pointer to the thread environment to initialize.
+ * @param arg Pointer to the `reduct_t` structure of the thread.
  */
-REDUCT_API void reduct_task_env_init(reduct_task_env_t* env);
+REDUCT_API int reduct_task_worker(void* arg);
 
 /**
- * @brief Deinitialize an thread environment.
+ * @brief Initialize a global task state.
  *
- * @param env Pointer to the thread environment to deinitialize.
+ * @param global Pointer to the global task state to initialize.
  */
-REDUCT_API void reduct_task_env_deinit(reduct_task_env_t* env);
+REDUCT_API void reduct_task_global_init(reduct_task_global_t* global);
+
+/**
+ * @brief Deinitialize a global task state.
+ *
+ * @param global Pointer to the global task state to deinitialize.
+ */
+REDUCT_API void reduct_task_global_deinit(reduct_task_global_t* global);
 
 /**
  * @brief Create a new task.
@@ -125,32 +118,24 @@ REDUCT_API void reduct_task_join(struct reduct* reduct, reduct_task_id_t id);
 /**
  * @brief Retrieve the number of pending tasks.
  *
- * @param env Pointer to the thread environment.
+ * @param global Pointer to the global task state.
  * @return The number of pending tasks in the queue.
  */
-static inline REDUCT_ALWAYS_INLINE uint64_t reduct_task_queue_size(reduct_task_env_t* env)
+static inline REDUCT_ALWAYS_INLINE uint64_t reduct_task_queue_size(reduct_task_global_t* global)
 {
-    size_t head = atomic_load_explicit(&env->queueHead, memory_order_acquire);
-    size_t tail = atomic_load_explicit(&env->queueTail, memory_order_acquire);
+    size_t head = atomic_load_explicit(&global->queueHead, memory_order_acquire);
+    size_t tail = atomic_load_explicit(&global->queueTail, memory_order_acquire);
     return head - tail;
 }
 
 /**
- * @brief Barrier function to ensure all threads have either reached the barrier or are idle.
+ * @brief Barrier function to ensure all threads have either reached the barrier.
  *
- * Once the function returns all threads that have reached the barrier will be blocked until the barrier is exited, and
- * all threads that have not reached the barrier will be idle until the barrier is exited.
- *
- * @param reduct Pointer to the Reduct structure.
- */
-REDUCT_API void reduct_task_barrier_enter(struct reduct* reduct);
-
-/**
- * @brief Exit the barrier, allowing threads to resume execution.
+ * Once the function returns all threads that have reached the barrier will be unblocked.
  *
  * @param reduct Pointer to the Reduct structure.
  */
-REDUCT_API void reduct_task_barrier_exit(struct reduct* reduct);
+REDUCT_API void reduct_task_barrier(struct reduct* reduct);
 
 /** @} */
 

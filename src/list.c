@@ -512,7 +512,7 @@ REDUCT_API void reduct_list_retain(reduct_t* reduct, reduct_list_t* list)
     assert(reduct != NULL);
     assert(list != NULL);
 
-    reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(list, reduct_item_t, list));
+    reduct_item_retain(REDUCT_CONTAINER_OF(list, reduct_item_t, list));
 }
 
 REDUCT_API void reduct_list_release(reduct_t* reduct, reduct_list_t* list)
@@ -520,5 +520,5 @@ REDUCT_API void reduct_list_release(reduct_t* reduct, reduct_list_t* list)
     assert(reduct != NULL);
     assert(list != NULL);
 
-    reduct_gc_release(reduct, REDUCT_CONTAINER_OF(list, reduct_item_t, list));
+    reduct_item_release(REDUCT_CONTAINER_OF(list, reduct_item_t, list));
 }

@@ -30,7 +30,7 @@ static void reduct_future_worker(reduct_t* reduct, void* arg)
     }
 
     atomic_store_explicit(&future->done, true, memory_order_release);
-    reduct_gc_release(reduct, item);
+    reduct_item_release(item);
 }
 
 REDUCT_API reduct_future_t* reduct_future_new(struct reduct* reduct, reduct_handle_t callable, size_t argc,
@@ -62,43 +62,15 @@ REDUCT_API reduct_future_t* reduct_future_new(struct reduct* reduct, reduct_hand
     future->argc = argc;
     atomic_init(&future->done, false);
 
-    reduct_gc_retain(reduct, item);
+    reduct_item_retain(item);
 
     if (!reduct_task_create_try(reduct, reduct_future_worker, item, &future->taskId))
     {
         future->result = reduct_eval_call(reduct, callable, argc, argv);
 
         atomic_store_explicit(&future->done, true, memory_order_release);
-        reduct_gc_release(reduct, item);
+        reduct_item_release(item);
     }
 
     return future;
-}
-
-REDUCT_API reduct_handle_t reduct_future_join(struct reduct* reduct, reduct_future_t* future)
-{
-    assert(reduct != NULL);
-    assert(future != NULL);
-
-    if (!atomic_load_explicit(&future->done, memory_order_acquire))
-    {
-        reduct_task_join(reduct, future->taskId);
-    }
-
-    if (future->error != NULL)
-    {
-        REDUCT_ERROR_RETHROW(reduct, future->error);
-    }
-
-    return future->result;
-}
-
-REDUCT_API bool reduct_future_is_done(struct reduct* reduct, reduct_future_t* future)
-{
-    assert(reduct != NULL);
-    assert(future != NULL);
-
-    REDUCT_UNUSED(reduct);
-
-    return atomic_load_explicit(&future->done, memory_order_relaxed);
 }

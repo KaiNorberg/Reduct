@@ -40,10 +40,10 @@ typedef uint8_t reduct_item_type_t;
 #define REDUCT_ITEM_TYPE_RVSDG_ORIGIN 11 ///< An IR origin (output/argument).
 #define REDUCT_ITEM_TYPE_FUTURE 12       ///< A future.
 
-typedef uint8_t reduct_item_flags_t;     ///< Item flags enumeration.
-#define REDUCT_ITEM_FLAG_NONE 0          ///< No flags.
-#define REDUCT_ITEM_FLAG_MARKED (1 << 0) ///< Item is marked by the GC.
-// #define REDUCT_ITEM_FLAG_IMMUTABLE (1 << 1) ///< Item is immutable, i.e the GC can safely trace it.
+typedef uint8_t reduct_item_flags_t;       ///< Item flags enumeration.
+#define REDUCT_ITEM_FLAG_NONE 0            ///< No flags.
+#define REDUCT_ITEM_FLAG_MARKED (1 << 0)   ///< Item is marked by the GC.
+#define REDUCT_ITEM_FLAG_RETAINED (1 << 1) ///< Item is retained and should be considered a root by the GC.
 
 #define REDUCT_ITEM_PAYLOAD_MAX 56 ///< The maximum size of the item payload.
 
@@ -84,9 +84,7 @@ typedef struct reduct_item
 _Static_assert(sizeof(reduct_item_t) == REDUCT_ALIGNMENT, "reduct_item_t must be aligned");
 #endif
 
-#define REDUCT_ITEM_BLOCK_MAX 126       ///< The maximum number of items in a block.
-#define REDUCT_ITEM_RETAINED_INITIAL 16 ///< Initial capacity for the retained items array.
-#define REDUCT_ITEM_RETAINED_GROWTH 2   ///< Growth factor for the retained items array.
+#define REDUCT_ITEM_BLOCK_MAX 127 ///< The maximum number of items in a block.
 
 /**
  * @brief Item block structure.
@@ -100,7 +98,6 @@ typedef struct reduct_item_block
     struct reduct_item_block* next;
     uint8_t _padding[REDUCT_ALIGNMENT - sizeof(void*) - sizeof(struct reduct_item_block*)];
     reduct_item_t items[REDUCT_ITEM_BLOCK_MAX];
-    uint8_t _alignmentPadding[REDUCT_ALIGNMENT]; ///< Padding space for aligning blocks, should never be accessed.
 } reduct_item_block_t;
 
 #ifdef _Static_assert
@@ -109,57 +106,57 @@ _Static_assert((sizeof(reduct_item_block_t) & (sizeof(reduct_item_block_t) - 1))
 #endif
 
 /**
- * @brief Global item-related environment structure.
- * @struct reduct_item_env_t
+ * @brief Global item-related state structure.
+ * @struct reduct_item_global_t
  */
 typedef struct
 {
     size_t prevBlockCount;
     size_t blockCount;
     reduct_item_block_t* block;
-    reduct_rwmutex_t mutex;
+    mtx_t mutex;
     struct reduct_item* globalFreeList;
     size_t globalFreeCount;
-} reduct_item_env_t;
+} reduct_item_global_t;
 
 /**
  * @brief Per-thread item-related state structure.
- * @struct reduct_item_state_t
+ * @struct reduct_item_local_t
  */
 typedef struct
 {
     size_t freeCount;
     reduct_item_t* freeList;
-} reduct_item_state_t;
+} reduct_item_local_t;
 
 /**
- * @brief Initialize an item environment.
+ * @brief Initialize a global item state.
  *
- * @param env Pointer to the item environment to initialize.
+ * @param global Pointer to the global item state to initialize.
  */
-REDUCT_API void reduct_item_env_init(reduct_item_env_t* env);
+REDUCT_API void reduct_item_global_init(reduct_item_global_t* global);
 
 /**
- * @brief Deinitialize an item environment.
+ * @brief Deinitialize a global item state.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param env Pointer to the item environment to deinitialize.
+ * @param global Pointer to the global item state to deinitialize.
  */
-REDUCT_API void reduct_item_env_deinit(struct reduct* reduct, reduct_item_env_t* env);
+REDUCT_API void reduct_item_global_deinit(struct reduct* reduct, reduct_item_global_t* global);
 
 /**
- * @brief Initialize an item state.
+ * @brief Initialize a local item state.
  *
- * @param state Pointer to the item state to initialize.
+ * @param local Pointer to the local item state to initialize.
  */
-REDUCT_API void reduct_item_state_init(reduct_item_state_t* state);
+REDUCT_API void reduct_item_local_init(reduct_item_local_t* local);
 
 /**
- * @brief Deinitialize an item state.
+ * @brief Deinitialize a local item state.
  *
- * @param state Pointer to the item state to deinitialize.
+ * @param local Pointer to the local item state to deinitialize.
  */
-REDUCT_API void reduct_item_state_deinit(reduct_item_state_t* state);
+REDUCT_API void reduct_item_local_deinit(reduct_item_local_t* local);
 
 /**
  * @brief Allocate a new item.
@@ -204,6 +201,28 @@ REDUCT_API const char* reduct_item_type_str(reduct_item_t* item);
  * @param item Pointer to the item to mark.
  */
 REDUCT_API void reduct_item_mark(reduct_item_t* item);
+
+/**
+ * @brief Retain an item, preventing it from being collected by the garbage collector.
+ *
+ * @param item Pointer to the item to retain.
+ */
+static inline REDUCT_ALWAYS_INLINE void reduct_item_retain(struct reduct_item* item)
+{
+    assert(item != NULL);
+    atomic_fetch_or(&item->flags, REDUCT_ITEM_FLAG_RETAINED);
+}
+
+/**
+ * @brief Release an item, potentially allowing the garbage collector to collect it.
+ *
+ * @param item Pointer to the item to release.
+ */
+static inline REDUCT_ALWAYS_INLINE void reduct_item_release(struct reduct_item* item)
+{
+    assert(item != NULL);
+    atomic_fetch_and(&item->flags, ~REDUCT_ITEM_FLAG_RETAINED);
+}
 
 /** @} */
 
