@@ -8,7 +8,6 @@
 #include <reduct/emit.h>
 #include <reduct/gc.h>
 #include <reduct/inst.h>
-#include <reduct/intrinsic.h>
 #include <reduct/item.h>
 #include <reduct/list.h>
 #include <reduct/scratch.h>

@@ -1,6 +1,5 @@
 #include <reduct/atom.h>
 #include <reduct/core.h>
-#include <reduct/intrinsic.h>
 #include <reduct/native.h>
 
 REDUCT_API void reduct_native_global_init(reduct_native_global_t* global)
