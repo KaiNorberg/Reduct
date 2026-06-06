@@ -2,7 +2,6 @@
 #define REDUCT_ATOM_H 1
 
 #include <reduct/defs.h>
-#include <reduct/intrinsic.h>
 #include <reduct/native.h>
 #include <reduct/schema.h>
 #include <reduct/sync.h>

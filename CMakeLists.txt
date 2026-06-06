@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(reduct VERSION 4.0.0 LANGUAGES C)
 
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
@@ -115,8 +115,8 @@ if(REDUCT_USE_FUZZER AND NOT (WIN32 OR APPLE))
 endif()
 
 if(NOT WIN32)
-    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides)
-    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides)
+    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides -Wno-unused-command-line-argument)
+    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides -Wno-unused-command-line-argument)
 endif()
 
 add_subdirectory(tools/reduct-cli)

@@ -131,7 +131,7 @@ REDUCT_API reduct_item_t* reduct_item_new(reduct_t* reduct)
     block->next = reduct->global->item.block;
     reduct->global->item.block = block;
     mtx_unlock(&reduct->global->item.mutex);
-    
+
     reduct_gc_request(&reduct->global->gc);
 
     return &block->items[0];

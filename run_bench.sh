@@ -84,7 +84,8 @@ for rdt_file in $RDT_FILES; do
         bench_cmds+=("$1|$2")
     }
 
-    add_bench "reduct" "$REDUCT_BIN $rdt_file"
+    add_bench "reduct (-O2)" "$REDUCT_BIN -O2 $rdt_file"
+    add_bench "reduct (-O3)" "$REDUCT_BIN -O3 $rdt_file"
 
     lua_script="$BENCH_DIR/$base_name.lua"
     if [ -f "$lua_script" ]; then

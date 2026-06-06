@@ -108,8 +108,6 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
     atomic_store_explicit(&gc->requested, true, memory_order_relaxed);
     reduct_task_barrier(reduct);
 
-    reduct_item_mark(REDUCT_HANDLE_TO_ITEM(reduct->nil));
-
     for (uint32_t j = 0; j < reduct->eval.regCount; j++)
     {
         reduct_handle_t handle = reduct->eval.regs[j];
@@ -130,11 +128,12 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
 
     if (atomic_exchange(&gc->requested, false))
     {
+        reduct_item_mark(REDUCT_HANDLE_TO_ITEM(reduct->global->nil));
+
         for (size_t i = 0; i < reduct->global->threadCount; i++)
         {
             reduct_t* thread = &reduct->global->threads[i];
 
-            reduct_item_mark(REDUCT_HANDLE_TO_ITEM(thread->nil));
             for (uint32_t j = 0; j < thread->eval.regCount; j++)
             {
                 reduct_handle_t handle = thread->eval.regs[j];

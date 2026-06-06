@@ -39,7 +39,7 @@ typedef struct
  * @brief Task structure.
  * @struct reduct_task_t
  */
-typedef struct REDUCT_ALIGNED(64) reduct_task
+typedef struct reduct_task
 {
     _Atomic(uint16_t) generation;
     void (*func)(struct reduct* reduct, void* arg);
@@ -55,9 +55,9 @@ typedef struct
     mtx_t mutex;
     cnd_t cond;
     _Atomic(bool) shutdown;
-    REDUCT_ALIGNED(64) reduct_task_t queue[REDUCT_TASK_QUEUE_MAX];
-    REDUCT_ALIGNED(64) _Atomic(size_t) queueHead;
-    REDUCT_ALIGNED(64) _Atomic(size_t) queueTail;
+    reduct_task_t queue[REDUCT_TASK_QUEUE_MAX];
+    _Atomic(size_t) queueHead;
+    _Atomic(size_t) queueTail;
     _Atomic(uint32_t) idleCount;
     _Atomic(uint32_t) barrierCount;
     _Atomic(uint32_t) barrierGen;

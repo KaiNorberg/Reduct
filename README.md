@@ -650,11 +650,11 @@ The included results were automatically generated using the `run_bench.sh` scrip
 
 All benchmarks were performed on the following system:
 
-- **Timestamp:** `Mon May 18 02:06:26 AM CEST 2026`
+- **Timestamp:** `Sun Jun  7 01:02:32 AM CEST 2026`
 - **CPU:** `AMD Ryzen 5 3600X 6-Core Processor`
 - **OS:** `Fedora Linux 43 (KDE Plasma Desktop Edition)`
-- **Kernel:** `6.19.14-200.fc43.x86_64`
-- **Reduct:** `Reduct 3.4.0+779b0a3`
+- **Kernel:** `7.0.10-100.fc43.x86_64`
+- **Reduct:** `Reduct 4.0.0+f09bd91`
 - **Hyperfine:** `hyperfine 1.20.0`
 - **Heaptrack:** `heaptrack 1.5.0`
 - **Lua:** `Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio`
@@ -666,16 +666,18 @@ All benchmarks were performed on the following system:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 1.0 ± 0.1 | 0.9 | 2.5 | 1.14 ± 0.24 |
-| `lua` | 1.2 ± 0.2 | 1.0 | 4.0 | 1.30 ± 0.28 |
-| `luajit (jit)` | 1.0 ± 0.1 | 0.9 | 2.2 | 1.12 ± 0.24 |
-| `luajit (int)` | 0.9 ± 0.1 | 0.8 | 3.9 | 1.00 |
+| `reduct (-O2)` | 1.6 ± 0.3 | 1.4 | 8.0 | 1.75 ± 0.48 |
+| `reduct (-O3)` | 1.7 ± 0.5 | 1.4 | 9.5 | 1.87 ± 0.62 |
+| `lua` | 1.2 ± 0.2 | 1.0 | 2.7 | 1.28 ± 0.33 |
+| `luajit (jit)` | 1.0 ± 0.2 | 0.9 | 2.2 | 1.09 ± 0.27 |
+| `luajit (int)` | 0.9 ± 0.2 | 0.8 | 2.0 | 1.00 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 132.73K |
+| `reduct (-O2)` | 191.18K |
+| `reduct (-O3)` | 191.18K |
 | `lua` | 103.77K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
@@ -686,18 +688,20 @@ All benchmarks were performed on the following system:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 320.2 ± 6.9 | 314.1 | 338.9 | 2.63 ± 0.10 |
-| `lua` | 737.4 ± 21.1 | 723.1 | 795.4 | 6.07 ± 0.25 |
-| `luajit (jit)` | 121.5 ± 3.7 | 117.3 | 134.0 | 1.00 |
-| `luajit (int)` | 470.9 ± 28.4 | 444.4 | 506.0 | 3.87 ± 0.26 |
-| `python3` | 1071.7 ± 48.0 | 1040.8 | 1201.8 | 8.82 ± 0.48 |
-| `janet` | 1537.4 ± 56.6 | 1447.6 | 1589.6 | 12.65 ± 0.60 |
+| `reduct (-O2)` | 347.9 ± 10.7 | 340.3 | 377.0 | 3.54 ± 0.33 |
+| `reduct (-O3)` | 98.3 ± 8.8 | 83.1 | 116.4 | 1.00 |
+| `lua` | 752.3 ± 28.6 | 721.8 | 782.8 | 7.65 ± 0.74 |
+| `luajit (jit)` | 119.4 ± 1.6 | 116.8 | 122.9 | 1.21 ± 0.11 |
+| `luajit (int)` | 467.1 ± 26.4 | 441.3 | 500.7 | 4.75 ± 0.50 |
+| `python3` | 1041.0 ± 8.2 | 1028.1 | 1053.9 | 10.59 ± 0.95 |
+| `janet` | 1490.6 ± 37.6 | 1451.8 | 1552.4 | 15.16 ± 1.41 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 101.74K |
+| `reduct (-O2)` | 125.25K |
+| `reduct (-O3)` | 376.33K |
 | `lua` | 102.45K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
@@ -708,20 +712,22 @@ All benchmarks were performed on the following system:
 
 ### fib65
 
-| Command | Mean [µs] | Min [µs] | Max [µs] | Relative |
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 736.9 ± 128.1 | 636.9 | 1670.9 | 1.00 |
-| `lua` | 960.3 ± 150.7 | 869.5 | 2463.8 | 1.30 ± 0.31 |
-| `luajit (jit)` | 815.9 ± 147.8 | 707.5 | 1734.6 | 1.11 ± 0.28 |
-| `luajit (int)` | 828.2 ± 154.4 | 705.3 | 1705.2 | 1.12 ± 0.29 |
-| `python3` | 12028.1 ± 1064.7 | 11159.6 | 21961.3 | 16.32 ± 3.18 |
-| `janet` | 3367.9 ± 498.4 | 3106.2 | 7022.3 | 4.57 ± 1.04 |
+| `reduct (-O2)` | 1.2 ± 0.2 | 1.0 | 4.4 | 1.36 ± 0.32 |
+| `reduct (-O3)` | 1.2 ± 0.1 | 1.0 | 2.2 | 1.35 ± 0.30 |
+| `lua` | 1.0 ± 0.2 | 0.9 | 2.6 | 1.19 ± 0.32 |
+| `luajit (jit)` | 0.8 ± 0.2 | 0.7 | 1.9 | 1.00 |
+| `luajit (int)` | 0.9 ± 0.2 | 0.7 | 1.8 | 1.01 ± 0.28 |
+| `python3` | 12.0 ± 1.0 | 11.3 | 20.9 | 14.11 ± 3.02 |
+| `janet` | 3.4 ± 0.5 | 3.2 | 6.9 | 4.03 ± 0.99 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 100.51K |
+| `reduct (-O2)` | 123.78K |
+| `reduct (-O3)` | 123.78K |
 | `lua` | 99.38K |
 | `luajit (jit)` | 78.30K |
 | `luajit (int)` | 78.30K |
@@ -734,17 +740,19 @@ All benchmarks were performed on the following system:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 1.5 ± 0.2 | 1.4 | 3.0 | 1.04 ± 0.26 |
-| `lua` | 6.1 ± 0.9 | 5.6 | 11.7 | 4.15 ± 0.97 |
-| `luajit (jit)` | 1.6 ± 0.3 | 1.4 | 3.2 | 1.05 ± 0.28 |
+| `reduct (-O2)` | 4.2 ± 0.1 | 4.0 | 5.2 | 2.86 ± 0.52 |
+| `reduct (-O3)` | 4.2 ± 0.1 | 4.0 | 4.9 | 2.85 ± 0.52 |
+| `lua` | 6.1 ± 0.7 | 5.8 | 11.8 | 4.17 ± 0.90 |
+| `luajit (jit)` | 1.6 ± 0.3 | 1.4 | 3.4 | 1.08 ± 0.28 |
 | `luajit (int)` | 1.5 ± 0.3 | 1.3 | 3.1 | 1.00 |
-| `janet` | 9.8 ± 1.5 | 9.2 | 21.5 | 6.66 ± 1.61 |
+| `janet` | 10.2 ± 1.7 | 9.2 | 19.4 | 6.97 ± 1.68 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 100.62K |
+| `reduct (-O2)` | 131.82K |
+| `reduct (-O3)` | 131.82K |
 | `lua` | 105.45K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
@@ -752,23 +760,43 @@ All benchmarks were performed on the following system:
 
 ---
 
-### mandelbrot
+### mandelbrot_map
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 259.8 ± 2.2 | 257.4 | 264.5 | 14.58 ± 0.94 |
-| `lua` | 287.8 ± 6.5 | 282.8 | 301.4 | 16.15 ± 1.10 |
-| `luajit (jit)` | 17.8 ± 1.1 | 17.4 | 31.5 | 1.00 |
-| `luajit (int)` | 126.6 ± 6.7 | 123.7 | 152.4 | 7.10 ± 0.59 |
+| `reduct (-O2)` | 49.8 ± 2.2 | 46.7 | 57.9 | 1.00 ± 0.06 |
+| `reduct (-O3)` | 49.7 ± 1.7 | 46.8 | 55.5 | 1.00 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 174.77K |
+| `reduct (-O2)` | 950.44K |
+| `reduct (-O3)` | 966.83K |
+
+---
+
+### mandelbrot
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `reduct (-O2)` | 263.2 ± 1.5 | 261.1 | 266.4 | 14.45 ± 0.94 |
+| `reduct (-O3)` | 269.6 ± 11.2 | 262.5 | 293.6 | 14.80 ± 1.14 |
+| `lua` | 292.1 ± 12.7 | 285.2 | 328.0 | 16.04 ± 1.25 |
+| `luajit (jit)` | 18.2 ± 1.2 | 17.7 | 31.8 | 1.00 |
+| `luajit (int)` | 126.4 ± 3.1 | 125.0 | 139.4 | 6.94 ± 0.48 |
+
+##### Memory Usage
+
+| Command | Peak Memory |
+|:---|---:|
+| `reduct (-O2)` | 173.50K |
+| `reduct (-O3)` | 173.50K |
 | `lua` | 112.02K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
+
+---
 
 ## Testing
 

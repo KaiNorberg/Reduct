@@ -11,6 +11,7 @@
 #include <reduct/intrinsic.h>
 #include <reduct/item.h>
 #include <reduct/list.h>
+#include <reduct/scratch.h>
 
 #include <stdlib.h>
 
@@ -303,11 +304,12 @@ static inline void reduct_emitter_emit_region_result(reduct_emitter_t* emitter, 
     reduct_emitter_release_origin(emitter, result->edge->origin);
 }
 
-static inline reduct_emitter_expr_t reduct_emitter_fetch_origin(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    uint16_t index, reduct_reg_t target)
+static inline void reduct_emit_inst_at(reduct_emitter_t* emitter, reduct_inst_t inst, reduct_rvsdg_node_t* node)
 {
-    reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, index);
-    return reduct_emit_origin(emitter, input->edge->origin, target);
+    assert(emitter != NULL);
+    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
+    uint32_t pos = (item->inputId != REDUCT_INPUT_ID_NONE) ? item->position : 0;
+    reduct_function_emit(emitter->reduct, emitter->function, inst, pos);
 }
 
 static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_emitter_expr_t* expr,
@@ -874,25 +876,36 @@ static inline bool reduct_emitter_can_use_skip(const reduct_rvsdg_origin_t* orig
     return origin->useCount == 1;
 }
 
+static inline void reduct_emitter_finalize_jmp(reduct_emitter_t* emitter, uint32_t jmpIdx)
+{
+    int32_t sax = (int32_t)(emitter->function->instCount - jmpIdx - 1);
+    emitter->function->insts[jmpIdx] = REDUCT_INST_SET_SAX(emitter->function->insts[jmpIdx], sax);
+}
+
 static inline reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
     reduct_reg_t target)
 {
     assert(emitter != NULL && node != NULL);
-    assert(node->type == REDUCT_RVSDG_NODE_TYPE_GAMMA);
     REDUCT_ERROR_ASSERT(emitter->reduct, node->regionCount == 2, "gamma node must have exactly 2 regions for now");
 
-    reduct_rvsdg_user_t* condInput = reduct_rvsdg_node_get_input(node, 0);
-    reduct_rvsdg_origin_t* condOrigin = condInput->edge->origin;
-
+    reduct_rvsdg_origin_t* condOrigin = reduct_rvsdg_node_get_input_origin(node, 0);
     reduct_rvsdg_region_t* elseRegion = node->firstRegion;
     reduct_rvsdg_region_t* thenRegion = elseRegion->next;
 
     bool thenSimple = target == REDUCT_REGISTER_RETURN && reduct_emitter_is_region_simple_return(thenRegion);
     bool elseSimple = target == REDUCT_REGISTER_RETURN && reduct_emitter_is_region_simple_return(elseRegion);
 
-    if (reduct_emitter_can_use_skip(condOrigin) && (thenSimple || elseSimple))
+    const bool canUseSkip = reduct_emitter_can_use_skip(condOrigin);
+    reduct_reg_t targetReg = (target == REDUCT_REGISTER_INVALID) ? reduct_emitter_alloc_register(emitter) : target;
+
+    if (canUseSkip && (thenSimple || elseSimple))
     {
-        reduct_opcode_t skipOp = REDUCT_OPCODE_TO_SKIP(condOrigin->node->opcode);
+        reduct_rvsdg_node_t* cmpNode = condOrigin->node;
+        reduct_opcode_t skipOp = REDUCT_OPCODE_TO_SKIP(cmpNode->opcode);
+
+        reduct_item_t* prevItem = emitter->lastItem;
+        emitter->lastItem = REDUCT_CONTAINER_OF(cmpNode, reduct_item_t, rvsdgNode);
+
         reduct_rvsdg_region_t* first = thenSimple ? thenRegion : elseRegion;
         reduct_rvsdg_region_t* second = thenSimple ? elseRegion : thenRegion;
 
@@ -901,22 +914,17 @@ static inline reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter,
             skipOp = REDUCT_OPCODE_INVERT_SKIP(skipOp);
         }
 
-        reduct_emitter_emit_skip_op(emitter, condOrigin->node, skipOp);
+        reduct_emitter_emit_skip_op(emitter, cmpNode, skipOp);
 
-        reduct_emitter_emit_region_result(emitter, first, target);
-        reduct_emitter_emit_region_result(emitter, second, target);
+        reduct_emitter_emit_region_result(emitter, first, targetReg);
+        reduct_emitter_emit_region_result(emitter, second, targetReg);
 
+        emitter->lastItem = prevItem;
         return REDUCT_EMITTER_EXPR_NONE;
     }
 
-    reduct_reg_t targetReg = target;
-    if (targetReg == REDUCT_REGISTER_INVALID)
-    {
-        targetReg = reduct_emitter_alloc_register(emitter);
-    }
-
     uint32_t jmpElseIdx;
-    if (reduct_emitter_can_use_skip(condOrigin))
+    if (canUseSkip)
     {
         jmpElseIdx = reduct_emit_skip_condition(emitter, condOrigin->node);
     }
@@ -940,17 +948,12 @@ static inline reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter,
         reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_JMP, 0, 0, 0));
     }
 
-    {
-        int32_t sax = (int32_t)(emitter->function->instCount - jmpElseIdx - 1);
-        emitter->function->insts[jmpElseIdx] = REDUCT_INST_SET_SAX(emitter->function->insts[jmpElseIdx], sax);
-    }
-
+    reduct_emitter_finalize_jmp(emitter, jmpElseIdx);
     reduct_emitter_emit_region_result(emitter, elseRegion, targetReg);
 
     if (targetReg != REDUCT_REGISTER_RETURN)
     {
-        int32_t sax = (int32_t)(emitter->function->instCount - jmpEndIdx - 1);
-        emitter->function->insts[jmpEndIdx] = REDUCT_INST_SET_SAX(emitter->function->insts[jmpEndIdx], sax);
+        reduct_emitter_finalize_jmp(emitter, jmpEndIdx);
     }
 
     if (targetReg == REDUCT_REGISTER_RETURN)

@@ -109,6 +109,7 @@ typedef struct reduct_global
 {
     int argc;
     char** argv;
+    reduct_handle_t nil;
     reduct_input_global_t input;
     reduct_import_global_t import;
     reduct_lib_global_t lib;
@@ -132,7 +133,6 @@ typedef struct reduct
     thrd_t thrd;
     reduct_global_t* global;
     reduct_error_t* error;
-    reduct_handle_t nil;
     reduct_atom_local_t atom;
     reduct_item_local_t item;
     reduct_scratch_local_t scratch;

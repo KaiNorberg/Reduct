@@ -513,9 +513,13 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  *
  * @param _reduct Pointer to the Reduct structure.
  */
-#define REDUCT_HANDLE_NIL(_reduct) ((_reduct)->nil)
-
-#define REDUCT_HANDLE_FALSE(_reduct) REDUCT_HANDLE_NIL(_reduct) ///< Constant false handle.
+#define REDUCT_HANDLE_NIL(_reduct) ((_reduct)->global->nil)
+/**
+ * @brief Get the constant false (nil) handle.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ */
+#define REDUCT_HANDLE_FALSE(_reduct) REDUCT_HANDLE_NIL(_reduct)
 
 #define REDUCT_HANDLE_TRUE() REDUCT_HANDLE_FROM_NUMBER(1.0) ///< Constant true handle.
 

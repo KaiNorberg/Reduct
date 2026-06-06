@@ -124,7 +124,7 @@ REDUCT_API int reduct_task_worker(void* arg)
         {
             break;
         }
-        
+
         mtx_lock(&global->mutex);
         size_t head = atomic_load_explicit(&global->queueHead, memory_order_acquire);
         size_t tail = atomic_load_explicit(&global->queueTail, memory_order_acquire);
@@ -216,6 +216,7 @@ REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(st
     {
         reduct_task_try_work(reduct);
         REDUCT_GC_CHECK(reduct);
+        thrd_yield();
     }
 
     return id;
@@ -227,6 +228,7 @@ REDUCT_API void reduct_task_join(reduct_t* reduct, reduct_task_id_t id)
     {
         reduct_task_try_work(reduct);
         REDUCT_GC_CHECK(reduct);
+        thrd_yield();
     }
 }
 
@@ -235,8 +237,6 @@ REDUCT_API void reduct_task_barrier(reduct_t* reduct)
     reduct_task_global_t* global = &reduct->global->task;
 
     uint32_t gen = atomic_load_explicit(&global->barrierGen, memory_order_acquire);
-
-    cnd_broadcast(&global->cond);
 
     if (atomic_fetch_add_explicit(&global->barrierCount, 1, memory_order_acq_rel) + 1 >= reduct->global->threadCount)
     {
@@ -252,6 +252,7 @@ REDUCT_API void reduct_task_barrier(reduct_t* reduct)
         {
             break;
         }
+        cnd_broadcast(&global->cond);
         thrd_yield();
     }
 }

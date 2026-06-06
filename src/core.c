@@ -128,11 +128,11 @@ REDUCT_API reduct_t* reduct_new(void)
         reduct_item_local_init(&thread->item);
         reduct_scratch_local_init(&thread->scratch);
         reduct_eval_local_init(&thread->eval);
-        thread->nil = REDUCT_HANDLE_CREATE_LIST(thread);
     }
 
     reduct_t* master = &global->threads[0];
     master->thrd = thrd_current();
+    global->nil = REDUCT_HANDLE_CREATE_LIST(master);
 
     for (size_t i = 1; i < global->threadCount; i++)
     {
@@ -213,6 +213,11 @@ REDUCT_API void reduct_global_lib_add(reduct_t* reduct, reduct_lib_t lib)
     {
         reduct->global->lib.capacity = REDUCT_LIBS_INITIAL;
         reduct->global->lib.array = (reduct_lib_t*)calloc(reduct->global->lib.capacity, sizeof(reduct_lib_t));
+        if (reduct->global->lib.array == NULL)
+        {
+            reduct_rwmutex_write_unlock(&reduct->global->lib.mutex);
+            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+        }
     }
     else if (reduct->global->lib.count >= reduct->global->lib.capacity)
     {
