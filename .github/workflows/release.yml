@@ -16,7 +16,6 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-          - os: macos-latest
           - os: windows-latest
             cmake_extra: -G Ninja -DCMAKE_C_COMPILER=clang
 
