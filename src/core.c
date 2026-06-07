@@ -174,7 +174,7 @@ REDUCT_API void reduct_free(reduct_t* reduct)
     for (size_t i = 0; i < global->threadCount; i++)
     {
         reduct_t* thread = &global->threads[i];
-        if (thrd_equal(thread->thrd, thrd_current()))
+        if (!thrd_equal(thread->thrd, thrd_current()))
         {
             thrd_join(thread->thrd, NULL);
         }
