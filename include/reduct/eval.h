@@ -1,9 +1,9 @@
 #ifndef REDUCT_EVAL_H
 #define REDUCT_EVAL_H 1
 
-#include "reduct/function.h"
-#include "reduct/handle.h"
-#include "reduct/optimize.h"
+#include <reduct/function.h>
+#include <reduct/handle.h>
+#include <reduct/optimize.h>
 
 struct reduct_closure;
 
@@ -31,21 +31,53 @@ typedef struct reduct_eval_frame
 {
     struct reduct_closure* closure; ///< The closure being evaluated.
     reduct_inst_t* ip;              ///< The current instruction pointer.
+    reduct_handle_t* constants;     ///< Cached pointer to closure constants.
     uint32_t base;                  ///< The base register, where the functions registers start.
     uint32_t prevRegCount;          ///< The previous register count to restore upon return.
 } reduct_eval_frame_t;
 
 /**
- * @brief Evaluates a compiled Reduct function.
- *
- * @param reduct The Reduct instance.
- * @param function The function to evaluate.
- * @return The result of the evaluation as a Reduct handle.
+ * @brief Per-thread eval-related state structure.
+ * @struct reduct_eval_local_t
  */
-REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t function);
+typedef struct reduct_eval_state
+{
+    struct reduct_eval_frame* frames;
+    size_t frameCount;
+    size_t frameCapacity;
+    reduct_handle_t* regs;
+    size_t regCount;
+    size_t regCapacity;
+} reduct_eval_local_t;
 
 /**
- * @brief Parses, compiles and evaluates a file.
+ * @brief Initialize a local eval state.
+ *
+ * @param local Pointer to the local eval state to initialize.
+ */
+REDUCT_API void reduct_eval_local_init(reduct_eval_local_t* local);
+
+/**
+ * @brief Deinitialize a local eval state.
+ *
+ * @param local Pointer to the local eval state to deinitialize.
+ */
+REDUCT_API void reduct_eval_local_deinit(reduct_eval_local_t* local);
+
+/**
+ * @brief Evaluates a handle.
+ *
+ * If the handle is a compiled function then it will be interpreted, otherwise, it will first be compiled into a
+ * function.
+ *
+ * @param reduct The Reduct instance.
+ * @param handle The handle to evaluate.
+ * @return The result of the evaluation as a Reduct handle.
+ */
+REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t handle);
+
+/**
+ * @brief Parses, builds, optimizes, emits and evaluates a file.
  *
  * @param reduct The Reduct instance.
  * @param path The path to the file.
@@ -55,7 +87,7 @@ REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t fu
 REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* path, reduct_optimize_flags_t optimize);
 
 /**
- * @brief Parses, compiles and evaluates a string.
+ * @brief Parses, builds, optimizes, emits and evaluates a string.
  *
  * @param reduct The Reduct instance.
  * @param str The string to evaluate.

@@ -1,19 +1,23 @@
+#include "reduct/emit.h"
 #ifndef REDUCT_CORE_H
 #define REDUCT_CORE_H 1
 
-#include "reduct/atom.h"
-#include "reduct/defs.h"
-#include "reduct/error.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
-#include "reduct/native.h"
-#include "reduct/schema.h"
+#include <reduct/atom.h>
+#include <reduct/defs.h>
+#include <reduct/error.h>
+#include <reduct/eval.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
+#include <reduct/native.h>
+#include <reduct/schema.h>
+#include <reduct/scratch.h>
+#include <reduct/task.h>
 
 struct reduct_item;
 struct reduct_eval_frame;
 
 #include <assert.h>
-#include <setjmp.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 
 /**
@@ -57,14 +61,39 @@ typedef struct reduct_input
 } reduct_input_t;
 
 /**
- * @brief Scratch buffer structure.
- * @struct reduct_scratch_t
+ * @brief Global input-related state structure.
+ * @struct reduct_input_global_t
  */
-typedef struct reduct_scratch
+typedef struct
 {
-    char* buffer;
-    size_t length;
-} reduct_scratch_t;
+    reduct_rwmutex_t mutex;
+    reduct_input_t* head;
+    reduct_input_id_t nextId;
+} reduct_input_global_t;
+
+/**
+ * @brief Global import-related state structure.
+ * @struct reduct_import_global_t
+ */
+typedef struct
+{
+    reduct_rwmutex_t mutex;
+    char** paths;
+    size_t count;
+    size_t capacity;
+} reduct_import_global_t;
+
+/**
+ * @brief Global library-related state structure.
+ * @struct reduct_lib_global_t
+ */
+typedef struct
+{
+    reduct_rwmutex_t mutex;
+    reduct_lib_t* array;
+    size_t count;
+    size_t capacity;
+} reduct_lib_global_t;
 
 #define REDUCT_SCRATCH_INITIAL 128 ///< Initial scratch buffer size.
 #define REDUCT_SCRATCH_MAX 16      ///< The maximum number of scratch buffers.
@@ -73,63 +102,50 @@ typedef struct reduct_scratch
 #define REDUCT_LIBS_GROWTH 2  ///< Growth factor of the library array.
 
 /**
- * @brief State structure.
+ * @brief Global state structure.
+ * @struct reduct_global_t
+ */
+typedef struct reduct_global
+{
+    int argc;
+    char** argv;
+    reduct_handle_t nil;
+    reduct_input_global_t input;
+    reduct_import_global_t import;
+    reduct_lib_global_t lib;
+    struct reduct* threads;
+    uint64_t threadCount;
+    reduct_atom_global_t atom;
+    reduct_native_global_t native;
+    reduct_item_global_t item;
+    reduct_gc_global_t gc;
+    reduct_schema_global_t schema;
+    reduct_optimize_global_t optimize;
+    reduct_task_global_t task;
+} reduct_global_t;
+
+/**
+ * @brief Per-thread state structure.
  * @struct reduct_t
  */
 typedef struct reduct
 {
-    reduct_handle_t nil;
-    struct reduct_eval_frame* frames;
-    size_t frameCount;
-    size_t frameCapacity;
-    reduct_handle_t* regs;
-    size_t regCount;
-    size_t regCapacity;
-    reduct_item_t** retained;
-    size_t retainedCount;
-    size_t retainedCapacity;
-    size_t prevBlockCount;
-    size_t blockCount;
-    reduct_item_block_t* block;
-    size_t freeCount;
-    reduct_item_t* freeList;
-    reduct_atom_stack_t* atomStack;
-    size_t atomMapSize;
-    size_t atomMapTombstones;
-    size_t atomMapCapacity;
-    size_t atomMapMask;
-    reduct_atom_t** atomMap;
-    size_t nativeMapSize;
-    size_t nativeMapCapacity;
-    size_t nativeMapMask;
-    reduct_native_entry_t* nativeMap;
-    size_t scratchSize;
-    size_t scratchCapacity;
-    reduct_scratch_t scratch[REDUCT_SCRATCH_MAX];
-    reduct_input_t* input;
+    thrd_t thrd;
+    reduct_global_t* global;
     reduct_error_t* error;
-    reduct_input_id_t newInputId;
-    reduct_lib_t* libs;
-    size_t libCount;
-    size_t libCapacity;
-    char** importPaths;
-    size_t importPathCount;
-    size_t importPathCapacity;
-    reduct_schema_internal_t** schemas;
-    size_t schemaCount;
-    size_t schemaCapacity;
+    reduct_atom_local_t atom;
+    reduct_item_local_t item;
+    reduct_scratch_local_t scratch;
+    reduct_eval_local_t eval;
     void* userdata;
-    int argc;
-    char** argv;
 } reduct_t;
 
 /**
- * @brief Create a new Reduct structure.
+ * @brief Create a new Reduct environment.
  *
- * @param error Pointer to the error structure to be used for error reporting.
- * @return A pointer to the newly allocated Reduct structure.
+ * @return A pointer to the first per thread state structure of the new environment or `NULL`.
  */
-REDUCT_API reduct_t* reduct_new(reduct_error_t* error);
+REDUCT_API reduct_t* reduct_new(void);
 
 /**
  * @brief Free the Reduct structure.
@@ -137,6 +153,14 @@ REDUCT_API reduct_t* reduct_new(reduct_error_t* error);
  * @param reduct Pointer to the Reduct structure to free.
  */
 REDUCT_API void reduct_free(reduct_t* reduct);
+
+/**
+ * @brief Add a loaded library handle to the global state.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param lib The library handle.
+ */
+REDUCT_API void reduct_global_lib_add(reduct_t* reduct, reduct_lib_t lib);
 
 /**
  * @brief Set the user data pointer for the Reduct structure.
@@ -196,70 +220,17 @@ REDUCT_API reduct_input_t* reduct_input_new(reduct_t* reduct, const char* buffer
 REDUCT_API reduct_input_t* reduct_input_lookup(reduct_t* reduct, reduct_input_id_t id);
 
 /**
- * @brief Allocate a scratch buffer.
+ * @brief Resolve a path relative to the current execution frame or import paths.
  *
- * @param _reduct Pointer to the Reduct structure.
- * @param _name The name of the buffer pointer.
- * @param _type The type of the elements.
- * @param _length The number of elements of `_type` to reserve memory for.
+ * @param reduct Pointer to the Reduct structure.
+ * @param path The path string to resolve.
+ * @param pathLen The length of the path string.
+ * @param outPath Pointer to the buffer where the resolved path will be stored.
+ * @param maxLen The maximum length of the output buffer.
+ * @param checkExistence Whether to check if the file exists when resolving relative paths.
  */
-#define REDUCT_SCRATCH(_reduct, _name, _type, _length) \
-    _type* _name = NULL; \
-    do \
-    { \
-        size_t _needed = (_length) * sizeof(_type); \
-        if ((_reduct)->scratchSize >= REDUCT_SCRATCH_MAX) \
-        { \
-            REDUCT_ERROR_INTERNAL(_reduct, "scratch buffer overflow"); \
-        } \
-        reduct_scratch_t* _s = &(_reduct)->scratch[(_reduct)->scratchSize++]; \
-        _s->buffer = malloc(_needed); \
-        if (_s->buffer == NULL) \
-        { \
-            REDUCT_ERROR_INTERNAL(_reduct, "out of memory"); \
-        } \
-        _s->length = _needed; \
-        _name = (_type*)_s->buffer; \
-    } while (0)
-
-/**
- * @brief Grow an allocated scratch buffer, the current buffer must be the last one allocated.
- *
- * @param _reduct Pointer to the Reduct structure.
- * @param _name The name of the buffer pointer.
- * @param _type The type of the elements.
- * @param _length The number of elements of `_type` to reserve memory for.
- */
-#define REDUCT_SCRATCH_GROW(_reduct, _name, _type, _length) \
-    do \
-    { \
-        size_t _needed = (_length) * sizeof(_type); \
-        reduct_scratch_t* _s = &(_reduct)->scratch[(_reduct)->scratchSize - 1]; \
-        _s->buffer = realloc(_s->buffer, _needed); \
-        if (_s->buffer == NULL) \
-        { \
-            REDUCT_ERROR_INTERNAL(_reduct, "out of memory"); \
-        } \
-        _s->length = _needed; \
-        _name = (_type*)_s->buffer; \
-    } while (0)
-
-/**
- * @brief Free a scratch buffer, the current buffer must be the last one allocated.
- *
- * @param _reduct Pointer to the Reduct structure.
- * @param _name The name of the buffer pointer.
- */
-#define REDUCT_SCRATCH_FREE(_reduct, _name) \
-    do \
-    { \
-        assert((_reduct)->scratchSize > 0); \
-        reduct_scratch_t* _s = &(_reduct)->scratch[--(_reduct)->scratchSize]; \
-        free(_s->buffer); \
-        _s->buffer = NULL; \
-        _s->length = 0; \
-        _name = NULL; \
-    } while (0)
+REDUCT_API void reduct_resolve_path(reduct_t* reduct, const char* path, size_t pathLen, char* outPath, size_t maxLen,
+    bool checkExistence);
 
 /**
  * @brief Hash a string.

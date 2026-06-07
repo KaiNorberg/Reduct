@@ -3,8 +3,8 @@
 
 struct reduct_item;
 
-#include "reduct/defs.h"
-#include "reduct/function.h"
+#include <reduct/defs.h>
+#include <reduct/function.h>
 
 /**
  * @file closure.h

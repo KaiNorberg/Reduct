@@ -1,19 +1,2 @@
-(do
-    (def a 10)
-    (assert! (== a 10) "def should bind 'a' to 10")
-
-    (do
-        (def a 30)
-        (def b 40)
-        (assert! (== a 30) "def in nested do should shadow the outer variable 'a'")
-        (assert! (== b 40) "def in nested do should bind local variable 'b'")
-    )
-
-    (assert! (== a 10) "outer 'a' should remain unchanged after nested do block exits")
-
-    (do
-        (def x 5)
-        (def y x)
-        (assert! (== y 5) "'y' should be able to reference 'x' in sequential def bindings")
-    )
-)
+(def a 10)
+(assert! (world) (== a 10) "def should bind 'a' to 10")

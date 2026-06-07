@@ -1,7 +1,7 @@
-#include "reduct/stringify.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
+#include <reduct/handle.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
+#include <reduct/stringify.h>
 
 REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, char* buffer, size_t size)
 {
@@ -10,18 +10,14 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, cha
 
     if (REDUCT_HANDLE_IS_NIL(handle))
     {
-        return snprintf(buffer, size, "<none>");
+        return snprintf(buffer, size, "<nil>");
     }
 
     if (!REDUCT_HANDLE_IS_ITEM(handle))
     {
-        if (REDUCT_HANDLE_IS_INT(handle))
+        if (REDUCT_HANDLE_IS_NUMBER(handle))
         {
-            return snprintf(buffer, size, "%lld", (long long)REDUCT_HANDLE_TO_INT(handle));
-        }
-        else if (REDUCT_HANDLE_IS_FLOAT(handle))
-        {
-            return snprintf(buffer, size, "%g", (double)REDUCT_HANDLE_TO_FLOAT(handle));
+            return snprintf(buffer, size, "%f", REDUCT_HANDLE_TO_NUMBER(handle));
         }
 
         return snprintf(buffer, size, "<unknown>");
@@ -35,13 +31,9 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, cha
         reduct_atom_t* atom = &item->atom;
         if (!(atom->flags & REDUCT_ATOM_FLAG_QUOTED))
         {
-            if (reduct_atom_is_int(atom))
+            if (reduct_atom_is_number(atom))
             {
-                return snprintf(buffer, size, "%lld", (long long)reduct_atom_get_int(atom));
-            }
-            else if (reduct_atom_is_float(atom))
-            {
-                return snprintf(buffer, size, "%g", (double)reduct_atom_get_float(atom));
+                return snprintf(buffer, size, "%f", reduct_atom_get_number(atom));
             }
             else if (reduct_atom_is_native(reduct, atom))
             {
@@ -63,23 +55,17 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, cha
         size_t res = snprintf(buffer, size, "(");
         written += res;
 
-        reduct_list_iter_t iter = REDUCT_LIST_ITER(&item->list);
-        reduct_list_chunk_t chunk;
-        while (reduct_list_iter_next_chunk(&iter, &chunk))
+        reduct_handle_t child;
+        REDUCT_LIST_FOR_EACH(&child, &item->list)
         {
-            size_t baseIdx = iter.index - chunk.count;
-            for (size_t i = 0; i < chunk.count; i++)
-            {
-                reduct_handle_t child = chunk.handles[i];
-                res = reduct_stringify(reduct, child, size > written ? buffer + written : NULL,
-                    size > written ? size - written : 0);
-                written += res;
+            res = reduct_stringify(reduct, child, size > written ? buffer + written : NULL,
+                size > written ? size - written : 0);
+            written += res;
 
-                if (baseIdx + i + 1 < item->length)
-                {
-                    res = snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, " ");
-                    written += res;
-                }
+            if (_index + 1 < item->length)
+            {
+                res = snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, " ");
+                written += res;
             }
         }
 

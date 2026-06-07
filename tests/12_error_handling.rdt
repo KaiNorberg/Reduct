@@ -1,10 +1,12 @@
-(do
-    (assert! (== (try (lambda () (+ 1 2)) (lambda (err) "fail")) 3) "try should return result of callable if no error")
-    (assert! (== (try (lambda () (throw! "error message")) (lambda (err) err)) "error message") "try should catch throw! and return error message to handler")
     
-    (def result (try 
-        (lambda () (assert! false "assertion failed"))
-        (lambda (msg) (concat "caught: " msg))
-    ))
+(def result (try 
+    (lambda () (assert! (world) false "assertion failed"))
+    (lambda (msg) (concat "caught: " msg))
+))
+
+(-> (world)
+    (assert! (== (try (lambda () (+ 1 2)) (lambda (err) "fail")) 3) "try should return result of callable if no error")
+    (assert! (== (try (lambda () (throw "error message")) (lambda (err) err)) "error message") "try should catch throw and return error message to handler")
+
     (assert! (== result "caught: assertion failed") "try should catch failed assert!")
 )

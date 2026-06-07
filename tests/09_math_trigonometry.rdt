@@ -1,4 +1,4 @@
-(do
+(-> (world)
     (assert! (== (+ 1 2) 3) "addition should work")
     (assert! (== (- 10 4) 6) "subtraction should work")
     (assert! (== (* 3 4) 12) "multiplication should work")

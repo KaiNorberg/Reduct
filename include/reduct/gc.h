@@ -1,22 +1,44 @@
+#include "reduct/sync.h"
 #ifndef REDUCT_GC_H
 #define REDUCT_GC_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
 
-#include "reduct/core.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
+#include <reduct/handle.h>
+#include <reduct/item.h>
 
 /**
  * @file gc.h
  * @brief Garbage collection
  * @defgroup gc Garbage Collection
  *
+ * @todo Reimplement Garbage Collector.
+ *
  * @{
  */
 
-#define REDUCT_GC_RETAINED_INITAL 16 ///< Initial capacity for the retained items array.
-#define REDUCT_GC_RETAINED_GROWTH 2  ///< Growth factor for the retained items array.
+/**
+ * @brief Global garbage collection-related state structure.
+ * @struct reduct_gc_global_t
+ */
+typedef struct
+{
+    _Atomic(bool) requested;
+} reduct_gc_global_t;
+
+/**
+ * @brief Initialize a global gc state.
+ *
+ * @param global Pointer to the global gc state to initialize.
+ */
+REDUCT_API void reduct_gc_global_init(reduct_gc_global_t* global);
+
+/**
+ * @brief Deinitialize a global gc state.
+ *
+ * @param global Pointer to the global gc state to deinitialize.
+ */
+REDUCT_API void reduct_gc_global_deinit(reduct_gc_global_t* global);
 
 /**
  * @brief Run the garbage collector.
@@ -26,39 +48,33 @@
  *
  * @param reduct Pointer to the Reduct structure.
  */
-REDUCT_API void reduct_gc(reduct_t* reduct);
+REDUCT_API void reduct_gc(struct reduct* reduct);
 
 /**
- * @brief Optionally run the garbage collector if the free list is low.
+ * @brief Check if the garbage collector should be ran and run it if so.
  *
- * @param reduct Pointer to the Reduct structure.
+ * State and env pointer must be specified sep
+ *
+ * @param _reduct Pointer to the Reduct structure.
  */
-static inline REDUCT_ALWAYS_INLINE void reduct_gc_if_needed(reduct_t* reduct)
+#define REDUCT_GC_CHECK(_reduct) \
+    do \
+    { \
+        if (REDUCT_UNLIKELY(atomic_load_explicit(&_reduct->global->gc.requested, memory_order_relaxed))) \
+        { \
+            reduct_gc(_reduct); \
+        } \
+    } while (0)
+
+/**
+ * @brief Request that the garbage collector be ran without immediately running it.
+ *
+ * @param gc Pointer to the GC environment.
+ */
+static inline REDUCT_ALWAYS_INLINE void reduct_gc_request(reduct_gc_global_t* gc)
 {
-    assert(reduct != NULL);
-
-    if (REDUCT_UNLIKELY(reduct->blockCount * REDUCT_ITEM_BLOCK_MAX * 3 > reduct->freeCount * 4 &&
-            reduct->blockCount > reduct->prevBlockCount))
-    {
-        reduct_gc(reduct);
-    }
+    atomic_store_explicit(&gc->requested, true, memory_order_relaxed);
 }
-
-/**
- * @brief Retain an item, preventing it from being collected by the garbage collector.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param item Pointer to the item to retain.
- */
-REDUCT_API void reduct_gc_retain(reduct_t* reduct, struct reduct_item* item);
-
-/**
- * @brief Release an item, potentially allowing the garbage collector to collect it.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param item Pointer to the item to release.
- */
-REDUCT_API void reduct_gc_release(reduct_t* reduct, struct reduct_item* item);
 
 /** @} */
 

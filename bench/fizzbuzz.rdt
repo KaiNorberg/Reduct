@@ -2,15 +2,14 @@
     (def iter (lambda (n)
         (if {n >= limit}
             ""
-            (do 
+            (iter (println! (++ n)             
                 (cond
-                    ({n % 15 == 0} (println! "FizzBuzz"))
-                    ({n % 3 == 0} (println! "Fizz"))
-                    ({n % 5 == 0} (println! "Buzz"))
-                    (true (println! n))
+                    ({n % 15 == 0} "FizzBuzz")
+                    ({n % 3 == 0} "Fizz")
+                    ({n % 5 == 0} "Buzz")
+                    (true n)
                 )
-                (iter (++ n))
-            )
+            ))
         )
     ))
 

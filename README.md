@@ -24,7 +24,7 @@
 </div>
 <br>
 
-Reduct is a functional, immutable, S-expression based configuration and scripting language. It aims to combine the flexibility of a Lisp with the ease-of-use and performance of a language like Lua.
+Reduct is a functional, immutable, S-expression based configuration and scripting language featuring automatic parallelization and an RVSDG inspired IR. It aims to combine the flexibility of a Lisp with the ease-of-use and performance of a language like Lua.
 
 ## Setup
 
@@ -100,14 +100,14 @@ Atoms are the most basic building blocks of Reduct. They are sequences of charac
 
 ```lisp
 "This is a string atom"
-12345 // An integer-shaped atom
-3.14159 // A float-shaped atom
+12345 // A number-shaped atom
+3.14159 // A number-shaped atom
 my-variable // A symbol-shaped atom
 ```
 
 There are no explicit integers or floats within Reduct, only atoms with different "shapes".
 
-An atom can be either string-shaped, integer-shaped or float-shaped, for convenience an atom that is integer-shaped or float-shaped is also considered number-shaped.
+An atom can be either string-shaped or number-shaped.
 
 ### Callables
 
@@ -156,7 +156,7 @@ For more examples, see the `bench/` and `tests/` directories.
 
 ## Motivation
 
-Reduct aims to provide a series of potential advantages that over existing languages.
+Reduct aims to provide a series of potential advantages over existing languages.
 
 ### Immutability
 
@@ -264,7 +264,7 @@ Comments are ignored by the parser and can be used to document your code.
 
 ### Association Lists
 
-The parser provides syntax sugar around the `get-in` native such that any atom followed by a `.` and another atom or list (e.g., `a.b`), that does not evaluate to a float-shaped atom, will be expanded into a `get-in` call.
+The parser provides syntax sugar around the `get-in` native such that any atom followed by a `.` and another atom or list (e.g., `a.b`), that does not evaluate to a number-shaped atom, will be expanded into a `get-in` call.
 
 For example:
 
@@ -346,34 +346,16 @@ This system can also be used to implement more complex logic, such as emulating 
 
 ## Additional Concepts
 
-### Type Coercion
-
-For any math intrinsic that takes in multiple arguments, C-like type promotion rules are used.
-
-This means that if any of the atoms provided to the operation are float-shaped, the others will also be converted to floats. Otherwise, they will be converted to integers.
-
-If one or more of the atoms are neither integer-shaped nor float-shaped, the evaluation will fail.
-
-For example:
-
-```lisp
-(+ 1 2.5) // Evaluates to "3.5"
-(* 2 3) // Evaluates to "6"
-(/ 10 3) // Evaluates to "3"
-(/ 10 3.0) // Evaluates to "3.333333"
-(+ "1" 2) // Error
-```
-
 ### Truthiness
 
-A truthy item is any item that is not falsy. Falsy items include `nil` (an empty list), an empty atom, the constant `false` (which evaluates to `0`), or any number-shaped atom that evaluates to zero.
+A truthy item is any item that is not `nil`. The only falsy item is `nil` (an empty list).
 
 For example:
 
 ```lisp
 (if () "truthy" "falsy") // Evaluates to "falsy"
-(if 0 "truthy" "falsy") // Evaluates to "falsy"
-(if "" "truthy" "falsy") // Evaluates to "falsy"
+(if 0 "truthy" "falsy") // Evaluates to "truthy"
+(if "" "truthy" "falsy") // Evaluates to "truthy"
 (if 1 "truthy" "falsy") // Evaluates to "truthy"
 (if false "truthy" "falsy") // Evaluates to "falsy"
 (if true "truthy" "falsy") // Evaluates to "truthy"
@@ -391,7 +373,7 @@ number < string < list
 
 The following rules apply:
 
-- **number:** Compared by value, a greater value is considered larger. If both values are equal, but one is float-shaped and the other is integer-shaped, the float-shaped atom is considered larger.
+- **number:** Compared by numeric value, a greater value is considered larger.
 - **string:** Compared lexicographically by their ASCII characters, or by their length if one is a prefix of the other.
 - **list:** Compared item by item. A list is considered "less than" another if its first non-equal item is lesser than the other list's first non-equal item, or by their length if one is a prefix of the other.
 
@@ -416,6 +398,48 @@ As an example, locals can be used to create a more traditional "function definit
 (def add (lambda (a b) (+ a b)))
 
 (add 1 2) // Evaluates to "3"
+```
+
+### Side Effects
+
+Reduct does not have traditional side effects and can generally be considered a pure and "lazy" language. This means that any operation is assumed to have the same result given the same arguments and that a operation is not executed until its result is needed, if its result is never needed, it is never executed.
+
+While Reduct does not have any build-in edge case handling for side effects, we can still achieve the same results by using state threading.
+
+State threading is a technique where we explicitly pass the state of the world as an argument to our functions, and return the new state. In practive, the "new state" might just some random meaningless value, but the fact that we have to return it and pass it around forces us, and the compiler, to acknowledge the side effect.
+
+For example, to print a set of messages, we could write:
+
+```lisp
+(-> (world)
+    (print! "Hello,")
+    (print! "World!")
+) 
+/// Expands to:
+(print! (print! (world) "Hello,") "World!")
+```
+
+The `world` function just returns a dummy value, but since we "thread" it through the `print!` calls, we can be sure that they will be executed in the correct order.
+
+### Automatic Parallelization
+
+There are two forms of parallelization in Reduct. Certain operations, such as `map` or `filter`, are simply implemented to run in parallel when given a large enough list.
+
+For example:
+
+```lisp
+(map (lambda (x) (* x x)) (range 1000000)) // Will run in parallel.
+```
+
+The second form of parallelization is performed by the optimizer when `-O3` is specified. The optimizer will attempt to find independent function calls utilizing the RVSDG IR and emit special `REDUCT_OPCODE_FORK` and `REDUCT_OPCODE_JOIN` opcodes.
+
+For example:
+
+```lisp
+(def result1 (my-expensive-func1))
+(def result2 (my-expensive-func2))
+(def result3 (my-expensive-func3))
+(+ result1 result2 result3) /// The optimizer will attempt to execute the three expensive functions in parallel, since they are independent of each other.
 ```
 
 ## Style Guide
@@ -475,11 +499,11 @@ To create a C module, define a function named `reduct_module_init` that returns 
 ```c
 // my_module.c
 
-#include "reduct/reduct.h"
+#include <reduct/reduct.h>
 
 reduct_handle_t my_native(reduct_t* reduct, reduct_size_t argc, reduct_handle_t* argv)
 {
-    return REDUCT_HANDLE_FROM_INT(52);
+    return REDUCT_HANDLE_FROM_NUMBER(52.0);
 }
 
 reduct_handle_t reduct_module_init(reduct_t* reduct)
@@ -520,7 +544,7 @@ Included is an example of using Reduct as a library:
 
 ```c
 // my_file.c
-#include "reduct/reduct.h"
+#include <reduct/reduct.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -529,24 +553,23 @@ char buffer[0x10000];
 
 int main(int argc, char **argv)
 {    
-    reduct_t* reduct = NULL;
-
+    reduct_t* reduct = reduct_new();
+    
     reduct_error_t error = REDUCT_ERROR();
-    if (REDUCT_ERROR_CATCH(&error)) // Setup setjmp.h based error handler.
+    REDUCT_ERROR_TRY(reduct, &error)
     {
-        // We will return to here if an error occurs.
-        reduct_error_print(&error, stderr);
-        reduct_free(reduct);
-        return 1;
+        reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
+
+        reduct_handle_t result = reduct_eval_file(reduct, "my_file.rdt", REDUCT_OPTIMIZE_ALL);
+
+        reduct_stringify(reduct, &result, buffer, sizeof(buffer));
+        printf("%s\n", buffer);
     }
 
-    reduct = reduct_new(&error);
-    reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
-
-    reduct_handle_t result = reduct_eval_file(reduct, "my_file.rdt", REDUCT_OPTIMIZE_ALL);
-
-    reduct_stringify(reduct, &result, buffer, sizeof(buffer));
-    printf("%s\n", buffer);
+    if (!REDUCT_ERROR_SUCCESS(&error))
+    {
+        fprintf(stderr, "error: %s\n", error.message);
+    }
 
     reduct_free(reduct);
     return 0;
@@ -627,11 +650,11 @@ The included results were automatically generated using the `run_bench.sh` scrip
 
 All benchmarks were performed on the following system:
 
-- **Timestamp:** `Mon May 18 02:06:26 AM CEST 2026`
+- **Timestamp:** `Sun Jun  7 01:02:32 AM CEST 2026`
 - **CPU:** `AMD Ryzen 5 3600X 6-Core Processor`
 - **OS:** `Fedora Linux 43 (KDE Plasma Desktop Edition)`
-- **Kernel:** `6.19.14-200.fc43.x86_64`
-- **Reduct:** `Reduct 3.4.0+779b0a3`
+- **Kernel:** `7.0.10-100.fc43.x86_64`
+- **Reduct:** `Reduct 4.0.0+f09bd91`
 - **Hyperfine:** `hyperfine 1.20.0`
 - **Heaptrack:** `heaptrack 1.5.0`
 - **Lua:** `Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio`
@@ -643,16 +666,18 @@ All benchmarks were performed on the following system:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 1.0 ± 0.1 | 0.9 | 2.5 | 1.14 ± 0.24 |
-| `lua` | 1.2 ± 0.2 | 1.0 | 4.0 | 1.30 ± 0.28 |
-| `luajit (jit)` | 1.0 ± 0.1 | 0.9 | 2.2 | 1.12 ± 0.24 |
-| `luajit (int)` | 0.9 ± 0.1 | 0.8 | 3.9 | 1.00 |
+| `reduct (-O2)` | 1.6 ± 0.3 | 1.4 | 8.0 | 1.75 ± 0.48 |
+| `reduct (-O3)` | 1.7 ± 0.5 | 1.4 | 9.5 | 1.87 ± 0.62 |
+| `lua` | 1.2 ± 0.2 | 1.0 | 2.7 | 1.28 ± 0.33 |
+| `luajit (jit)` | 1.0 ± 0.2 | 0.9 | 2.2 | 1.09 ± 0.27 |
+| `luajit (int)` | 0.9 ± 0.2 | 0.8 | 2.0 | 1.00 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 132.73K |
+| `reduct (-O2)` | 191.18K |
+| `reduct (-O3)` | 191.18K |
 | `lua` | 103.77K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
@@ -663,18 +688,20 @@ All benchmarks were performed on the following system:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 320.2 ± 6.9 | 314.1 | 338.9 | 2.63 ± 0.10 |
-| `lua` | 737.4 ± 21.1 | 723.1 | 795.4 | 6.07 ± 0.25 |
-| `luajit (jit)` | 121.5 ± 3.7 | 117.3 | 134.0 | 1.00 |
-| `luajit (int)` | 470.9 ± 28.4 | 444.4 | 506.0 | 3.87 ± 0.26 |
-| `python3` | 1071.7 ± 48.0 | 1040.8 | 1201.8 | 8.82 ± 0.48 |
-| `janet` | 1537.4 ± 56.6 | 1447.6 | 1589.6 | 12.65 ± 0.60 |
+| `reduct (-O2)` | 347.9 ± 10.7 | 340.3 | 377.0 | 3.54 ± 0.33 |
+| `reduct (-O3)` | 98.3 ± 8.8 | 83.1 | 116.4 | 1.00 |
+| `lua` | 752.3 ± 28.6 | 721.8 | 782.8 | 7.65 ± 0.74 |
+| `luajit (jit)` | 119.4 ± 1.6 | 116.8 | 122.9 | 1.21 ± 0.11 |
+| `luajit (int)` | 467.1 ± 26.4 | 441.3 | 500.7 | 4.75 ± 0.50 |
+| `python3` | 1041.0 ± 8.2 | 1028.1 | 1053.9 | 10.59 ± 0.95 |
+| `janet` | 1490.6 ± 37.6 | 1451.8 | 1552.4 | 15.16 ± 1.41 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 101.74K |
+| `reduct (-O2)` | 125.25K |
+| `reduct (-O3)` | 376.33K |
 | `lua` | 102.45K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
@@ -685,20 +712,22 @@ All benchmarks were performed on the following system:
 
 ### fib65
 
-| Command | Mean [µs] | Min [µs] | Max [µs] | Relative |
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 736.9 ± 128.1 | 636.9 | 1670.9 | 1.00 |
-| `lua` | 960.3 ± 150.7 | 869.5 | 2463.8 | 1.30 ± 0.31 |
-| `luajit (jit)` | 815.9 ± 147.8 | 707.5 | 1734.6 | 1.11 ± 0.28 |
-| `luajit (int)` | 828.2 ± 154.4 | 705.3 | 1705.2 | 1.12 ± 0.29 |
-| `python3` | 12028.1 ± 1064.7 | 11159.6 | 21961.3 | 16.32 ± 3.18 |
-| `janet` | 3367.9 ± 498.4 | 3106.2 | 7022.3 | 4.57 ± 1.04 |
+| `reduct (-O2)` | 1.2 ± 0.2 | 1.0 | 4.4 | 1.36 ± 0.32 |
+| `reduct (-O3)` | 1.2 ± 0.1 | 1.0 | 2.2 | 1.35 ± 0.30 |
+| `lua` | 1.0 ± 0.2 | 0.9 | 2.6 | 1.19 ± 0.32 |
+| `luajit (jit)` | 0.8 ± 0.2 | 0.7 | 1.9 | 1.00 |
+| `luajit (int)` | 0.9 ± 0.2 | 0.7 | 1.8 | 1.01 ± 0.28 |
+| `python3` | 12.0 ± 1.0 | 11.3 | 20.9 | 14.11 ± 3.02 |
+| `janet` | 3.4 ± 0.5 | 3.2 | 6.9 | 4.03 ± 0.99 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 100.51K |
+| `reduct (-O2)` | 123.78K |
+| `reduct (-O3)` | 123.78K |
 | `lua` | 99.38K |
 | `luajit (jit)` | 78.30K |
 | `luajit (int)` | 78.30K |
@@ -711,17 +740,19 @@ All benchmarks were performed on the following system:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 1.5 ± 0.2 | 1.4 | 3.0 | 1.04 ± 0.26 |
-| `lua` | 6.1 ± 0.9 | 5.6 | 11.7 | 4.15 ± 0.97 |
-| `luajit (jit)` | 1.6 ± 0.3 | 1.4 | 3.2 | 1.05 ± 0.28 |
+| `reduct (-O2)` | 4.2 ± 0.1 | 4.0 | 5.2 | 2.86 ± 0.52 |
+| `reduct (-O3)` | 4.2 ± 0.1 | 4.0 | 4.9 | 2.85 ± 0.52 |
+| `lua` | 6.1 ± 0.7 | 5.8 | 11.8 | 4.17 ± 0.90 |
+| `luajit (jit)` | 1.6 ± 0.3 | 1.4 | 3.4 | 1.08 ± 0.28 |
 | `luajit (int)` | 1.5 ± 0.3 | 1.3 | 3.1 | 1.00 |
-| `janet` | 9.8 ± 1.5 | 9.2 | 21.5 | 6.66 ± 1.61 |
+| `janet` | 10.2 ± 1.7 | 9.2 | 19.4 | 6.97 ± 1.68 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 100.62K |
+| `reduct (-O2)` | 131.82K |
+| `reduct (-O3)` | 131.82K |
 | `lua` | 105.45K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
@@ -729,23 +760,43 @@ All benchmarks were performed on the following system:
 
 ---
 
-### mandelbrot
+### mandelbrot_map
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `reduct` | 259.8 ± 2.2 | 257.4 | 264.5 | 14.58 ± 0.94 |
-| `lua` | 287.8 ± 6.5 | 282.8 | 301.4 | 16.15 ± 1.10 |
-| `luajit (jit)` | 17.8 ± 1.1 | 17.4 | 31.5 | 1.00 |
-| `luajit (int)` | 126.6 ± 6.7 | 123.7 | 152.4 | 7.10 ± 0.59 |
+| `reduct (-O2)` | 49.8 ± 2.2 | 46.7 | 57.9 | 1.00 ± 0.06 |
+| `reduct (-O3)` | 49.7 ± 1.7 | 46.8 | 55.5 | 1.00 |
 
 ##### Memory Usage
 
 | Command | Peak Memory |
 |:---|---:|
-| `reduct` | 174.77K |
+| `reduct (-O2)` | 950.44K |
+| `reduct (-O3)` | 966.83K |
+
+---
+
+### mandelbrot
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `reduct (-O2)` | 263.2 ± 1.5 | 261.1 | 266.4 | 14.45 ± 0.94 |
+| `reduct (-O3)` | 269.6 ± 11.2 | 262.5 | 293.6 | 14.80 ± 1.14 |
+| `lua` | 292.1 ± 12.7 | 285.2 | 328.0 | 16.04 ± 1.25 |
+| `luajit (jit)` | 18.2 ± 1.2 | 17.7 | 31.8 | 1.00 |
+| `luajit (int)` | 126.4 ± 3.1 | 125.0 | 139.4 | 6.94 ± 0.48 |
+
+##### Memory Usage
+
+| Command | Peak Memory |
+|:---|---:|
+| `reduct (-O2)` | 173.50K |
+| `reduct (-O3)` | 173.50K |
 | `lua` | 112.02K |
 | `luajit (jit)` | 78.38K |
 | `luajit (int)` | 78.30K |
+
+---
 
 ## Testing
 
@@ -778,14 +829,14 @@ atom = string | symbol | number ;
 string = '"', { character | white_space | escape_sequence }, '"' ;
 symbol = character, { character } ;
 
-number = integer | float ;
-integer = decimal_integer | hex_integer | octal_integer | binary_integer ;
+number = decimal_integer | hex_integer | octal_integer | binary_integer | float ;
+float = float_number | float_naked_decimal | float_trailing_decimal | scientific_number | special_float ;
 
-truthy = true | expression - falsy_item ;
-falsy  = nil | '""' | false | zero ;
+truthy = expression - nil ;
+falsy  = nil ;
 
 true = "1" ;
-false = "0" ;
+false = nil ;
 
 nil = "(", { white_space }, ")" ;
 
@@ -857,7 +908,7 @@ The following constants are defined by default in the Reduct environment:
 | Constant | Value |
 |----------|-------|
 | `true`   | `1` |
-| `false`  | `0` |
+| `false`  | `nil` |
 | `nil`    | `()` |
 | `pi`     | `3.14159265358979323846` |
 | `e`      | `2.7182818284590452354` |
@@ -873,6 +924,16 @@ Returns the provided expression without evaluating it.
 **`(recur {expression}) -> <item>`**
 
 Calls the currently executing lambda with the provided arguments.
+
+**`(len <item>) -> <number>`**
+
+Returns the total number of items in the list and the number of characters in the atom.
+
+**`(nth <item> <n: number> [default: item]) -> <item>`**
+
+Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
+
+If the index is out of bounds, returns `[default]` or `nil`.
 
 **`(list {expression} ) -> <list>`**
 
@@ -1058,13 +1119,19 @@ Will stop evaluating arguments as soon as one is not greater than or equal to th
 
 Since Reduct is a functional language, side effects should be avoided when possible. As such, any native with side effects will be suffixed with an exclamation mark `!`.
 
+#### State Management
+
+**`(world) -> <list>`**
+
+Returns an empty list representing the "world state". Intended to be utilized for state threading.
+
 #### Error Handling
 
-**`(assert! <cond: item> <msg: item>) -> <cond: item>`**
+**`(assert! <state: item> <cond: item> <msg: item>) -> <cond: item>`**
 
-Evaluates `<cond>`. If it is falsy, the evaluation fails and throws an error with `<msg>` as the message.
+Evaluates `<cond>`. If it is falsy, the evaluation fails and throws an error with `<msg>` as the message. Will return the provided state as the first argument for easy threading.
 
-**`(throw! <msg: atom>)`**
+**`(throw <msg: atom>)`**
 
 Throws an error with the given atom being the error message.
 
@@ -1079,6 +1146,30 @@ Calls the provided callable. If an error occurs during evaluation, the `<catch>`
 **`(map <list> <callable>) -> <list>`**
 
 Returns a new list by applying `<callable>` to each item in `<list>`. The `<callable>` must accept a single argument.
+
+**`(grid <extents: list> <callable>) -> <list>`**
+
+Returns a new `n` dimensional list where `n` is the number of arguments that `<callable>` accepts and the length of `<list>`. Each item in `<list>` is the extent of the corresponding argument in `<callable>`, and the value of each item in the resulting list is the result of calling `<callable>` with some integer point representing the index within the extent of the arguments.
+
+Each element in `<extents>` defines the range for the corresponding argument of the callable:
+
+- If the element is a single number `n`, the range is from `0` to `n - 1`.
+- If the element is a list of two numbers `(start end)`, the range is from `start` to `end - 1`.
+- If the element is a list of three numbers `(start end step)`, the range is from `start` to `end - 1` with increments of `step`.
+
+For example:
+
+```lisp
+(grid (3 3) (lambda (x y) {x + y})) 
+// Evaluates to "((0 1 2) (1 2 3) (2 3 4))"
+
+(grid ((-1 2) (10 13)) (lambda (x y) (+ x y)))
+// Evaluates to "((9 10 11) (10 11 12) (11 12 13))"
+```
+
+**`(compute <extents: list> <callable>) -> <list>`**
+
+Similar to `grid`, but the resulting list is flattened.
 
 **`(filter <list> <callable>) -> <list>`**
 
@@ -1108,13 +1199,13 @@ If a `callable` is provided, it should accept two arguments and return a truthy 
 
 If no `callable` is specified, then items are sorted in ascending order.
 
+**`(find <list> <callable>) -> <item>`**
+
+Returns the first item in the list for which the `<callable>` returns a truthy value. If no such item is found, returns `nil`.
+
 ---
 
 #### Sequences (Lists & Strings)
-
-**`(len <item> {item}) -> <number>`**
-
-Returns the total number of items in the lists and the number of characters in the atoms for all provided arguments.
 
 **`(range [start: number] <end: number> [step: number]) -> <list>`**
 
@@ -1122,7 +1213,7 @@ Returns a new list containing a sequence of numbers from `<start>` up to (but no
 
 **`(concat {item}) -> <item>`**
 
-Returns a new atom or list by concatenating all items, can also be utilized for "append" or "prepend" operations. If any of the items is a list, the result will be a list, otherwise it will be an atom.
+Returns a new atom or list by concatenating all items. If any of the items is a list, the result will be a list, otherwise it will be an atom.
 
 **`(append <list> {item}) -> <item>`**
 
@@ -1147,12 +1238,6 @@ Returns a new list containing all except the first item of a list or an atom con
 **`(init <item>) -> <item>`**
 
 Returns a new list containing all but the last item of a list or an atom containing all but the last character of an atom.
-
-**`(nth <item> <n: number> [default: item]) -> <item>`**
-
-Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
-
-If the index is out of bounds, returns `[default]` or `nil`.
 
 **`(assoc <item> <n: number> <value: item> [fill: item]) -> <item>`**
 
@@ -1203,10 +1288,6 @@ Returns a new list containing only the unique items from the provided list, pres
 **`(chunk <list> <n: number>) -> <list>`**
 
 Returns a new list of sub-lists, where each sub-list contains <n> items from the original list.
-
-**`(find <list> <callable>) -> <item>`**
-
-Returns the first item in the list for which the `<callable>` returns a truthy value. If no such item is found, returns `nil`.
 
 **`(get-in <list> <path: list|atom> [default: item]) -> <item>`**
 
@@ -1293,17 +1374,9 @@ Returns a new atom with leading and trailing whitespace removed.
 
 Returns `true` if all items are atoms, otherwise `false`.
 
-**`(int? <item> {item}) -> <true|false>`**
-
-Returns `true` if all items are integer shaped atoms, otherwise `false`.
-
-**`(float? <item> {item}) -> <true|false>`**
-
-Returns `true` if all items are float shaped atoms, otherwise `false`.
-
 **`(number? <item> {item}) -> <true|false>`**
 
-Returns `true` if all items are integer or float shaped atoms, otherwise `false`.
+Returns `true` if all items are number shaped atoms, otherwise `false`.
 
 **`(lambda? <item> {item}) -> <true|false>`**
 
@@ -1345,13 +1418,9 @@ Will stop evaluating arguments as soon as one is equal.
 
 #### Type Casting
 
-**`(int <atom>) -> <number>`**
+**`(number <atom>) -> <number>`**
 
-Returns the integer shaped representation of the atom.
-
-**`(float <atom>) -> <number>`**
-
-Returns the float shaped representation of the atom.
+Returns the number representation of the atom.
 
 ---
 
@@ -1400,11 +1469,11 @@ For example:
 
 **`(read-file! <path: string>) -> <string>`**
 
-Reads the file at the given path and returns its contents as a string atom without evaluating it.
+Reads the file at the given path and returns its contents as a string atom.
 
-**`(write-file! <path: string> <content: item>) -> <content: item>`**
+**`(write-file! <state: item> <path: string> <content: item>) -> <state: item>`**
 
-Writes the string representation of `<content>` to the file at the given path.
+Writes the string representation of `<content>` to the file at the given path and returns the provided state.
 
 **`(read-line!) -> <string>`**
 
@@ -1414,13 +1483,13 @@ Reads a single line of input from the standard input and returns it as an atom.
 
 Reads a single character from the standard input and returns it as an atom.
 
-**`(print! {item}) -> nil`**
+**`(print! <state: item> {item}) -> <state: item>`**
 
-Prints the string representation of all arguments to the standard output.
+Prints the string representation of all arguments to the standard output. Returns the provided state.
 
-**`(println! {item}) -> nil`**
+**`(println! <state: item> {item}) -> <state: item>`**
 
-Prints the string representation of all arguments to the standard output, followed by a newline.
+Prints the string representation of all arguments to the standard output, followed by a newline. Returns the provided state.
 
 **`(ord <atom: string>) -> <number>`**
 

@@ -1,26 +1,15 @@
-(do
-    (def num-int 42)
-    (def num-float 3.14)
-    (def text "hello")
-    (def my-list (list 1 2 3))
-    (def my-lambda (lambda (x) x))
+(def num-int 42)
+(def num-float 3.14)
+(def text "hello")
+(def my-list (list 1 2 3))
+(def my-lambda (lambda (x) x))
 
+(-> (world)
     (assert! (== (atom? text) true) "atom? should return true for string atoms")
     (assert! (== (atom? num-int) true) "atom? should return true for number atoms")
     (assert! (== (atom? my-list) false) "atom? should return false for lists")
     (assert! (== (atom? text num-int num-float) true) "atom? should return true if all items are atoms")
     (assert! (== (atom? text my-list) false) "atom? should return false if any item is not an atom")
-
-    (assert! (== (int? num-int) true) "int? should return true for integer shaped atoms")
-    (assert! (== (int? num-float) false) "int? should return false for float shaped atoms")
-    (assert! (== (int? text) false) "int? should return false for non-integer shaped atoms")
-    (assert! (== (int? num-int 100) true) "int? should return true if all items are integers")
-    (assert! (== (int? num-int num-float) false) "int? should return false if any item is not an integer")
-
-    (assert! (== (float? num-float) true) "float? should return true for float shaped atoms")
-    (assert! (== (float? num-int) false) "float? should return false for integer shaped atoms")
-    (assert! (== (float? num-float 1.5) true) "float? should return true if all items are floats")
-    (assert! (== (float? num-float num-int) false) "float? should return false if any item is not a float")
 
     (assert! (== (number? num-int) true) "number? should return true for integers")
     (assert! (== (number? num-float) true) "number? should return true for floats")
@@ -56,7 +45,7 @@
     (assert! (== (empty? "" my-list) false) "empty? should return false if any item is not empty")
 
     (assert! (== (nil? nil) true) "nil? should return true for nil")
-    (assert! (== (nil? false) false) "nil? should return false for false")
+    (assert! (== (nil? false) true) "nil? should return true for false")
     (assert! (== (nil? nil nil) true) "nil? should return true if all items are nil")
     (assert! (== (nil? nil text) false) "nil? should return false if any item is not nil")
 

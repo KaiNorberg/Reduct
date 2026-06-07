@@ -1,8 +1,8 @@
-#include "reduct/function.h"
-#include "reduct/core.h"
-#include "reduct/gc.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
+#include <reduct/core.h>
+#include <reduct/function.h>
+#include <reduct/gc.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
 
 REDUCT_API void reduct_function_init(reduct_function_t* func)
 {
@@ -18,7 +18,6 @@ REDUCT_API void reduct_function_init(reduct_function_t* func)
     func->registerCount = 0;
     func->arity = 0;
     func->flags = REDUCT_FUNCTION_FLAG_NONE;
-    func->optimizeFlags = REDUCT_OPTIMIZE_NONE;
 }
 
 REDUCT_API void reduct_function_deinit(reduct_function_t* func)
@@ -69,21 +68,8 @@ REDUCT_API void reduct_function_grow(reduct_t* reduct, reduct_function_t* func)
     func->instCapacity = newCapacity;
 }
 
-REDUCT_API reduct_const_t reduct_function_lookup_constant(reduct_t* reduct, reduct_function_t* func,
-    reduct_const_slot_t* slot)
+static inline reduct_const_t reduct_function_grow_constants(reduct_t* reduct, reduct_function_t* func)
 {
-    assert(reduct != NULL);
-    assert(func != NULL);
-    assert(slot != NULL);
-
-    for (reduct_const_t i = 0; i < func->constantCount; i++)
-    {
-        if (func->constants[i].type == slot->type && func->constants[i].raw == slot->raw)
-        {
-            return i;
-        }
-    }
-
     if (func->constantCount >= func->constantCapacity)
     {
         uint32_t newCapacity = func->constantCapacity == 0 ? 16 : func->constantCapacity * 2;
@@ -99,9 +85,42 @@ REDUCT_API reduct_const_t reduct_function_lookup_constant(reduct_t* reduct, redu
         func->constants = newConstants;
         func->constantCapacity = newCapacity;
     }
-
-    func->constants[func->constantCount] = *slot;
     return func->constantCount++;
+}
+
+REDUCT_API reduct_const_t reduct_function_add_constant(reduct_t* reduct, reduct_function_t* func,
+    reduct_handle_t handle)
+{
+    assert(reduct != NULL);
+    assert(func != NULL);
+
+    for (reduct_const_t i = 0; i < func->constantCount; i++)
+    {
+        if (func->constants[i].type == REDUCT_CONST_SLOT_TYPE_STATIC)
+        {
+            reduct_handle_t a = func->constants[i].handle;
+            if (reduct_handle_is_equal(reduct, a, handle))
+            {
+                return i;
+            }
+        }
+    }
+
+    reduct_const_t index = reduct_function_grow_constants(reduct, func);
+    func->constants[index].type = REDUCT_CONST_SLOT_TYPE_STATIC;
+    func->constants[index].handle = handle;
+    return index;
+}
+
+REDUCT_API reduct_const_t reduct_function_add_capture(reduct_t* reduct, reduct_function_t* func)
+{
+    assert(reduct != NULL);
+    assert(func != NULL);
+
+    reduct_const_t index = reduct_function_grow_constants(reduct, func);
+    func->constants[index].type = REDUCT_CONST_SLOT_TYPE_CAPTURE;
+    func->constants[index].handle = REDUCT_HANDLE_NIL(reduct);
+    return index;
 }
 
 REDUCT_API void reduct_function_retain(reduct_t* reduct, reduct_function_t* function)
@@ -109,7 +128,7 @@ REDUCT_API void reduct_function_retain(reduct_t* reduct, reduct_function_t* func
     assert(reduct != NULL);
     assert(function != NULL);
 
-    reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(function, reduct_item_t, function));
+    reduct_item_retain(REDUCT_CONTAINER_OF(function, reduct_item_t, function));
 }
 
 REDUCT_API void reduct_function_release(reduct_t* reduct, reduct_function_t* function)
@@ -117,5 +136,5 @@ REDUCT_API void reduct_function_release(reduct_t* reduct, reduct_function_t* fun
     assert(reduct != NULL);
     assert(function != NULL);
 
-    reduct_gc_release(reduct, REDUCT_CONTAINER_OF(function, reduct_item_t, function));
+    reduct_item_release(REDUCT_CONTAINER_OF(function, reduct_item_t, function));
 }

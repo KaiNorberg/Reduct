@@ -1,7 +1,7 @@
-(do
-    (def abc+ (lambda (a b) (+ a b)))
-    (def abc* (lambda (a b) (* a b)))
+(def abc+ (lambda (a b) (+ a b)))
+(def abc* (lambda (a b) (* a b)))
 
+(-> (world)
     (assert! (== {10 - 2 * 3} 4) "infix notation should respect standard operator precedence")
     (assert! (== {{10 - 2} * 3 } 24) "infix notation should respect nested infixes")
     (assert! (== {1 abc+ 2 abc* 3} 7) "infix notation should support custom functions and respect precedence")

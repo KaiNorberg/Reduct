@@ -1,9 +1,9 @@
-(do
+(-> (world)
     (assert! (== (if true 10 20) 10) "if should return the 'then' branch when condition is truthy")
     (assert! (== (if false 10 20) 20) "if should return the 'else' branch when condition is falsy")
     (assert! (== (if false 10) ()) "if should return an empty list '()' when condition is falsy and no 'else' is provided")
     (assert! (== (if 0 "f" "t") "t") "if should treat 0 as falsy")
-    (assert! (== (if "" "f" "t") "t") "if should treat empty string as falsy")
+    (assert! (== (if "" "f" "t") "f") "if should treat empty string as truthy")
 
     (assert! (== (match 2 (1 "one") (2 "two") "else") "two") "match should return matching case result")
     (assert! (== (match "x" (1 "one") (2 "two") "default") "default") "match should return default when no match")
@@ -21,9 +21,7 @@
 
     (assert! (== (or false 2 3) 2) "or should return the first truthy value")
     (assert! (== (or true (assert! false "or should short-circuit")) true) "or should return the first truthy value")
-    (assert! (== (or false 0 "") "") "or should return the last falsy value if all values are falsy")
 
     (assert! (== (not false) true) "not false should be true")
-    (assert! (== (not 0) true) "not 0 should be true (0 is a falsy item)")
     (assert! (== (not 1) false) "not 1 should be false")
 )

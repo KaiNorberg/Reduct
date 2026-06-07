@@ -1,8 +1,8 @@
-#include "reduct/list.h"
-#include "reduct/core.h"
-#include "reduct/gc.h"
-#include "reduct/handle.h"
-#include "reduct/item.h"
+#include <reduct/core.h>
+#include <reduct/gc.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
 
 #include <stdarg.h>
 
@@ -10,14 +10,14 @@ static reduct_list_node_t* reduct_list_node_new(struct reduct* reduct)
 {
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_LIST_NODE;
-    return &item->node;
+    return &item->listNode;
 }
 
 static reduct_list_node_t* reduct_list_node_copy(reduct_t* reduct, reduct_list_node_t* node)
 {
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_LIST_NODE;
-    reduct_list_node_t* newNode = &item->node;
+    reduct_list_node_t* newNode = &item->listNode;
     memcpy(newNode, node, sizeof(reduct_list_node_t));
     return newNode;
 }
@@ -36,7 +36,6 @@ REDUCT_API reduct_list_t* reduct_list_new(reduct_t* reduct)
 
     reduct_item_t* item = reduct_item_new(reduct);
     item->type = REDUCT_ITEM_TYPE_LIST;
-    item->flags |= REDUCT_ITEM_FLAG_FALSY;
     reduct_list_t* list = &item->list;
     list->length = 0;
     list->shift = 0;
@@ -54,10 +53,6 @@ REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t 
     {
         reduct_item_t* item = reduct_item_new(reduct);
         item->type = REDUCT_ITEM_TYPE_LIST;
-        if (count == 0)
-        {
-            item->flags |= REDUCT_ITEM_FLAG_FALSY;
-        }
 
         reduct_list_t* list = &item->list;
         list->length = count;
@@ -66,6 +61,10 @@ REDUCT_API reduct_list_t* reduct_list_new_handles(struct reduct* reduct, size_t 
         for (uint32_t i = 0; i < count; i++)
         {
             list->tail.handles[i] = handles[i];
+        }
+        for (uint32_t i = count; i < REDUCT_LIST_WIDTH; i++)
+        {
+            list->tail.handles[i] = (reduct_handle_t){0};
         }
         return list;
     }
@@ -169,11 +168,6 @@ REDUCT_API reduct_list_t* reduct_list_assoc(struct reduct* reduct, reduct_list_t
 
     reduct_list_t* newList = reduct_list_new(reduct);
     newList->length = list->length;
-    if (newList->length > 0)
-    {
-        REDUCT_CONTAINER_OF(newList, reduct_item_t, list)->flags &= ~REDUCT_ITEM_FLAG_FALSY;
-    }
-
     newList->shift = list->shift;
 
     size_t tailOffset = REDUCT_LIST_TAIL_OFFSET(list);
@@ -206,17 +200,12 @@ REDUCT_API reduct_list_t* reduct_list_dissoc(struct reduct* reduct, reduct_list_
     /// @todo There is definetly a better way to do this
 
     reduct_list_t* newList = reduct_list_new(reduct);
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(list);
-    reduct_list_chunk_t chunk;
-    size_t currentIndex = 0;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH(&handle, list)
     {
-        for (size_t i = 0; i < chunk.count; i++, currentIndex++)
+        if (_index != index)
         {
-            if (currentIndex != index)
-            {
-                reduct_list_push(reduct, newList, chunk.handles[i]);
-            }
+            reduct_list_push(reduct, newList, handle);
         }
     }
 
@@ -235,24 +224,13 @@ REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t
 
     reduct_list_t* newList = reduct_list_new(reduct);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER_AT(list, start);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH_AT(&handle, list, start)
     {
-        size_t chunkStart = iter.index - chunk.count;
-        size_t count = chunk.count;
-        if (chunkStart + count > end)
-        {
-            count = end - chunkStart;
-        }
-        for (size_t i = 0; i < count; i++)
-        {
-            reduct_list_push(reduct, newList, chunk.handles[i]);
-        }
-        if (chunkStart + count >= end)
-        {
+        if (_index >= end)
             break;
-        }
+
+        reduct_list_push(reduct, newList, handle);
     }
 
     return newList;
@@ -265,11 +243,6 @@ REDUCT_API reduct_list_t* reduct_list_append(struct reduct* reduct, reduct_list_
 
     reduct_list_t* newList = reduct_list_new(reduct);
     newList->length = list->length;
-    if (newList->length > 0)
-    {
-        REDUCT_CONTAINER_OF(newList, reduct_item_t, list)->flags &= ~REDUCT_ITEM_FLAG_FALSY;
-    }
-
     newList->shift = list->shift;
     newList->root = list->root;
     newList->tail = list->tail;
@@ -343,11 +316,6 @@ REDUCT_API void reduct_list_push(reduct_t* reduct, reduct_list_t* list, reduct_h
 {
     assert(list != NULL);
 
-    if (list->length == 0)
-    {
-        REDUCT_CONTAINER_OF(list, reduct_item_t, list)->flags &= ~REDUCT_ITEM_FLAG_FALSY;
-    }
-
     if (list->length < REDUCT_LIST_WIDTH || (list->length & REDUCT_LIST_MASK) != 0)
     {
         list->tail.handles[list->length & REDUCT_LIST_MASK] = val;
@@ -389,14 +357,10 @@ REDUCT_API void reduct_list_push_list(reduct_t* reduct, reduct_list_t* list, red
     assert(list != NULL);
     assert(other != NULL);
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(other);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t handle;
+    REDUCT_LIST_FOR_EACH(&handle, other)
     {
-        for (size_t i = 0; i < chunk.count; i++)
-        {
-            reduct_list_push(reduct, list, chunk.handles[i]);
-        }
+        reduct_list_push(reduct, list, handle);
     }
 }
 
@@ -429,35 +393,30 @@ REDUCT_API reduct_handle_t reduct_list_find_entry(reduct_t* reduct, reduct_list_
 
     reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(list);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t entryH;
+    REDUCT_LIST_FOR_EACH(&entryH, list)
     {
-        for (size_t i = 0; i < chunk.count; i++)
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
         {
-            reduct_handle_t entryH = chunk.handles[i];
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
-            {
-                continue;
-            }
+            continue;
+        }
 
-            reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
-            if (REDUCT_UNLIKELY(entry->length < 1))
-            {
-                continue;
-            }
+        reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
+        if (REDUCT_UNLIKELY(entry->length < 1))
+        {
+            continue;
+        }
 
-            reduct_handle_t entryKey = reduct_list_first(reduct, entry);
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
-            {
-                continue;
-            }
+        reduct_handle_t entryKey = reduct_list_first(reduct, entry);
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
+        {
+            continue;
+        }
 
-            reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
-            if (internedKey == entryKeyInterned)
-            {
-                return entryH;
-            }
+        reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
+        if (internedKey == entryKeyInterned)
+        {
+            return entryH;
         }
     }
 
@@ -489,39 +448,34 @@ REDUCT_API bool reduct_list_find_entry_index(reduct_t* reduct, reduct_list_t* li
 
     reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
 
-    reduct_list_iter_t iter = REDUCT_LIST_ITER(list);
-    reduct_list_chunk_t chunk;
-    while (reduct_list_iter_next_chunk(&iter, &chunk))
+    reduct_handle_t entryH;
+    REDUCT_LIST_FOR_EACH(&entryH, list)
     {
-        for (size_t i = 0; i < chunk.count; i++)
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
         {
-            reduct_handle_t entryH = chunk.handles[i];
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(entryH)))
-            {
-                continue;
-            }
+            continue;
+        }
 
-            reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
-            if (REDUCT_UNLIKELY(entry->length < 1))
-            {
-                continue;
-            }
+        reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(entryH);
+        if (REDUCT_UNLIKELY(entry->length < 1))
+        {
+            continue;
+        }
 
-            reduct_handle_t entryKey = reduct_list_first(reduct, entry);
-            if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
-            {
-                continue;
-            }
+        reduct_handle_t entryKey = reduct_list_first(reduct, entry);
+        if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_ATOM(entryKey)))
+        {
+            continue;
+        }
 
-            reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
-            if (internedKey == entryKeyInterned)
+        reduct_atom_t* entryKeyInterned = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryKey));
+        if (internedKey == entryKeyInterned)
+        {
+            if (outIndex != NULL)
             {
-                if (outIndex != NULL)
-                {
-                    *outIndex = iter.index - chunk.count + i;
-                }
-                return true;
+                *outIndex = _index;
             }
+            return true;
         }
     }
 
@@ -558,7 +512,7 @@ REDUCT_API void reduct_list_retain(reduct_t* reduct, reduct_list_t* list)
     assert(reduct != NULL);
     assert(list != NULL);
 
-    reduct_gc_retain(reduct, REDUCT_CONTAINER_OF(list, reduct_item_t, list));
+    reduct_item_retain(REDUCT_CONTAINER_OF(list, reduct_item_t, list));
 }
 
 REDUCT_API void reduct_list_release(reduct_t* reduct, reduct_list_t* list)
@@ -566,5 +520,5 @@ REDUCT_API void reduct_list_release(reduct_t* reduct, reduct_list_t* list)
     assert(reduct != NULL);
     assert(list != NULL);
 
-    reduct_gc_release(reduct, REDUCT_CONTAINER_OF(list, reduct_item_t, list));
+    reduct_item_release(REDUCT_CONTAINER_OF(list, reduct_item_t, list));
 }

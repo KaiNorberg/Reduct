@@ -1,10 +1,10 @@
 #ifndef REDUCT_ATOM_H
 #define REDUCT_ATOM_H 1
 
-#include "reduct/defs.h"
-#include "reduct/intrinsic.h"
-#include "reduct/native.h"
-#include "reduct/schema.h"
+#include <reduct/defs.h>
+#include <reduct/native.h>
+#include <reduct/schema.h>
+#include <reduct/sync.h>
 
 #include <assert.h>
 #include <stdbool.h>
@@ -19,7 +19,7 @@ struct reduct;
  * @defgroup atom Atoms
  *
  * Atoms represent all strings within a Reduct expression, as such it also represents anything that a string can be,
- * including integers, floats and natives.
+ * including numbers and natives.
  *
  * ## Interning
  *
@@ -70,17 +70,14 @@ typedef enum
 
 typedef uint16_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NONE 0                  ///< No flags.
-#define REDUCT_ATOM_FLAG_INTEGER (1 << 0)        ///< Atom is known to be integer shaped.
-#define REDUCT_ATOM_FLAG_FLOAT (1 << 1)          ///< Atom is known to be float shaped.
+#define REDUCT_ATOM_FLAG_NUMBER (1 << 0)         ///< Atom is known to be number shaped.
 #define REDUCT_ATOM_FLAG_INTRINSIC (1 << 2)      ///< Atom is known to represent an intrinsic.
 #define REDUCT_ATOM_FLAG_NATIVE (1 << 3)         ///< Atom is known to represent a native function.
-#define REDUCT_ATOM_FLAG_NUMBER_CHECKED (1 << 4) ///< Atom has been checked for integer/float shaping.
+#define REDUCT_ATOM_FLAG_NUMBER_CHECKED (1 << 4) ///< Atom has been checked for number shaping.
 #define REDUCT_ATOM_FLAG_NATIVE_CHECKED (1 << 5) ///< Atom has been checked for a native function.
 #define REDUCT_ATOM_FLAG_LARGE (1 << 6)          ///< Atom has an allocated buffer within a stack.
-#define REDUCT_ATOM_FLAG_OVERFLOW \
-    (1 << 7) ///< Atom has been parsed into an integer that is to large to fit into a `reduct_handle_t`.
-#define REDUCT_ATOM_FLAG_SCHEMA (1 << 8) ///< Atom is a schema field.
-#define REDUCT_ATOM_FLAG_QUOTED (1 << 9) ///< Atom is quoted.
+#define REDUCT_ATOM_FLAG_SCHEMA (1 << 8)         ///< Atom is a schema field.
+#define REDUCT_ATOM_FLAG_QUOTED (1 << 9)         ///< Atom is quoted.
 
 #define REDUCT_ATOM_STACK_MIN 1024 ///< The minimum size of an atom stack.
 #define REDUCT_ATOM_STACK_GROWTH \
@@ -129,8 +126,7 @@ typedef struct reduct_atom
             reduct_schema_index_t* schema;
             uint32_t schemaCount;
         };
-        int64_t integerValue; ///< Pre-computed integer value, atom must have `REDUCT_ATOM_FLAG_INTEGER`.
-        double floatValue;    ///< Pre-computed float value, atom must have `REDUCT_ATOM_FLAG_FLOAT`.
+        double numberValue; ///< Pre-computed number value, atom must have `REDUCT_ATOM_FLAG_NUMBER`.
         struct
         {
             reduct_native_fn native; ///< Cached native function, atom must have `REDUCT_ATOM_FLAG_NATIVE`.
@@ -142,6 +138,57 @@ typedef struct reduct_atom
 
 #define REDUCT_FNV_PRIME 16777619U    ///< FNV-1a 32-bit prime.
 #define REDUCT_FNV_OFFSET 2166136261U ///< FNV-1a 32-bit offset basis.
+
+/**
+ * @brief Global atom-related environment structure.
+ * @struct reduct_atom_global_t
+ */
+typedef struct
+{
+    struct reduct_atom** map;
+    uint32_t size;
+    uint32_t capacity;
+    uint32_t mask;
+    uint32_t tombstones;
+    reduct_rwmutex_t mutex;
+} reduct_atom_global_t;
+
+/**
+ * @brief Per-thread atom-related state structure.
+ * @struct reduct_atom_local_t
+ */
+typedef struct
+{
+    reduct_atom_stack_t* atomStack;
+} reduct_atom_local_t;
+
+/**
+ * @brief Initialize a global atom state.
+ *
+ * @param global Pointer to the global atom state to initialize.
+ */
+REDUCT_API void reduct_atom_global_init(reduct_atom_global_t* global);
+
+/**
+ * @brief Deinitialize a global atom state.
+ *
+ * @param global Pointer to the global atom state to deinitialize.
+ */
+REDUCT_API void reduct_atom_global_deinit(reduct_atom_global_t* global);
+
+/**
+ * @brief Initialize a local atom state.
+ *
+ * @param local Pointer to the local atom state to initialize.
+ */
+REDUCT_API void reduct_atom_local_init(reduct_atom_local_t* local);
+
+/**
+ * @brief Deinitialize a local atom state.
+ *
+ * @param local Pointer to the local atom state to deinitialize.
+ */
+REDUCT_API void reduct_atom_local_deinit(reduct_atom_local_t* local);
 
 /**
  * @brief Check if an atom is equal to a string.
@@ -173,22 +220,13 @@ REDUCT_API reduct_atom_t* reduct_atom_new(struct reduct* reduct, size_t len);
 REDUCT_API reduct_atom_t* reduct_atom_new_string(struct reduct* reduct, const char* str);
 
 /**
- * @brief Create an atom from a integer value.
+ * @brief Create an atom from a number value.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param value The integer value.
+ * @param value The number value.
  * @return A pointer to the atom.
  */
-REDUCT_API reduct_atom_t* reduct_atom_new_int(struct reduct* reduct, int64_t value);
-
-/**
- * @brief Create an atom from a float value.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param value The float value.
- * @return A pointer to the atom.
- */
-REDUCT_API reduct_atom_t* reduct_atom_new_float(struct reduct* reduct, double value);
+REDUCT_API reduct_atom_t* reduct_atom_new_number(struct reduct* reduct, double value);
 
 /**
  * @brief Create an atom for a anonymous native function.
@@ -324,37 +362,7 @@ static inline bool reduct_atom_is_native(struct reduct* reduct, reduct_atom_t* a
 }
 
 /**
- * @brief Check if an atom is integer-shaped.
- *
- * @param atom Pointer to the atom.
- * @return `true` if the atom is an integer, `false` otherwise.
- */
-static inline REDUCT_ALWAYS_INLINE bool reduct_atom_is_int(reduct_atom_t* atom)
-{
-    if (REDUCT_UNLIKELY(!(atom->flags & REDUCT_ATOM_FLAG_NUMBER_CHECKED)))
-    {
-        reduct_atom_check_number(atom);
-    }
-    return (atom->flags & REDUCT_ATOM_FLAG_INTEGER) != 0;
-}
-
-/**
- * @brief Check if an atom is float-shaped.
- *
- * @param atom Pointer to the atom.
- * @return `true` if the atom is a float, `false` otherwise.
- */
-static inline REDUCT_ALWAYS_INLINE bool reduct_atom_is_float(reduct_atom_t* atom)
-{
-    if (REDUCT_UNLIKELY(!(atom->flags & REDUCT_ATOM_FLAG_NUMBER_CHECKED)))
-    {
-        reduct_atom_check_number(atom);
-    }
-    return (atom->flags & REDUCT_ATOM_FLAG_FLOAT) != 0;
-}
-
-/**
- * @brief Check if an atom is integer-shaped or float-shaped.
+ * @brief Check if an atom is number-shaped.
  *
  * @param atom Pointer to the atom.
  * @return `true` if the atom is a number, `false` otherwise.
@@ -365,47 +373,19 @@ static inline REDUCT_ALWAYS_INLINE bool reduct_atom_is_number(reduct_atom_t* ato
     {
         reduct_atom_check_number(atom);
     }
-    return (atom->flags & (REDUCT_ATOM_FLAG_INTEGER | REDUCT_ATOM_FLAG_FLOAT)) != 0;
+    return (atom->flags & REDUCT_ATOM_FLAG_NUMBER) != 0;
 }
 
 /**
- * @brief Get the integer value of an atom.
+ * @brief Get the number value of an atom.
  *
  * @param atom Pointer to the atom.
- * @return The integer value.
+ * @return The number value.
  */
-static inline REDUCT_ALWAYS_INLINE int64_t reduct_atom_get_int(reduct_atom_t* atom)
+static inline REDUCT_ALWAYS_INLINE double reduct_atom_get_number(reduct_atom_t* atom)
 {
     assert(reduct_atom_is_number(atom));
-
-    if (reduct_atom_is_int(atom))
-    {
-        return atom->integerValue;
-    }
-    else
-    {
-        return (int64_t)atom->floatValue;
-    }
-}
-
-/**
- * @brief Get the float value of an atom.
- *
- * @param atom Pointer to the atom.
- * @return The float value.
- */
-static inline REDUCT_ALWAYS_INLINE double reduct_atom_get_float(reduct_atom_t* atom)
-{
-    assert(reduct_atom_is_number(atom));
-
-    if (reduct_atom_is_float(atom))
-    {
-        return atom->floatValue;
-    }
-    else
-    {
-        return (double)atom->integerValue;
-    }
+    return atom->numberValue;
 }
 
 /**
@@ -461,13 +441,13 @@ static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_atom_new_copy(struct re
 REDUCT_API int64_t reduct_atom_as_int(struct reduct* reduct, reduct_atom_t* atom);
 
 /**
- * @brief Retrieve a float value from an atom, regardless of if it is quoted or not.
+ * @brief Retrieve a number value from an atom, regardless of if it is quoted or not.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param atom Pointer to the atom.
- * @return The float value.
+ * @return The number value.
  */
-REDUCT_API double reduct_atom_as_float(struct reduct* reduct, reduct_atom_t* atom);
+REDUCT_API double reduct_atom_as_number(struct reduct* reduct, reduct_atom_t* atom);
 
 /** @} */
 

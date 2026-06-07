@@ -1,8 +1,8 @@
 #ifndef REDUCT_STANDARD_H
 #define REDUCT_STANDARD_H 1
 
-#include "reduct/defs.h"
-#include "reduct/item.h"
+#include <reduct/defs.h>
+#include <reduct/item.h>
 
 struct reduct;
 
@@ -23,18 +23,20 @@ struct reduct;
  */
 typedef enum
 {
-    REDUCT_STDLIB_ERROR = (1 << 0),
-    REDUCT_STDLIB_HIGHER_ORDER = (1 << 1),
-    REDUCT_STDLIB_SEQUENCES = (1 << 2),
-    REDUCT_STDLIB_STRING = (1 << 3),
-    REDUCT_STDLIB_INTROSPECTION = (1 << 4),
-    REDUCT_STDLIB_TYPE_CASTING = (1 << 5),
-    REDUCT_STDLIB_SYSTEM = (1 << 6),
-    REDUCT_STDLIB_MATH = (1 << 7),
+    REDUCT_STDLIB_STATE = (1 << 0),
+    REDUCT_STDLIB_ERROR = (1 << 1),
+    REDUCT_STDLIB_HIGHER_ORDER = (1 << 2),
+    REDUCT_STDLIB_SEQUENCES = (1 << 3),
+    REDUCT_STDLIB_STRING = (1 << 4),
+    REDUCT_STDLIB_INTROSPECTION = (1 << 5),
+    REDUCT_STDLIB_TYPE_CASTING = (1 << 6),
+    REDUCT_STDLIB_SYSTEM = (1 << 7),
+    REDUCT_STDLIB_MATH = (1 << 8),
     REDUCT_STDLIB_ALL = 0xFFFF,
 } reduct_stdlib_sets_t;
 
-REDUCT_API reduct_handle_t reduct_assert(struct reduct* reduct, reduct_handle_t cond, reduct_handle_t msg);
+REDUCT_API reduct_handle_t reduct_assert(struct reduct* reduct, reduct_handle_t state, reduct_handle_t cond,
+    reduct_handle_t msg);
 REDUCT_API reduct_handle_t reduct_throw(struct reduct* reduct, reduct_handle_t msg);
 REDUCT_API reduct_handle_t reduct_try(struct reduct* reduct, reduct_handle_t callable, reduct_handle_t catchFn);
 
@@ -98,8 +100,6 @@ REDUCT_API reduct_handle_t reduct_lower(struct reduct* reduct, reduct_handle_t s
 REDUCT_API reduct_handle_t reduct_trim(struct reduct* reduct, reduct_handle_t srcHandle);
 
 REDUCT_API reduct_handle_t reduct_is_atom(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
-REDUCT_API reduct_handle_t reduct_is_int(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
-REDUCT_API reduct_handle_t reduct_is_float(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 REDUCT_API reduct_handle_t reduct_is_number(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 REDUCT_API reduct_handle_t reduct_is_lambda(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 REDUCT_API reduct_handle_t reduct_is_native(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
@@ -112,7 +112,8 @@ REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t han
 REDUCT_API reduct_handle_t reduct_import(struct reduct* reduct, reduct_handle_t path, reduct_handle_t compiler,
     reduct_handle_t compilerArgs);
 REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle_t path);
-REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t path, reduct_handle_t content);
+REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t state, reduct_handle_t path,
+    reduct_handle_t content);
 REDUCT_API reduct_handle_t reduct_read_char(struct reduct* reduct);
 REDUCT_API reduct_handle_t reduct_read_line(struct reduct* reduct);
 REDUCT_API reduct_handle_t reduct_print(struct reduct* reduct, size_t argc, reduct_handle_t* argv);

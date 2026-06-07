@@ -1,157 +1,41 @@
-#include "reduct/gc.h"
-#include "reduct/atom.h"
-#include "reduct/core.h"
-#include "reduct/eval.h"
-#include "reduct/item.h"
-#include "reduct/list.h"
+#include <reduct/atom.h>
+#include <reduct/core.h>
+#include <reduct/eval.h>
+#include <reduct/gc.h>
+#include <reduct/handle.h>
+#include <reduct/item.h>
+#include <reduct/list.h>
+#include <reduct/task.h>
+#include <threads.h>
 
-static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item);
-
-static void reduct_gc_mark_node(reduct_t* reduct, uint32_t shift, reduct_list_node_t* node);
-
-static void reduct_gc_mark_node_contents(reduct_t* reduct, uint32_t shift, reduct_list_node_t* node)
+REDUCT_API void reduct_gc_global_init(reduct_gc_global_t* global)
 {
-    if (shift == 0)
-    {
-        for (uint32_t i = 0; i < REDUCT_LIST_WIDTH; i++)
-        {
-            reduct_handle_t handle = node->handles[i];
-            if (REDUCT_HANDLE_IS_ITEM(handle))
-            {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(handle));
-            }
-        }
-    }
-    else
-    {
-        for (uint32_t i = 0; i < REDUCT_LIST_WIDTH; i++)
-        {
-            reduct_gc_mark_node(reduct, shift - REDUCT_LIST_BITS, node->children[i]);
-        }
-    }
+    atomic_init(&global->requested, false);
 }
 
-static void reduct_gc_mark_node(reduct_t* reduct, uint32_t shift, reduct_list_node_t* node)
+REDUCT_API void reduct_gc_global_deinit(reduct_gc_global_t* global)
 {
-    if (node == NULL)
-    {
-        return;
-    }
-
-    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, node);
-    if (item->flags & REDUCT_ITEM_FLAG_GC_MARK)
-    {
-        return;
-    }
-    item->flags |= REDUCT_ITEM_FLAG_GC_MARK;
-
-    reduct_gc_mark_node_contents(reduct, shift, node);
+    REDUCT_UNUSED(global);
 }
 
-static void reduct_gc_mark_list(reduct_t* reduct, reduct_list_t* list)
+static inline void reduct_item_sweep(reduct_t* reduct)
 {
-    reduct_gc_mark_node(reduct, list->shift, list->root);
-    reduct_gc_mark_node_contents(reduct, 0, &list->tail);
-}
-
-static void reduct_gc_mark_atom(reduct_t* reduct, reduct_atom_t* atom)
-{
-    if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->stack != NULL)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(atom->stack, reduct_item_t, atomStack));
-    }
-}
-
-static void reduct_gc_mark(reduct_t* reduct, reduct_item_t* item)
-{
-    assert(reduct != NULL);
-
-    if (REDUCT_UNLIKELY(item == NULL || (item->flags & REDUCT_ITEM_FLAG_GC_MARK)))
-    {
-        return;
-    }
-
-    item->flags |= REDUCT_ITEM_FLAG_GC_MARK;
-
-    if (item->type == REDUCT_ITEM_TYPE_LIST)
-    {
-        reduct_gc_mark_list(reduct, &item->list);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_ATOM)
-    {
-        reduct_gc_mark_atom(reduct, &item->atom);
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_FUNCTION)
-    {
-        for (uint16_t i = 0; i < item->function.constantCount; i++)
-        {
-            if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_HANDLE)
-            {
-                if (REDUCT_HANDLE_IS_ITEM(item->function.constants[i].handle))
-                {
-                    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(item->function.constants[i].handle));
-                }
-            }
-            else if (item->function.constants[i].type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
-            {
-                reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(item->function.constants[i].capture, reduct_item_t, atom));
-            }
-        }
-    }
-    else if (item->type == REDUCT_ITEM_TYPE_CLOSURE)
-    {
-        reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(item->closure.function, reduct_item_t, function));
-        for (uint16_t i = 0; i < item->closure.function->constantCount; i++)
-        {
-            reduct_handle_t handle = item->closure.constants[i];
-            if (REDUCT_HANDLE_IS_ITEM(handle))
-            {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(handle));
-            }
-        }
-    }
-}
-
-REDUCT_API void reduct_gc(reduct_t* reduct)
-{
-    assert(reduct != NULL);
-
-    reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(reduct->nil));
-
-    for (size_t i = 0; i < reduct->retainedCount; i++)
-    {
-        reduct_gc_mark(reduct, reduct->retained[i]);
-    }
-
-    if (reduct != NULL)
-    {
-        for (uint32_t i = 0; i < reduct->regCount; i++)
-        {
-            reduct_handle_t child = reduct->regs[i];
-            if (REDUCT_HANDLE_IS_ITEM(child))
-            {
-                reduct_gc_mark(reduct, REDUCT_HANDLE_TO_ITEM(child));
-            }
-        }
-        for (uint32_t i = 0; i < reduct->frameCount; i++)
-        {
-            reduct_closure_t* closure = reduct->frames[i].closure;
-            reduct_gc_mark(reduct, REDUCT_CONTAINER_OF(closure, reduct_item_t, closure));
-        }
-    }
-
-    reduct->freeList = NULL;
-    reduct->freeCount = 0;
+    reduct_item_global_t* global = &reduct->global->item;
+    mtx_lock(&global->mutex);
 
     reduct_item_block_t* prev = NULL;
-    reduct_item_block_t* block = reduct->block;
+    reduct_item_block_t* block = global->block;
+
+    reduct_item_t* globalFreeList = NULL;
+    size_t globalFreeCount = 0;
+
     while (block != NULL)
     {
         reduct_item_block_t* next = block->next;
         uint32_t count = 0;
         for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
         {
-            if (block->items[i].flags & REDUCT_ITEM_FLAG_GC_MARK)
+            if (atomic_load(&block->items[i].flags) & REDUCT_ITEM_FLAG_MARKED)
             {
                 count++;
             }
@@ -163,7 +47,7 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
             {
                 reduct_item_deinit(reduct, &block->items[i]);
             }
-            reduct->blockCount--;
+            global->blockCount--;
             free(block->allocated);
         }
         else
@@ -171,19 +55,25 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
             for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
             {
                 reduct_item_t* item = &block->items[i];
-                if (item->flags & REDUCT_ITEM_FLAG_GC_MARK)
+                if (atomic_load(&block->items[i].flags) & REDUCT_ITEM_FLAG_MARKED)
                 {
-                    item->flags &= ~REDUCT_ITEM_FLAG_GC_MARK;
+                    atomic_fetch_and(&item->flags, ~REDUCT_ITEM_FLAG_MARKED);
                 }
                 else
                 {
-                    reduct_item_free(reduct, item);
+                    if (item->type != REDUCT_ITEM_TYPE_NONE)
+                    {
+                        reduct_item_deinit(reduct, item);
+                    }
+                    item->free = globalFreeList;
+                    globalFreeList = item;
+                    globalFreeCount++;
                 }
             }
 
             if (prev == NULL)
             {
-                reduct->block = block;
+                global->block = block;
             }
             else
             {
@@ -200,51 +90,86 @@ REDUCT_API void reduct_gc(reduct_t* reduct)
     }
     else
     {
-        reduct->block = NULL;
+        global->block = NULL;
     }
-    reduct->prevBlockCount = reduct->blockCount;
+
+    global->globalFreeList = globalFreeList;
+    global->globalFreeCount = globalFreeCount;
+    global->prevBlockCount = global->blockCount;
+
+    mtx_unlock(&global->mutex);
 }
 
-REDUCT_API void reduct_gc_retain(reduct_t* reduct, reduct_item_t* item)
+REDUCT_API void reduct_gc(reduct_t* reduct)
 {
     assert(reduct != NULL);
-    assert(item != NULL);
+    reduct_gc_global_t* gc = &reduct->global->gc;
 
-    for (size_t i = 0; i < reduct->retainedCount; i++)
+    atomic_store_explicit(&gc->requested, true, memory_order_relaxed);
+    reduct_task_barrier(reduct);
+
+    for (uint32_t j = 0; j < reduct->eval.regCount; j++)
     {
-        if (reduct->retained[i] == item)
+        reduct_handle_t handle = reduct->eval.regs[j];
+        if (REDUCT_HANDLE_IS_ITEM(handle))
         {
-            return;
+            reduct_item_mark(REDUCT_HANDLE_TO_ITEM(handle));
         }
     }
-
-    if (reduct->retainedCount >= reduct->retainedCapacity)
+    for (uint32_t j = 0; j < reduct->eval.frameCount; j++)
     {
-        size_t newCapacity = reduct->retainedCapacity == 0 ? REDUCT_GC_RETAINED_INITAL
-                                                           : reduct->retainedCapacity * REDUCT_GC_RETAINED_GROWTH;
-        reduct_item_t** newRetained = (reduct_item_t**)realloc(reduct->retained, newCapacity * sizeof(reduct_item_t*));
-        if (newRetained == NULL)
-        {
-            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
-        }
-        reduct->retained = newRetained;
-        reduct->retainedCapacity = newCapacity;
+        reduct_item_mark(REDUCT_CONTAINER_OF(reduct->eval.frames[j].closure, reduct_item_t, closure));
     }
 
-    reduct->retained[reduct->retainedCount++] = item;
-}
+    reduct->item.freeList = NULL;
+    reduct->item.freeCount = 0;
 
-REDUCT_API void reduct_gc_release(reduct_t* reduct, reduct_item_t* item)
-{
-    assert(reduct != NULL);
-    assert(item != NULL);
+    reduct_task_barrier(reduct);
 
-    for (size_t i = 0; i < reduct->retainedCount; i++)
+    if (atomic_exchange(&gc->requested, false))
     {
-        if (reduct->retained[i] == item)
+        reduct_item_mark(REDUCT_HANDLE_TO_ITEM(reduct->global->nil));
+
+        for (size_t i = 0; i < reduct->global->threadCount; i++)
         {
-            reduct->retained[i] = reduct->retained[--reduct->retainedCount];
-            return;
+            reduct_t* thread = &reduct->global->threads[i];
+
+            for (uint32_t j = 0; j < thread->eval.regCount; j++)
+            {
+                reduct_handle_t handle = thread->eval.regs[j];
+                if (REDUCT_HANDLE_IS_ITEM(handle))
+                {
+                    reduct_item_mark(REDUCT_HANDLE_TO_ITEM(handle));
+                }
+            }
+            for (uint32_t j = 0; j < thread->eval.frameCount; j++)
+            {
+                reduct_item_mark(REDUCT_CONTAINER_OF(thread->eval.frames[j].closure, reduct_item_t, closure));
+            }
+
+            thread->item.freeList = NULL;
+            thread->item.freeCount = 0;
         }
+
+        reduct_item_global_t* itemEnv = &reduct->global->item;
+        mtx_lock(&itemEnv->mutex);
+        reduct_item_block_t* block = itemEnv->block;
+        while (block != NULL)
+        {
+            for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
+            {
+                reduct_item_t* item = &block->items[i];
+                if (atomic_load(&item->flags) & REDUCT_ITEM_FLAG_RETAINED)
+                {
+                    reduct_item_mark(item);
+                }
+            }
+            block = block->next;
+        }
+        mtx_unlock(&itemEnv->mutex);
+
+        reduct_item_sweep(reduct);
     }
+
+    reduct_task_barrier(reduct);
 }

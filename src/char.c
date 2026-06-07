@@ -1,4 +1,4 @@
-#include "reduct/char.h"
+#include <reduct/char.h>
 
 reduct_char_info_t reductCharTable[256] = {
     ['\a'] = {.flags = 0, .upper = '\a', .lower = '\a', .decodeEscape = 0, .encodeEscape = 'a'},

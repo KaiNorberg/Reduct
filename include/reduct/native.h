@@ -1,10 +1,12 @@
 #ifndef REDUCT_NATIVE_H
 #define REDUCT_NATIVE_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
+#include <reduct/rvsdg.h>
+#include <reduct/sync.h>
 
 struct reduct;
-struct reduct_compiler;
+struct reduct_builder;
 struct reduct_item;
 struct reduct_expr;
 
@@ -24,26 +26,6 @@ struct reduct_expr;
  */
 
 /**
- * @brief Native function pointer type.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param argc The number of arguments.
- * @param argv The array of arguments.
- * @return The result of the function.
- */
-typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
-
-/**
- * @brief Intrinsic handler function type.
- *
- * @param compiler Pointer to the compiler context.
- * @param expr The expression being compiled.
- * @param out The output expression.
- */
-typedef void (
-    *reduct_native_intrinsic_fn)(struct reduct_compiler* compiler, struct reduct_list* expr, struct reduct_expr* out);
-
-/**
  * @brief Native function definition structure.
  */
 typedef struct
@@ -55,6 +37,33 @@ typedef struct
 
 #define REDUCT_NATIVE_MAP_INITIAL 256 ///< The initial size of the native map.
 #define REDUCT_NATIVE_MAP_GROWTH 2    ///< The growth factor of the native map.
+
+/**
+ * @brief Global native-related state structure.
+ * @struct reduct_native_global_t
+ */
+typedef struct
+{
+    struct reduct_native_entry* map;
+    size_t size;
+    size_t capacity;
+    size_t mask;
+    reduct_rwmutex_t mutex;
+} reduct_native_global_t;
+
+/**
+ * @brief Initialize a global native state.
+ *
+ * @param global Pointer to the global native state to initialize.
+ */
+REDUCT_API void reduct_native_global_init(reduct_native_global_t* global);
+
+/**
+ * @brief Deinitialize a global native state.
+ *
+ * @param global Pointer to the global native state to deinitialize.
+ */
+REDUCT_API void reduct_native_global_deinit(reduct_native_global_t* global);
 
 /**
  * @brief Native map entry.
@@ -87,7 +96,7 @@ REDUCT_API reduct_native_entry_t* reduct_native_map_find(struct reduct* reduct, 
  * @param array An array of native function definitions.
  * @param count The number of functions in the array.
  */
-REDUCT_API void reduct_native_register(struct reduct* reduct, reduct_native_t* array, size_t count);
+REDUCT_API void reduct_native_register(struct reduct* reduct, const reduct_native_t* array, size_t count);
 
 /** @} */
 

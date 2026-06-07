@@ -1,7 +1,7 @@
 #ifndef REDUCT_BITMAP_H
 #define REDUCT_BITMAP_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
 
 /**
  * @file bitmap.h
@@ -51,6 +51,23 @@ typedef uint64_t reduct_bitmap_t; ///< A single word in a bitmap.
  */
 #define REDUCT_BITMAP_TEST(_bitmap, _bit) \
     (((_bitmap)[(_bit) / REDUCT_BITMAP_WIDTH] & (1ULL << ((_bit) % REDUCT_BITMAP_WIDTH))) != 0)
+
+/**
+ * @brief Set a range of bits in a bitmap.
+ *
+ * @param bitmap The bitmap array.
+ * @param start The starting bit index to set.
+ * @param count The number of bits to set.
+ * @return The starting bit index that was set.
+ */
+static inline size_t reduct_bitmap_set_range(reduct_bitmap_t* bitmap, size_t start, size_t count)
+{
+    for (size_t i = 0; i < count; i++)
+    {
+        REDUCT_BITMAP_SET(bitmap, start + i);
+    }
+    return start;
+}
 
 /**
  * @brief Find the first clear bit in a bitmap.
@@ -168,6 +185,37 @@ static inline size_t reduct_bitmap_next_clear(const reduct_bitmap_t* bitmap, siz
         }
     }
 
+    return REDUCT_BITMAP_INDEX_NONE;
+}
+
+/**
+ * @brief Find the last set bit in a bitmap.
+ *
+ * @param bitmap The bitmap array.
+ * @param size The number of words in the bitmap array.
+ * @return The index of the last set bit, or `REDUCT_BITMAP_INDEX_NONE` if all bits are clear.
+ */
+static inline size_t reduct_bitmap_find_last_set(const reduct_bitmap_t* bitmap, size_t size)
+{
+    if (size == 0)
+    {
+        return REDUCT_BITMAP_INDEX_NONE;
+    }
+
+    for (size_t i = size; i > 0; i--)
+    {
+        size_t idx = i - 1;
+        if (bitmap[idx] != 0)
+        {
+            for (int32_t b = REDUCT_BITMAP_WIDTH - 1; b >= 0; b--)
+            {
+                if (bitmap[idx] & (1ULL << b))
+                {
+                    return idx * REDUCT_BITMAP_WIDTH + (size_t)b;
+                }
+            }
+        }
+    }
     return REDUCT_BITMAP_INDEX_NONE;
 }
 

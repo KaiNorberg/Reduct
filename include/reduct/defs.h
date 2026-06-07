@@ -6,6 +6,8 @@
 
 struct reduct;
 struct reduct_list;
+struct reduct_builder;
+struct reduct_list;
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 #ifdef REDUCT_BUILD_LIB
@@ -32,6 +34,7 @@ typedef HMODULE reduct_lib_t;
 #define REDUCT_LIB_ERROR() "Windows Error"
 #else
 #include <dlfcn.h>
+#include <unistd.h>
 typedef void* reduct_lib_t;
 #define REDUCT_LIB_OPEN(_path) dlopen(_path, RTLD_NOW | RTLD_GLOBAL)
 #define REDUCT_LIB_CLOSE(_lib) dlclose(_lib)
@@ -44,12 +47,13 @@ typedef void* reduct_lib_t;
 #define REDUCT_UNLIKELY(_x) __builtin_expect(!!(_x), 0)
 #define REDUCT_NORETURN __attribute__((noreturn))
 #define REDUCT_ALWAYS_INLINE __attribute__((always_inline))
-#define REDUCT_HAS_COMPUTED_GOTO
+#define REDUCT_ALIGNED(_x) __attribute__((aligned(_x)))
 #elif defined(_MSC_VER)
 #define REDUCT_LIKELY(_x) (_x)
 #define REDUCT_UNLIKELY(_x) (_x)
 #define REDUCT_NORETURN __declspec(noreturn)
 #define REDUCT_ALWAYS_INLINE __forceinline
+#define REDUCT_ALIGNED(_x) __declspec(align(_x))
 #else
 #define REDUCT_LIKELY(_x) (_x)
 #define REDUCT_UNLIKELY(_x) (_x)
@@ -115,6 +119,17 @@ typedef struct
 {
     uint64_t _value;
 } reduct_handle_t;
+
+/**
+ * @brief Native function pointer type.
+ */
+typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
+
+/**
+ * @brief Intrinsic handler function type.
+ */
+typedef struct reduct_rvsdg_origin* (
+    *reduct_native_intrinsic_fn)(struct reduct_builder* builder, struct reduct_list* expr);
 
 /**
  * @brief Module initialization function type.

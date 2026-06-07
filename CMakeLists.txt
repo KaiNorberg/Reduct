@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
-project(reduct VERSION 3.4.2 LANGUAGES C)
+project(reduct VERSION 4.0.0 LANGUAGES C)
 
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
@@ -44,24 +44,28 @@ set(REDUCT_SOURCES
     src/atom.c
     src/char.c
     src/closure.c
-    src/compile.c
+    src/emit.c
+    src/build.c
     src/core.c
-    src/disasm.c
+    src/dump.c
     src/error.c
     src/eval.c
     src/function.c
+    src/future.c
     src/gc.c
     src/handle.c
-    src/inst.c
-    src/intrinsic.c
+    src/opcode.c
     src/item.c
     src/list.c
     src/native.c
     src/optimize.c
     src/parse.c
     src/schema.c
+    src/scratch.c
     src/standard.c
     src/stringify.c
+    src/rvsdg.c
+    src/task.c
 )
 
 add_library(reduct SHARED ${REDUCT_SOURCES})
@@ -111,8 +115,8 @@ if(REDUCT_USE_FUZZER AND NOT (WIN32 OR APPLE))
 endif()
 
 if(NOT WIN32)
-    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter)
-    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter)
+    target_compile_options(reduct PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides -Wno-unused-command-line-argument -Wno-initializer-overrides)
+    target_compile_options(reduct_static PRIVATE -Wall -Wextra -Werror -Wno-uninitialized -Wno-unused -Wno-unused-parameter -Wno-initializer-overrides -Wno-unused-command-line-argument -Wno-initializer-overrides)
 endif()
 
 add_subdirectory(tools/reduct-cli)

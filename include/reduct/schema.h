@@ -1,7 +1,8 @@
 #ifndef REDUCT_SCHEMA_H
 #define REDUCT_SCHEMA_H 1
 
-#include "reduct/defs.h"
+#include <reduct/defs.h>
+#include <reduct/sync.h>
 
 #include <stdbool.h>
 
@@ -62,6 +63,32 @@ typedef uint32_t reduct_schema_id_t; ///< Schema ID type.
 typedef uint32_t reduct_schema_index_t; ///< Schema index type.
 
 #define REDUCT_SCHEMA_INDEX_NONE ((reduct_schema_index_t) - 1) ///< Invalid schema index.
+
+/**
+ * @brief Global schema-related state structure.
+ * @struct reduct_schema_global_t
+ */
+typedef struct
+{
+    struct reduct_schema_internal** schemas;
+    size_t count;
+    size_t capacity;
+    reduct_rwmutex_t mutex;
+} reduct_schema_global_t;
+
+/**
+ * @brief Initialize a global schema state.
+ *
+ * @param global Pointer to the global schema state to initialize.
+ */
+REDUCT_API void reduct_schema_global_init(reduct_schema_global_t* global);
+
+/**
+ * @brief Deinitialize a global schema state.
+ *
+ * @param global Pointer to the global schema state to deinitialize.
+ */
+REDUCT_API void reduct_schema_global_deinit(reduct_schema_global_t* global);
 
 /**
  * @brief Create a new schema.
