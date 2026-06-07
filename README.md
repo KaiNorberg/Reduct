@@ -631,19 +631,6 @@ printf("Name: %s, Age: %d\n", person.name, person.age);
 
 For more information, either consult the doxygen documentation within the headers or the generated documentation found [here](https://kainorberg.github.io/Reduct/html/index.html).
 
-## Implementation
-
-- Register-based VM executing custom 32-bit bytecode.
-- Uses NaN-boxed [Tagged Pointers](https://en.wikipedia.org/wiki/Tagged_pointer) (`reduct_handle_t`) to store 48-bit integers, doubles, or pointers in a single 64-bit value.
-- 64-byte fixed-size items (`reduct_item_t`) managed by a pool allocator and a simple garbage collector.
-- Lists are implemented as persistent bit-mapped vector tries for $O(\log n)$ performance.
-- Symbol atoms use [String Interning](https://en.wikipedia.org/wiki/String_interning) for $O(1)$ pointer-based comparisons.
-- Includes constant folding, [Tail Call Optimization](https://en.wikipedia.org/wiki/Tail_call), [Computed Gotos](https://eli.thegreenplace.net/2012/07/12/computed-goto-for-efficient-dispatch-tables), and much more.
-- Utilizes `setjmp`/`longjmp` to minimize error-checking overhead.
-- Micro optimized with the help of `cachegrind`.
-
-*See the [include/reduct/](https://github.com/KaiNorberg/Reduct/tree/main/include/reduct) and [src/](https://github.com/KaiNorberg/Reduct/tree/main/src) directories for the full implementation details.*
-
 ## Benchmarks
 
 The included results were automatically generated using the `run_bench.sh` script, all benchmarks can be found in `bench/`.
