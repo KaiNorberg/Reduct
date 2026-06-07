@@ -91,13 +91,24 @@ typedef struct
     reduct_handle_t result;
     reduct_handle_t callable;
     reduct_handle_t arg;
+    reduct_error_t* error;
 } reduct_standard_task_t;
 
 static void reduct_standard_worker(reduct_t* reduct, void* arg)
 {
     reduct_standard_task_t* task = (reduct_standard_task_t*)arg;
-    task->result = reduct_eval_call(reduct, task->callable, 1, &task->arg);
-    REDUCT_HANDLE_RETAIN(reduct, task->result);
+    reduct_error_t error = REDUCT_ERROR();
+
+    REDUCT_ERROR_TRY(reduct, &error)
+    {
+        task->result = reduct_eval_call(reduct, task->callable, 1, &task->arg);
+        REDUCT_HANDLE_RETAIN(reduct, task->result);
+    }
+
+    if (!REDUCT_ERROR_SUCCESS(&error) && REDUCT_ERROR_SUCCESS(task->error))
+    {
+        *task->error = error;
+    }
 }
 
 REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, reduct_handle_t callable)
@@ -125,6 +136,8 @@ REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, re
         return mapped;
     }
 
+    reduct_error_t error = REDUCT_ERROR();
+
     reduct_handle_t mapped = REDUCT_HANDLE_CREATE_LIST(reduct);
     REDUCT_HANDLE_RETAIN(reduct, mapped);
     REDUCT_SCRATCH_GET(reduct, tasks, reduct_standard_task_t, sourceList->length);
@@ -133,6 +146,7 @@ REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, re
     REDUCT_LIST_FOR_EACH(&handle, sourceList)
     {
         reduct_standard_task_t* task = &tasks[_index];
+        task->error = &error;
         task->callable = callable;
         task->arg = handle;
         task->id = reduct_task_create(reduct, reduct_standard_worker, task);
@@ -147,6 +161,12 @@ REDUCT_API reduct_handle_t reduct_map(reduct_t* reduct, reduct_handle_t list, re
 
     REDUCT_SCRATCH_PUT(reduct, tasks);
     REDUCT_HANDLE_RELEASE(reduct, mapped);
+
+    if (!REDUCT_ERROR_SUCCESS(&error))
+    {
+        REDUCT_ERROR_RETHROW(reduct, &error);
+    }
+
     return mapped;
 }
 
@@ -178,8 +198,10 @@ REDUCT_API reduct_handle_t reduct_filter(reduct_t* reduct, reduct_handle_t list,
         return REDUCT_HANDLE_FROM_LIST(filtered);
     }
 
-    reduct_list_t* filtered = reduct_list_new(reduct);
-    reduct_list_retain(reduct, filtered);
+    reduct_error_t error = REDUCT_ERROR();
+
+    reduct_handle_t filtered = REDUCT_HANDLE_CREATE_LIST(reduct);
+    REDUCT_HANDLE_RETAIN(reduct, filtered);
 
     REDUCT_SCRATCH_GET(reduct, tasks, reduct_standard_task_t, sourceList->length);
 
@@ -187,6 +209,7 @@ REDUCT_API reduct_handle_t reduct_filter(reduct_t* reduct, reduct_handle_t list,
     REDUCT_LIST_FOR_EACH(&handle, sourceList)
     {
         reduct_standard_task_t* task = &tasks[_index];
+        task->error = &error;
         task->callable = callable;
         task->arg = handle;
         task->id = reduct_task_create(reduct, reduct_standard_worker, task);
@@ -201,13 +224,19 @@ REDUCT_API reduct_handle_t reduct_filter(reduct_t* reduct, reduct_handle_t list,
     {
         if (REDUCT_HANDLE_IS_TRUTHY(tasks[_index].result))
         {
-            reduct_list_push(reduct, filtered, handle);
+            reduct_list_push(reduct, REDUCT_HANDLE_TO_LIST(filtered), handle);
         }
     }
 
     REDUCT_SCRATCH_PUT(reduct, tasks);
-    reduct_list_release(reduct, filtered);
-    return REDUCT_HANDLE_FROM_LIST(filtered);
+    REDUCT_HANDLE_RELEASE(reduct, filtered);
+
+    if (!REDUCT_ERROR_SUCCESS(&error))
+    {
+        REDUCT_ERROR_RETHROW(reduct, &error);
+    }
+
+    return filtered;
 }
 
 REDUCT_API reduct_handle_t reduct_reduce(reduct_t* reduct, reduct_handle_t list, reduct_handle_t initial,
@@ -1234,12 +1263,15 @@ REDUCT_API reduct_handle_t reduct_find(struct reduct* reduct, reduct_handle_t ha
         return REDUCT_HANDLE_NIL(reduct);
     }
 
+    reduct_error_t error = REDUCT_ERROR();
+
     REDUCT_SCRATCH_GET(reduct, tasks, reduct_standard_task_t, list->length);
 
     reduct_handle_t current;
     REDUCT_LIST_FOR_EACH(&current, list)
     {
         reduct_standard_task_t* task = &tasks[_index];
+        task->error = &error;
         task->callable = callable;
         task->arg = current;
         task->id = reduct_task_create(reduct, reduct_standard_worker, task);
@@ -1248,6 +1280,12 @@ REDUCT_API reduct_handle_t reduct_find(struct reduct* reduct, reduct_handle_t ha
     for (size_t i = 0; i < list->length; i++)
     {
         reduct_task_join(reduct, tasks[i].id);
+    }
+
+    if (!REDUCT_ERROR_SUCCESS(&error))
+    {
+        REDUCT_SCRATCH_PUT(reduct, tasks);
+        REDUCT_ERROR_RETHROW(reduct, &error);
     }
 
     REDUCT_LIST_FOR_EACH(&current, list)

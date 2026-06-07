@@ -160,25 +160,25 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         reduct_rwmutex_write_unlock(&reduct->global->atom.mutex);
     }
     break;
-    case REDUCT_ITEM_TYPE_ATOM_STACK:
+    case REDUCT_ITEM_TYPE_ARENA:
     {
-        reduct_atom_stack_t* stack = &item->atomStack;
-        if (stack->data != NULL)
+        reduct_arena_t* arena = &item->arena;
+        if (arena->data != NULL)
         {
-            free(stack->data);
-            stack->data = NULL;
+            free(arena->data);
+            arena->data = NULL;
         }
-        if (stack->next != NULL)
+        if (arena->next != NULL)
         {
-            stack->next->prev = stack->prev;
+            arena->next->prev = arena->prev;
         }
-        if (stack->prev != NULL)
+        if (arena->prev != NULL)
         {
-            stack->prev->next = stack->next;
+            arena->prev->next = arena->next;
         }
-        else if (reduct->atom.atomStack == stack)
+        else if (reduct->arena.current == arena)
         {
-            reduct->atom.atomStack = stack->next;
+            reduct->arena.current = arena->next;
         }
     }
     break;
@@ -270,8 +270,8 @@ REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)
             return "number";
         }
         return "atom";
-    case REDUCT_ITEM_TYPE_ATOM_STACK:
-        return "atom stack";
+    case REDUCT_ITEM_TYPE_ARENA:
+        return "arena";
     case REDUCT_ITEM_TYPE_LIST:
         return "list";
     case REDUCT_ITEM_TYPE_LIST_NODE:
@@ -345,9 +345,9 @@ static inline void reduct_item_mark_list(reduct_list_t* list)
 
 static inline void reduct_item_mark_atom(reduct_atom_t* atom)
 {
-    if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->stack != NULL)
+    if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->arena != NULL)
     {
-        reduct_item_mark(REDUCT_CONTAINER_OF(atom->stack, reduct_item_t, atomStack));
+        reduct_item_mark(REDUCT_CONTAINER_OF(atom->arena, reduct_item_t, arena));
     }
 }
 

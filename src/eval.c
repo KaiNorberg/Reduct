@@ -56,7 +56,7 @@ static inline REDUCT_ALWAYS_INLINE void reduct_eval_ensure_regs(reduct_t* reduct
     }
     if (REDUCT_UNLIKELY(reduct->eval.regCapacity > REDUCT_EVAL_REGS_MAX))
     {
-        REDUCT_ERROR_INTERNAL(reduct, "too many registers");
+        REDUCT_ERROR_INTERNAL(reduct, "register overflow within evaluator, most likely caused by excessive recursion");
     }
 
     reduct_handle_t* newRegs =

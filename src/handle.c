@@ -52,9 +52,9 @@ REDUCT_API reduct_handle_type_t reduct_handle_get_type(reduct_handle_t handle)
     {
         return REDUCT_HANDLE_TYPE_CLOSURE;
     }
-    case REDUCT_ITEM_TYPE_ATOM_STACK:
+    case REDUCT_ITEM_TYPE_ARENA:
     {
-        return REDUCT_HANDLE_TYPE_ATOM_STACK;
+        return REDUCT_HANDLE_TYPE_ARENA;
     }
     case REDUCT_ITEM_TYPE_LIST_NODE:
     {
@@ -95,8 +95,8 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type)
         return "function";
     case REDUCT_HANDLE_TYPE_CLOSURE:
         return "closure";
-    case REDUCT_HANDLE_TYPE_ATOM_STACK:
-        return "atom stack";
+    case REDUCT_HANDLE_TYPE_ARENA:
+        return "arena";
     case REDUCT_HANDLE_TYPE_LIST_NODE:
         return "list node";
     case REDUCT_HANDLE_TYPE_RVSDG_NODE:

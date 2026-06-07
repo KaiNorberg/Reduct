@@ -228,7 +228,9 @@ REDUCT_API reduct_list_t* reduct_list_slice(struct reduct* reduct, reduct_list_t
     REDUCT_LIST_FOR_EACH_AT(&handle, list, start)
     {
         if (_index >= end)
+        {
             break;
+        }
 
         reduct_list_push(reduct, newList, handle);
     }

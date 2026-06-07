@@ -1,3 +1,4 @@
+#include "reduct/arena.h"
 #include "reduct/sync.h"
 #include <reduct/atom.h>
 #include <reduct/char.h>
@@ -38,18 +39,6 @@ REDUCT_API void reduct_atom_global_deinit(reduct_atom_global_t* global)
     global->mask = 0;
     global->tombstones = 0;
     reduct_rwmutex_destroy(&global->mutex);
-}
-
-REDUCT_API void reduct_atom_local_init(reduct_atom_local_t* local)
-{
-    assert(local != NULL);
-    local->atomStack = NULL;
-}
-
-REDUCT_API void reduct_atom_local_deinit(reduct_atom_local_t* local)
-{
-    assert(local != NULL);
-    local->atomStack = NULL;
 }
 
 static inline bool reduct_atom_map_is_alive(reduct_atom_t* slot)
@@ -208,58 +197,6 @@ REDUCT_API bool reduct_atom_is_equal(reduct_atom_t* atom, const char* str, size_
     return memcmp(atom->string, str, len) == 0;
 }
 
-static inline reduct_atom_stack_t* reduct_atom_stack_new(reduct_t* reduct, size_t capacity)
-{
-    reduct_item_t* item = reduct_item_new(reduct);
-    item->type = REDUCT_ITEM_TYPE_ATOM_STACK;
-
-    reduct_atom_stack_t* stack = &item->atomStack;
-    stack->capacity = (uint32_t)capacity;
-    stack->count = 0;
-    stack->data = malloc(capacity);
-    if (stack->data == NULL)
-    {
-        REDUCT_ERROR_INTERNAL(reduct, "out of memory");
-    }
-
-    stack->next = reduct->atom.atomStack;
-    stack->prev = NULL;
-    if (reduct->atom.atomStack != NULL)
-    {
-        reduct->atom.atomStack->prev = stack;
-    }
-    reduct->atom.atomStack = stack;
-    return stack;
-}
-
-static inline char* reduct_atom_stack_alloc(reduct_t* reduct, size_t size, reduct_atom_stack_t** out)
-{
-    assert(reduct != NULL);
-
-    reduct_atom_stack_t* stack = reduct->atom.atomStack;
-    if (stack == NULL || stack->count + size > stack->capacity)
-    {
-        size_t capacity = REDUCT_ATOM_STACK_MIN;
-        while (capacity < size)
-        {
-            capacity *= REDUCT_ATOM_MAP_GROWTH;
-        }
-        stack = reduct_atom_stack_new(reduct, capacity);
-        if (stack == NULL)
-        {
-            return NULL;
-        }
-    }
-
-    char* data = stack->data + stack->count;
-    stack->count += (uint32_t)size;
-    if (out != NULL)
-    {
-        *out = stack;
-    }
-    return data;
-}
-
 REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, size_t len)
 {
     reduct_item_t* item = reduct_item_new(reduct);
@@ -278,11 +215,10 @@ REDUCT_API reduct_atom_t* reduct_atom_new(reduct_t* reduct, size_t len)
     }
     else
     {
-        atom->string = reduct_atom_stack_alloc(reduct, len, &atom->stack);
-        if (atom->string == NULL)
-        {
-            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
-        }
+        reduct_arena_chunk_t chunk;
+        reduct_arena_alloc(reduct, len, &chunk);
+        atom->string = chunk.data;
+        atom->arena = chunk.arena;
         atom->flags |= REDUCT_ATOM_FLAG_LARGE;
     }
 
@@ -806,7 +742,7 @@ REDUCT_API reduct_atom_t* reduct_atom_substr(struct reduct* reduct, reduct_atom_
     {
         subAtom->flags = REDUCT_ATOM_FLAG_LARGE;
         subAtom->string = (char*)str + start;
-        subAtom->stack = atom->stack;
+        subAtom->arena = atom->arena;
     }
     else
     {
@@ -828,30 +764,27 @@ REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_ato
         return reduct_atom_new(reduct, 0);
     }
 
-    if (atom->flags & REDUCT_ATOM_FLAG_LARGE && atom->stack != NULL)
+    if (!(atom->flags & REDUCT_ATOM_FLAG_LARGE))
     {
-        reduct_atom_stack_t* stack = atom->stack;
-        if (stack->data + stack->count == atom->string + atom->length &&
-            stack->count + len - atom->length <= stack->capacity)
-        {
-            stack->count += len - atom->length;
-
-            reduct_item_t* superItem = reduct_item_new(reduct);
-            superItem->type = REDUCT_ITEM_TYPE_ATOM;
-
-            reduct_atom_t* superAtom = &superItem->atom;
-            superAtom->length = len;
-            superAtom->hash = 0;
-            superAtom->index = REDUCT_ATOM_INDEX_NONE;
-            superAtom->flags = REDUCT_ATOM_FLAG_LARGE;
-            superAtom->string = atom->string;
-            superAtom->stack = atom->stack;
-            return superAtom;
-        }
+        reduct_atom_t* superAtom = reduct_atom_new(reduct, len);
+        memcpy(superAtom->string, atom->string, atom->length);
+        return superAtom;
     }
 
-    reduct_atom_t* superAtom = reduct_atom_new(reduct, len);
-    memcpy(superAtom->string, atom->string, atom->length);
+    reduct_arena_chunk_t source = REDUCT_ARENA_CHUNK(atom->arena, atom->length, atom->string);
+    reduct_arena_chunk_t chunk;
+    reduct_arena_alloc_super(reduct, len, &source, &chunk);
+
+    reduct_item_t* superItem = reduct_item_new(reduct);
+    superItem->type = REDUCT_ITEM_TYPE_ATOM;
+
+    reduct_atom_t* superAtom = &superItem->atom;
+    superAtom->length = len;
+    superAtom->hash = 0;
+    superAtom->index = REDUCT_ATOM_INDEX_NONE;
+    superAtom->flags = REDUCT_ATOM_FLAG_LARGE;
+    superAtom->string = (char*)chunk.data;
+    superAtom->arena = chunk.arena;
     return superAtom;
 }
 

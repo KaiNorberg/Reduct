@@ -212,6 +212,7 @@ REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(st
 {
     reduct_task_id_t id;
 
+    /// @todo Can deadlock if the queue is full.
     while (!reduct_task_create_try(reduct, func, arg, &id))
     {
         reduct_task_try_work(reduct);

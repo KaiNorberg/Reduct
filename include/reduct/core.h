@@ -1,8 +1,8 @@
-#include "reduct/emit.h"
 #ifndef REDUCT_CORE_H
 #define REDUCT_CORE_H 1
 
 #include <reduct/atom.h>
+#include <reduct/arena.h>
 #include <reduct/defs.h>
 #include <reduct/error.h>
 #include <reduct/eval.h>
@@ -12,6 +12,7 @@
 #include <reduct/schema.h>
 #include <reduct/scratch.h>
 #include <reduct/task.h>
+#include <reduct/gc.h>
 
 struct reduct_item;
 struct reduct_eval_frame;
@@ -133,7 +134,7 @@ typedef struct reduct
     thrd_t thrd;
     reduct_global_t* global;
     reduct_error_t* error;
-    reduct_atom_local_t atom;
+    reduct_arena_local_t arena;
     reduct_item_local_t item;
     reduct_scratch_local_t scratch;
     reduct_eval_local_t eval;

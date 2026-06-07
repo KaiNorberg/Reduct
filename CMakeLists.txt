@@ -41,6 +41,7 @@ configure_file(
 )
 
 set(REDUCT_SOURCES
+    src/arena.c
     src/atom.c
     src/char.c
     src/closure.c

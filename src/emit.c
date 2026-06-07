@@ -1,7 +1,7 @@
-#include "reduct/function.h"
-#include "reduct/handle.h"
-#include "reduct/opcode.h"
-#include "reduct/rvsdg.h"
+#include <reduct/function.h>
+#include <reduct/handle.h>
+#include <reduct/opcode.h>
+#include <reduct/rvsdg.h>
 #include <reduct/atom.h>
 #include <reduct/core.h>
 #include <reduct/defs.h>

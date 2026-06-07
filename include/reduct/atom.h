@@ -5,6 +5,7 @@
 #include <reduct/native.h>
 #include <reduct/schema.h>
 #include <reduct/sync.h>
+#include <reduct/arena.h>
 
 #include <assert.h>
 #include <stdbool.h>
@@ -68,35 +69,16 @@ typedef enum
     REDUCT_ATOM_LOOKUP_QUOTED = 1 << 0 ///< Atom should be explicitly quoted.
 } reduct_atom_lookup_flags_t;
 
-typedef uint16_t reduct_atom_flags_t;
+typedef uint8_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NONE 0                  ///< No flags.
 #define REDUCT_ATOM_FLAG_NUMBER (1 << 0)         ///< Atom is known to be number shaped.
-#define REDUCT_ATOM_FLAG_INTRINSIC (1 << 2)      ///< Atom is known to represent an intrinsic.
-#define REDUCT_ATOM_FLAG_NATIVE (1 << 3)         ///< Atom is known to represent a native function.
-#define REDUCT_ATOM_FLAG_NUMBER_CHECKED (1 << 4) ///< Atom has been checked for number shaping.
-#define REDUCT_ATOM_FLAG_NATIVE_CHECKED (1 << 5) ///< Atom has been checked for a native function.
-#define REDUCT_ATOM_FLAG_LARGE (1 << 6)          ///< Atom has an allocated buffer within a stack.
-#define REDUCT_ATOM_FLAG_SCHEMA (1 << 8)         ///< Atom is a schema field.
-#define REDUCT_ATOM_FLAG_QUOTED (1 << 9)         ///< Atom is quoted.
-
-#define REDUCT_ATOM_STACK_MIN 1024 ///< The minimum size of an atom stack.
-#define REDUCT_ATOM_STACK_GROWTH \
-    2 ///< The factor by which we increase the minimum size until the needed capacity is reached.
-
-/**
- * @brief Atom block structure.
- * @struct reduct_atom_block_t
- *
- * Used to more efficiently allocate large strings for atoms.
- */
-typedef struct reduct_atom_stack
-{
-    struct reduct_atom_stack* next;
-    struct reduct_atom_stack* prev;
-    uint32_t capacity;
-    uint32_t count;
-    char* data;
-} reduct_atom_stack_t;
+#define REDUCT_ATOM_FLAG_INTRINSIC (1 << 1)      ///< Atom is known to represent an intrinsic.
+#define REDUCT_ATOM_FLAG_NATIVE (1 << 2)         ///< Atom is known to represent a native function.
+#define REDUCT_ATOM_FLAG_NUMBER_CHECKED (1 << 3) ///< Atom has been checked for number shaping.
+#define REDUCT_ATOM_FLAG_NATIVE_CHECKED (1 << 4) ///< Atom has been checked for a native function.
+#define REDUCT_ATOM_FLAG_LARGE (1 << 5)          ///< Atom has an allocated buffer within a stack.
+#define REDUCT_ATOM_FLAG_SCHEMA (1 << 6)         ///< Atom is a schema field.
+#define REDUCT_ATOM_FLAG_QUOTED (1 << 7)         ///< Atom is quoted.
 
 /**
  * @brief Atom structure.
@@ -108,12 +90,12 @@ typedef struct reduct_atom
     uint32_t hash;             ///< The hash of the string.
     uint32_t index;            ///< The index within the atom map.
     reduct_atom_flags_t flags; ///< Atom flags.
-    uint8_t _padding[2];
+    uint8_t _padding[3];
     char* string; ///< Pointer to the data.
     union {
         char smallString[REDUCT_ATOM_SMALL_MAX]; ///< Small string data, atom must not have `REDUCT_ATOM_FLAG_LARGE`.
-        struct reduct_atom_stack*
-            stack; ///< The stack that this atoms string was allocated from, atom must have `REDUCT_ATOM_FLAG_LARGE`.
+        reduct_arena_t*
+            arena; ///< The arena that this atoms string was allocated from, atom must have `REDUCT_ATOM_FLAG_LARGE`.
     };
     union {
         struct
@@ -154,15 +136,6 @@ typedef struct
 } reduct_atom_global_t;
 
 /**
- * @brief Per-thread atom-related state structure.
- * @struct reduct_atom_local_t
- */
-typedef struct
-{
-    reduct_atom_stack_t* atomStack;
-} reduct_atom_local_t;
-
-/**
  * @brief Initialize a global atom state.
  *
  * @param global Pointer to the global atom state to initialize.
@@ -175,20 +148,6 @@ REDUCT_API void reduct_atom_global_init(reduct_atom_global_t* global);
  * @param global Pointer to the global atom state to deinitialize.
  */
 REDUCT_API void reduct_atom_global_deinit(reduct_atom_global_t* global);
-
-/**
- * @brief Initialize a local atom state.
- *
- * @param local Pointer to the local atom state to initialize.
- */
-REDUCT_API void reduct_atom_local_init(reduct_atom_local_t* local);
-
-/**
- * @brief Deinitialize a local atom state.
- *
- * @param local Pointer to the local atom state to deinitialize.
- */
-REDUCT_API void reduct_atom_local_deinit(reduct_atom_local_t* local);
 
 /**
  * @brief Check if an atom is equal to a string.

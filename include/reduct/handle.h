@@ -46,7 +46,7 @@ typedef enum
     REDUCT_HANDLE_TYPE_LIST,       ///< Handle is a reference to a list.
     REDUCT_HANDLE_TYPE_FUNCTION,   ///< Handle is a reference to a function.
     REDUCT_HANDLE_TYPE_CLOSURE,    ///< Handle is a reference to a closure.
-    REDUCT_HANDLE_TYPE_ATOM_STACK, ///< Handle is a reference to an atom stack.
+    REDUCT_HANDLE_TYPE_ARENA, ///< Handle is a reference to an arena.
     REDUCT_HANDLE_TYPE_LIST_NODE,  ///< Handle is a reference to a list node.
     REDUCT_HANDLE_TYPE_RVSDG_NODE, ///< Handle is a reference to an IR node.
     REDUCT_HANDLE_TYPE_RVSDG_EDGE, ///< Handle is a reference to an IR edge.

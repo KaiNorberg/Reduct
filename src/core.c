@@ -1,3 +1,4 @@
+#include "reduct/arena.h"
 #include "reduct/build.h"
 #include <reduct/atom.h>
 #include <reduct/core.h>
@@ -124,7 +125,7 @@ REDUCT_API reduct_t* reduct_new(void)
         reduct_t* thread = &global->threads[i];
 
         thread->global = global;
-        reduct_atom_local_init(&thread->atom);
+        reduct_arena_local_init(&thread->arena);
         reduct_item_local_init(&thread->item);
         reduct_scratch_local_init(&thread->scratch);
         reduct_eval_local_init(&thread->eval);
@@ -190,7 +191,7 @@ REDUCT_API void reduct_free(reduct_t* reduct)
     for (size_t i = 0; i < global->threadCount; i++)
     {
         reduct_t* thread = &global->threads[i];
-        reduct_atom_local_deinit(&thread->atom);
+        reduct_arena_local_deinit(&thread->arena);
         reduct_item_local_deinit(&thread->item);
         reduct_scratch_local_deinit(&thread->scratch);
         reduct_eval_local_deinit(&thread->eval);
