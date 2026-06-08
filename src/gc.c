@@ -26,6 +26,7 @@ static inline void reduct_item_sweep(reduct_t* reduct)
     reduct_item_block_t* prev = NULL;
     reduct_item_block_t* block = global->block;
 
+    reduct_item_block_t* blocksToFree = NULL;
     reduct_item_t* globalFreeList = NULL;
     size_t globalFreeCount = 0;
 
@@ -48,7 +49,9 @@ static inline void reduct_item_sweep(reduct_t* reduct)
                 reduct_item_deinit(reduct, &block->items[i]);
             }
             global->blockCount--;
-            free(block->allocated);
+
+            block->next = blocksToFree;
+            blocksToFree = block;
         }
         else
         {
@@ -98,6 +101,13 @@ static inline void reduct_item_sweep(reduct_t* reduct)
     global->prevBlockCount = global->blockCount;
 
     mtx_unlock(&global->mutex);
+
+    while (blocksToFree != NULL)
+    {
+        reduct_item_block_t* next = blocksToFree->next;
+        free(blocksToFree->allocated);
+        blocksToFree = next;
+    }
 }
 
 REDUCT_API void reduct_gc(reduct_t* reduct)

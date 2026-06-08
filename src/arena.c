@@ -24,7 +24,7 @@ static inline reduct_arena_t* reduct_arena_new(reduct_t* reduct, size_t capacity
     reduct_arena_t* arena = &item->arena;
     arena->capacity = capacity;
     arena->count = 0;
-    arena->data = malloc(capacity);
+    arena->data = calloc(1, capacity);
     if (arena->data == NULL)
     {
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
@@ -36,7 +36,8 @@ static inline reduct_arena_t* reduct_arena_new(reduct_t* reduct, size_t capacity
 static inline reduct_arena_t* reduct_arena_get(reduct_t* reduct, size_t size)
 {
     reduct_arena_t* arena = reduct->arena.current;
-    if (arena == NULL || arena->count + size > arena->capacity)
+    size_t offset = (arena != NULL) ? REDUCT_ROUND_UP(arena->count, 8) : 0;
+    if (arena == NULL || offset + size > arena->capacity)
     {
         size_t capacity = REDUCT_ARENA_MIN;
         while (capacity < size)
@@ -64,13 +65,16 @@ REDUCT_API void reduct_arena_alloc(struct reduct* reduct, size_t size, reduct_ar
     assert(size > 0);
 
     reduct_arena_t* arena = reduct_arena_get(reduct, size);
+    size_t offset = REDUCT_ROUND_UP(arena->count, 8);
+
     out->arena = arena;
-    out->data = (uint8_t*)arena->data + arena->count;
+    out->data = (uint8_t*)arena->data + offset;
     out->size = size;
-    arena->count += size;
+    arena->count = offset + size;
 }
 
-REDUCT_API void reduct_arena_alloc_super(struct reduct* reduct, size_t size, reduct_arena_chunk_t* chunk, reduct_arena_chunk_t* out)
+REDUCT_API void reduct_arena_alloc_super(struct reduct* reduct, size_t size, reduct_arena_chunk_t* chunk,
+    reduct_arena_chunk_t* out)
 {
     assert(reduct != NULL);
     assert(chunk != NULL);

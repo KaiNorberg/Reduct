@@ -3,8 +3,8 @@
 
 #include <reduct/defs.h>
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * @file arena.h
@@ -35,7 +35,7 @@ typedef struct reduct_arena
  * @brief Arena chunk descriptor.
  * @struct reduct_arena_chunk_t
  */
-typedef struct 
+typedef struct
 {
     reduct_arena_t* arena;
     size_t size;
@@ -50,8 +50,7 @@ typedef struct
  * @param data Pointer to the chunk data.
  * @return An arena chunk descriptor.
  */
-#define REDUCT_ARENA_CHUNK(_arena, _size, _data) \
-    ((reduct_arena_chunk_t){(_arena), (_size), (_data)})
+#define REDUCT_ARENA_CHUNK(_arena, _size, _data) ((reduct_arena_chunk_t){(_arena), (_size), (_data)})
 
 /**
  * @brief Per-thread arena-related state structure.
@@ -87,15 +86,16 @@ REDUCT_API void reduct_arena_alloc(struct reduct* reduct, size_t size, reduct_ar
 
 /**
  * @brief Allocate a super chunk that starts with the specified chunk.
- * 
+ *
  * If the chunk is at the end of its arena and there is enough capacity, it will extend the existing allocation.
- * 
+ *
  * @param reduct Pointer to the Reduct structure.
  * @param size The size of the super chunk to allocate in bytes.
  * @param chunk The description of the chunk to extend from.
  * @param out Pointer to store the allocated super chunk information.
  */
-REDUCT_API void reduct_arena_alloc_super(struct reduct* reduct, size_t size, reduct_arena_chunk_t* chunk, reduct_arena_chunk_t* out);
+REDUCT_API void reduct_arena_alloc_super(struct reduct* reduct, size_t size, reduct_arena_chunk_t* chunk,
+    reduct_arena_chunk_t* out);
 
 /** @} */
 

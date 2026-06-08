@@ -17,11 +17,9 @@ struct reduct_closure;
 
 #define REDUCT_EVAL_REGS_INITIAL 64      ///< The initial amount of registers.
 #define REDUCT_EVAL_REGS_GROWTH_FACTOR 2 ///< The growth factor of the registers array.
-#define REDUCT_EVAL_REGS_MAX 65536       ///< The maximum amount of registers.
 
 #define REDUCT_EVAL_FRAMES_INITIAL 32      ///< The initial size of the frames array.
 #define REDUCT_EVAL_FRAMES_GROWTH_FACTOR 2 ///< The growth factor of the frames array.
-#define REDUCT_EVAL_FRAMES_MAX 65536       ///< The maximum size of the frames array.
 
 /**
  * @brief Evaluation frame structure.

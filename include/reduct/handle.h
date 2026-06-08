@@ -46,8 +46,7 @@ typedef enum
     REDUCT_HANDLE_TYPE_LIST,       ///< Handle is a reference to a list.
     REDUCT_HANDLE_TYPE_FUNCTION,   ///< Handle is a reference to a function.
     REDUCT_HANDLE_TYPE_CLOSURE,    ///< Handle is a reference to a closure.
-    REDUCT_HANDLE_TYPE_ARENA, ///< Handle is a reference to an arena.
-    REDUCT_HANDLE_TYPE_LIST_NODE,  ///< Handle is a reference to a list node.
+    REDUCT_HANDLE_TYPE_ARENA,      ///< Handle is a reference to an arena.
     REDUCT_HANDLE_TYPE_RVSDG_NODE, ///< Handle is a reference to an IR node.
     REDUCT_HANDLE_TYPE_RVSDG_EDGE, ///< Handle is a reference to an IR edge.
     REDUCT_HANDLE_TYPE_FUTURE,     ///< Handle is a reference to a future.
@@ -414,8 +413,9 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @brief Create a list handle.
  *
  * @param _reduct Pointer to the Reduct structure.
+ * @param _length The length of the list.
  */
-#define REDUCT_HANDLE_CREATE_LIST(_reduct) REDUCT_HANDLE_FROM_LIST(reduct_list_new(_reduct))
+#define REDUCT_HANDLE_CREATE_LIST(_reduct, _length) REDUCT_HANDLE_FROM_LIST(reduct_list_new(_reduct, _length))
 
 /**
  * @brief Create a list handle from an array of handles.
@@ -496,7 +496,7 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @param _handle The reduct_handle_t variable to store each element.
  * @param _list Pointer to the list handle.
  */
-#define REDUCT_HANDLE_FOR_EACH(_handle, _list) REDUCT_LIST_OF_EACH(_handle, REDUCT_HANDLE_TO_LIST(_list))
+#define REDUCT_HANDLE_FOR_EACH(_handle, _list) REDUCT_LIST_FOR_EACH(_handle, REDUCT_HANDLE_TO_LIST(_list))
 
 /**
  * @brief Get the value of the future referenced by the handle or the handle itself.
@@ -844,15 +844,6 @@ REDUCT_API void reduct_handle_atom_string(struct reduct* reduct, reduct_handle_t
     size_t* outLen);
 
 /**
- * @brief Push a value to a list handle.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param list The list handle.
- * @param val The value handle to push.
- */
-REDUCT_API void reduct_handle_push(struct reduct* reduct, reduct_handle_t list, reduct_handle_t val);
-
-/**
  * @brief Get the element at the specified index from a list or atom handle.
  *
  * For lists, returns the nth element. For atoms, returns the nth character as a string handle.
@@ -862,7 +853,7 @@ REDUCT_API void reduct_handle_push(struct reduct* reduct, reduct_handle_t list, 
  * @param index The index.
  * @return The element handle.
  */
-REDUCT_API reduct_handle_t reduct_handle_at(struct reduct* reduct, reduct_handle_t handle, size_t index);
+REDUCT_API reduct_handle_t reduct_handle_nth(struct reduct* reduct, reduct_handle_t handle, size_t index);
 
 /**
  * @brief Get the length of a handle (list elements or atom characters).

@@ -55,14 +55,13 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, cha
         size_t res = snprintf(buffer, size, "(");
         written += res;
 
-        reduct_handle_t child;
-        REDUCT_LIST_FOR_EACH(&child, &item->list)
+        for (size_t i = 0; i < item->list.length; i++)
         {
-            res = reduct_stringify(reduct, child, size > written ? buffer + written : NULL,
+            res = reduct_stringify(reduct, item->list.handles[i], size > written ? buffer + written : NULL,
                 size > written ? size - written : 0);
             written += res;
 
-            if (_index + 1 < item->length)
+            if (i + 1 < item->list.length)
             {
                 res = snprintf(size > written ? buffer + written : NULL, size > written ? size - written : 0, " ");
                 written += res;

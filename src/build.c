@@ -201,9 +201,7 @@ static reduct_rvsdg_origin_t* reduct_build_quote(reduct_builder_t* builder, redu
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "quote: expected 1 argument, got %zu",
         (size_t)list->length - 1);
 
-    return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region,
-        reduct_list_second(builder->reduct, list))
-        ->output;
+    return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, list->handles[1])->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_recur(reduct_builder_t* builder, reduct_list_t* list)
@@ -222,9 +220,9 @@ static reduct_rvsdg_origin_t* reduct_build_recur(reduct_builder_t* builder, redu
 
     reduct_rvsdg_node_t* call = reduct_rvsdg_node_new_call(builder->reduct, builder->scope->region, callable);
 
-    reduct_handle_t arg;
-    REDUCT_LIST_FOR_EACH_AT(&arg, list, 1)
+    for (size_t i = 1; i < list->length; i++)
     {
+        reduct_handle_t arg = list->handles[i];
         reduct_rvsdg_origin_t* argOrigin = reduct_build_handle(builder, arg);
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_add_input(builder->reduct, call);
         reduct_rvsdg_edge_connect(builder->reduct, argOrigin, input);
@@ -235,12 +233,7 @@ static reduct_rvsdg_origin_t* reduct_build_recur(reduct_builder_t* builder, redu
 
 static reduct_handle_t reduct_build_list_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    reduct_list_t* list = reduct_list_new(reduct);
-    for (size_t i = 0; i < argc; i++)
-    {
-        reduct_list_push(reduct, list, argv[i]);
-    }
-    return REDUCT_HANDLE_FROM_LIST(list);
+    return REDUCT_HANDLE_CREATE_HANDLES(reduct, argc, argv);
 }
 
 static reduct_rvsdg_origin_t* reduct_build_list(reduct_builder_t* builder, reduct_list_t* list)
@@ -258,7 +251,7 @@ static reduct_rvsdg_origin_t* reduct_build_lambda(reduct_builder_t* builder, red
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 3, "lambda: expected 2 arguments, got %zu",
         (size_t)list->length - 1);
 
-    reduct_handle_t args = reduct_list_second(builder->reduct, list);
+    reduct_handle_t args = list->handles[1];
     REDUCT_ERROR_COMPILE_ASSERT(builder, REDUCT_HANDLE_IS_LIST(args), "lambda: parameter list must be a list, got %s",
         REDUCT_HANDLE_GET_TYPE_STRING(args));
 
@@ -267,9 +260,10 @@ static reduct_rvsdg_origin_t* reduct_build_lambda(reduct_builder_t* builder, red
     reduct_builder_scope_t scope;
     reduct_builder_enter_scope(builder, &scope, lambda->firstRegion, lambda);
 
-    reduct_handle_t param;
-    REDUCT_LIST_FOR_EACH(&param, REDUCT_HANDLE_TO_LIST(args))
+    reduct_list_t* argsList = REDUCT_HANDLE_TO_LIST(args);
+    for (size_t i = 0; i < argsList->length; i++)
     {
+        reduct_handle_t param = argsList->handles[i];
         REDUCT_ERROR_COMPILE_ASSERT(builder, REDUCT_HANDLE_IS_ATOM(param), "lambda: parameter must be an atom, got %s",
             REDUCT_HANDLE_GET_TYPE_STRING(param));
 
@@ -308,39 +302,45 @@ static reduct_rvsdg_origin_t* reduct_build_thread(reduct_builder_t* builder, red
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 2, "->: expected at least 1 argument, got %zu",
         (size_t)list->length - 1);
 
-    reduct_handle_t current = reduct_list_nth(builder->reduct, list, 1);
-
+    reduct_handle_t current = list->handles[1];
     for (size_t i = 2; i < list->length; i++)
     {
-        reduct_handle_t step = reduct_list_nth(builder->reduct, list, i);
-        reduct_list_t* next = reduct_list_new(builder->reduct);
-
-        reduct_item_t* nextItem = REDUCT_CONTAINER_OF(next, reduct_item_t, list);
-        if (REDUCT_HANDLE_IS_ITEM(step))
-        {
-            reduct_item_t* stepItem = REDUCT_HANDLE_TO_ITEM(step);
-            nextItem->inputId = stepItem->inputId;
-            nextItem->position = stepItem->position;
-        }
-
+        reduct_list_t* next;
+        reduct_handle_t step = list->handles[i];
         if (REDUCT_HANDLE_IS_ATOM(step))
         {
-            reduct_list_push(builder->reduct, next, step);
-            reduct_list_push(builder->reduct, next, current);
+            next = reduct_list_new(builder->reduct, 2);
+            reduct_item_t* nextItem = REDUCT_CONTAINER_OF(next, reduct_item_t, list);
+            reduct_item_t* stepItem = REDUCT_HANDLE_TO_ITEM(step);
+
+            nextItem->inputId = stepItem->inputId;
+            nextItem->position = stepItem->position;
+
+            next->handles[0] = step;
+            next->handles[1] = current;
+
+            current = REDUCT_HANDLE_FROM_LIST(next);
         }
         else if (REDUCT_HANDLE_IS_LIST(step))
         {
             reduct_list_t* stepList = REDUCT_HANDLE_TO_LIST(step);
             REDUCT_ERROR_COMPILE_ASSERT(builder, stepList->length > 0, "->: step cannot be an empty list");
 
-            reduct_list_push(builder->reduct, next, reduct_list_first(builder->reduct, stepList));
-            reduct_list_push(builder->reduct, next, current);
+            next = reduct_list_new(builder->reduct, stepList->length + 1);
+            reduct_item_t* nextItem = REDUCT_CONTAINER_OF(next, reduct_item_t, list);
+            reduct_item_t* stepItem = REDUCT_HANDLE_TO_ITEM(step);
 
-            reduct_handle_t arg;
-            REDUCT_LIST_FOR_EACH_AT(&arg, stepList, 1)
+            nextItem->inputId = stepItem->inputId;
+            nextItem->position = stepItem->position;
+
+            next->handles[0] = stepList->handles[0];
+            next->handles[1] = current;
+            if (stepList->length > 1)
             {
-                reduct_list_push(builder->reduct, next, arg);
+                memcpy(next->handles + 2, stepList->handles + 1, (stepList->length - 1) * sizeof(reduct_handle_t));
             }
+
+            current = REDUCT_HANDLE_FROM_LIST(next);
         }
         else
         {
@@ -362,13 +362,12 @@ static reduct_rvsdg_origin_t* reduct_build_def(reduct_builder_t* builder, reduct
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 3, "def: expected 2 arguments, got %zu",
         (size_t)list->length - 1);
 
-    reduct_handle_t name = reduct_list_second(builder->reduct, list);
+    reduct_handle_t name = list->handles[1];
     REDUCT_ERROR_COMPILE_ASSERT(builder, REDUCT_HANDLE_IS_ATOM(name), "def: first argument must be a symbol, got %s",
         REDUCT_HANDLE_GET_TYPE_STRING(name));
 
     reduct_builder_local_t* local = reduct_builder_add_local(builder, REDUCT_HANDLE_TO_ATOM(name), NULL);
-    local->value = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
-    ;
+    local->value = reduct_build_handle(builder, list->handles[2]);
     return local->value;
 }
 
@@ -380,10 +379,9 @@ static reduct_rvsdg_origin_t* reduct_build_if(reduct_builder_t* builder, reduct_
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 3 || list->length == 4,
         "if: expected 2 or 3 arguments, got %zu", (size_t)list->length - 1);
 
-    reduct_handle_t cond = reduct_list_nth(builder->reduct, list, 1);
-    reduct_handle_t then = reduct_list_nth(builder->reduct, list, 2);
-    reduct_handle_t els =
-        (list->length == 4) ? reduct_list_nth(builder->reduct, list, 3) : REDUCT_HANDLE_NIL(builder->reduct);
+    reduct_handle_t cond = list->handles[1];
+    reduct_handle_t then = list->handles[2];
+    reduct_handle_t els = (list->length == 4) ? list->handles[3] : REDUCT_HANDLE_NIL(builder->reduct);
 
     reduct_rvsdg_origin_t* condOrigin = reduct_build_handle(builder, cond);
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
@@ -425,7 +423,7 @@ static reduct_list_t* reduct_build_get_pair(reduct_builder_t* builder, reduct_ha
 static reduct_rvsdg_origin_t* reduct_build_and_or_internal(reduct_builder_t* builder, reduct_list_t* list, size_t index,
     bool isOr)
 {
-    reduct_rvsdg_origin_t* current = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, index));
+    reduct_rvsdg_origin_t* current = reduct_build_handle(builder, list->handles[index]);
     if (index == list->length - 1)
     {
         return current;
@@ -478,7 +476,7 @@ static reduct_rvsdg_origin_t* reduct_build_and_or_internal(reduct_builder_t* bui
 static reduct_rvsdg_origin_t* reduct_build_not(reduct_builder_t* builder, reduct_list_t* list)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "not: expected 1 argument");
-    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
+    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, list->handles[1]);
 
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
     reduct_rvsdg_edge_connect(builder->reduct, arg, reduct_rvsdg_node_get_input(gamma, 0));
@@ -521,7 +519,7 @@ static reduct_rvsdg_origin_t* reduct_build_variadic_op(reduct_builder_t* builder
     reduct_opcode_t op)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 2, "operator: expected at least 1 argument");
-    reduct_rvsdg_origin_t* acc = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
+    reduct_rvsdg_origin_t* acc = reduct_build_handle(builder, list->handles[1]);
 
     if (list->length == 2)
     {
@@ -548,7 +546,7 @@ static reduct_rvsdg_origin_t* reduct_build_variadic_op(reduct_builder_t* builder
 
     for (size_t i = 2; i < list->length; i++)
     {
-        reduct_rvsdg_origin_t* next = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, i));
+        reduct_rvsdg_origin_t* next = reduct_build_handle(builder, list->handles[i]);
         acc = reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, op, acc, next)->output;
     }
     return acc;
@@ -557,7 +555,7 @@ static reduct_rvsdg_origin_t* reduct_build_variadic_op(reduct_builder_t* builder
 static reduct_rvsdg_origin_t* reduct_build_inc(reduct_builder_t* builder, reduct_list_t* list)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "++: expected 1 argument");
-    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
+    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, list->handles[1]);
     reduct_rvsdg_origin_t* one =
         reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FROM_NUMBER(1.0))
             ->output;
@@ -568,7 +566,7 @@ static reduct_rvsdg_origin_t* reduct_build_inc(reduct_builder_t* builder, reduct
 static reduct_rvsdg_origin_t* reduct_build_dec(reduct_builder_t* builder, reduct_list_t* list)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "--: expected 1 argument");
-    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
+    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, list->handles[1]);
     reduct_rvsdg_origin_t* one =
         reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, REDUCT_HANDLE_FROM_NUMBER(1.0))
             ->output;
@@ -579,7 +577,7 @@ static reduct_rvsdg_origin_t* reduct_build_dec(reduct_builder_t* builder, reduct
 static reduct_rvsdg_origin_t* reduct_build_comparison_internal(reduct_builder_t* builder, reduct_list_t* list,
     size_t index, reduct_opcode_t op, reduct_rvsdg_origin_t* left)
 {
-    reduct_rvsdg_origin_t* right = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, index));
+    reduct_rvsdg_origin_t* right = reduct_build_handle(builder, list->handles[index]);
     reduct_rvsdg_origin_t* cmp =
         reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, op, left, right)->output;
 
@@ -612,7 +610,7 @@ static reduct_rvsdg_origin_t* reduct_build_chained_comparison(reduct_builder_t* 
     reduct_opcode_t op)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 3, "comparison: expected at least 2 arguments");
-    reduct_rvsdg_origin_t* left = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
+    reduct_rvsdg_origin_t* left = reduct_build_handle(builder, list->handles[1]);
     return reduct_build_comparison_internal(builder, list, 2, op, left);
 }
 
@@ -625,8 +623,8 @@ static reduct_rvsdg_origin_t* reduct_build_cond_internal(reduct_builder_t* build
             ->output;
     }
 
-    reduct_list_t* pair = reduct_build_get_pair(builder, reduct_list_nth(builder->reduct, list, index), "cond");
-    reduct_rvsdg_origin_t* cond = reduct_build_handle(builder, reduct_list_first(builder->reduct, pair));
+    reduct_list_t* pair = reduct_build_get_pair(builder, list->handles[index], "cond");
+    reduct_rvsdg_origin_t* cond = reduct_build_handle(builder, pair->handles[0]);
 
     reduct_rvsdg_node_t* gamma = reduct_rvsdg_node_new_gamma(builder->reduct, builder->scope->region, 2);
     reduct_rvsdg_edge_connect(builder->reduct, cond, reduct_rvsdg_node_get_input(gamma, 0));
@@ -642,7 +640,7 @@ static reduct_rvsdg_origin_t* reduct_build_cond_internal(reduct_builder_t* build
     {
         reduct_builder_scope_t scope;
         reduct_builder_enter_scope(builder, &scope, gamma->firstRegion->next, NULL);
-        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, reduct_list_second(builder->reduct, pair));
+        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, pair->handles[1]);
         reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->next->result);
         reduct_builder_exit_scope(builder);
     }
@@ -660,11 +658,11 @@ static reduct_rvsdg_origin_t* reduct_build_match_internal(reduct_builder_t* buil
 {
     if (index == list->length - 1)
     {
-        return reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, index));
+        return reduct_build_handle(builder, list->handles[index]);
     }
 
-    reduct_list_t* pair = reduct_build_get_pair(builder, reduct_list_nth(builder->reduct, list, index), "match");
-    reduct_rvsdg_origin_t* caseVal = reduct_build_handle(builder, reduct_list_first(builder->reduct, pair));
+    reduct_list_t* pair = reduct_build_get_pair(builder, list->handles[index], "match");
+    reduct_rvsdg_origin_t* caseVal = reduct_build_handle(builder, pair->handles[0]);
 
     reduct_rvsdg_origin_t* cmp =
         reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_EQ, target, caseVal)
@@ -685,7 +683,7 @@ static reduct_rvsdg_origin_t* reduct_build_match_internal(reduct_builder_t* buil
     {
         reduct_builder_scope_t scope;
         reduct_builder_enter_scope(builder, &scope, gamma->firstRegion->next, NULL);
-        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, reduct_list_second(builder->reduct, pair));
+        reduct_rvsdg_origin_t* res = reduct_build_handle(builder, pair->handles[1]);
         reduct_rvsdg_edge_connect(builder->reduct, res, gamma->firstRegion->next->result);
         reduct_builder_exit_scope(builder);
     }
@@ -696,7 +694,7 @@ static reduct_rvsdg_origin_t* reduct_build_match_internal(reduct_builder_t* buil
 static reduct_rvsdg_origin_t* reduct_build_match(reduct_builder_t* builder, reduct_list_t* list)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 3, "match: expected at least target and one case");
-    reduct_rvsdg_origin_t* target = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
+    reduct_rvsdg_origin_t* target = reduct_build_handle(builder, list->handles[1]);
     return reduct_build_match_internal(builder, list, 2, target);
 }
 
@@ -906,18 +904,6 @@ static reduct_handle_t reduct_build_len_native(reduct_t* reduct, size_t argc, re
     return REDUCT_HANDLE_FROM_NUMBER((double)reduct_handle_len(reduct, argv[0]));
 }
 
-static reduct_handle_t reduct_build_nth2_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    REDUCT_ERROR_ASSERT(reduct, argc == 2, "nth: expected 2 arguments, got %zu", argc);
-    return reduct_nth(reduct, argv[0], argv[1], REDUCT_HANDLE_NIL(reduct));
-}
-
-static reduct_handle_t reduct_build_nth3_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    REDUCT_ERROR_ASSERT(reduct, argc == 3, "nth: expected 3 arguments, got %zu", argc);
-    return reduct_nth(reduct, argv[0], argv[1], argv[2]);
-}
-
 static reduct_handle_t reduct_build_range1_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
     REDUCT_ERROR_ASSERT(reduct, argc == 1, "range: expected 1 argument, got %zu", argc);
@@ -940,37 +926,31 @@ static reduct_rvsdg_origin_t* reduct_build_bit_not(reduct_builder_t* builder, re
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "~: expected 1 argument");
     return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_BNOT,
-        reduct_build_handle(builder, reduct_list_second(builder->reduct, list)))
+        reduct_build_handle(builder, list->handles[1]))
+        ->output;
+}
+
+static reduct_handle_t reduct_build_repeat_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+{
+    REDUCT_ERROR_ASSERT(reduct, argc == 2, "repeat: expected 2 argument(s), got %zu", (size_t)argc);
+    return reduct_repeat(reduct, argv[0], argv[1]);
+}
+
+static reduct_rvsdg_origin_t* reduct_build_repeat(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 3, "repeat: expected 2 arguments");
+    reduct_rvsdg_origin_t* item = reduct_build_handle(builder, list->handles[1]);
+    reduct_rvsdg_origin_t* count = reduct_build_handle(builder, list->handles[2]);
+    return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_REPEAT, item,
+        count)
         ->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_len(reduct_builder_t* builder, reduct_list_t* list)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "len: expected 1 argument");
-    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
+    reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, list->handles[1]);
     return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_LEN, arg)->output;
-}
-
-static reduct_rvsdg_origin_t* reduct_build_nth(reduct_builder_t* builder, reduct_list_t* list)
-{
-    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 3 || list->length == 4,
-        "nth: expected 2 or 3 arguments, got %zu", (size_t)list->length - 1);
-
-    if (list->length == 3)
-    {
-        reduct_rvsdg_origin_t* src = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
-        reduct_rvsdg_origin_t* idx = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
-        return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH2, src,
-            idx)
-            ->output;
-    }
-
-    reduct_rvsdg_origin_t* src = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
-    reduct_rvsdg_origin_t* idx = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
-    reduct_rvsdg_origin_t* def = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 3));
-    return reduct_rvsdg_node_new_simple_ternary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH3, src, idx,
-        def)
-        ->output;
 }
 
 static reduct_rvsdg_origin_t* reduct_build_range(reduct_builder_t* builder, reduct_list_t* list)
@@ -980,13 +960,13 @@ static reduct_rvsdg_origin_t* reduct_build_range(reduct_builder_t* builder, redu
 
     if (list->length == 2)
     {
-        reduct_rvsdg_origin_t* end = reduct_build_handle(builder, reduct_list_second(builder->reduct, list));
+        reduct_rvsdg_origin_t* end = reduct_build_handle(builder, list->handles[1]);
         return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE1, end)
             ->output;
     }
 
-    reduct_rvsdg_origin_t* start = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 1));
-    reduct_rvsdg_origin_t* end = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 2));
+    reduct_rvsdg_origin_t* start = reduct_build_handle(builder, list->handles[1]);
+    reduct_rvsdg_origin_t* end = reduct_build_handle(builder, list->handles[2]);
     if (list->length == 3)
     {
         return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE2, start,
@@ -994,7 +974,7 @@ static reduct_rvsdg_origin_t* reduct_build_range(reduct_builder_t* builder, redu
             ->output;
     }
 
-    reduct_rvsdg_origin_t* step = reduct_build_handle(builder, reduct_list_nth(builder->reduct, list, 3));
+    reduct_rvsdg_origin_t* step = reduct_build_handle(builder, list->handles[3]);
     return reduct_rvsdg_node_new_simple_ternary(builder->reduct, builder->scope->region, REDUCT_OPCODE_RANGE3, start,
         end, step)
         ->output;
@@ -1017,11 +997,10 @@ const reduct_native_t reductIntrinsics[UINT8_MAX + 1] = {
     [REDUCT_OPCODE_RECUR] = {"recur", NULL, reduct_build_recur},
     [REDUCT_OPCODE_LIST] = {"list", reduct_build_list_native, reduct_build_list},
     [REDUCT_OPCODE_LEN] = {"len", reduct_build_len_native, reduct_build_len},
-    [REDUCT_OPCODE_NTH2] = {"nth", reduct_build_nth2_native, reduct_build_nth},
-    [REDUCT_OPCODE_NTH3] = {"nth", reduct_build_nth3_native, reduct_build_nth},
     [REDUCT_OPCODE_RANGE1] = {"range", reduct_build_range1_native, reduct_build_range},
     [REDUCT_OPCODE_RANGE2] = {"range", reduct_build_range2_native, reduct_build_range},
     [REDUCT_OPCODE_RANGE3] = {"range", reduct_build_range3_native, reduct_build_range},
+    [REDUCT_OPCODE_REPEAT] = {"repeat", reduct_build_repeat_native, reduct_build_repeat},
     [REDUCT_OPCODE_ADD] = {"+", reduct_build_add_native, reduct_build_add},
     [REDUCT_OPCODE_SUB] = {"-", reduct_build_sub_native, reduct_build_sub},
     [REDUCT_OPCODE_MUL] = {"*", reduct_build_mul_native, reduct_build_mul},
@@ -1129,7 +1108,7 @@ static inline bool reduct_builder_is_data(reduct_builder_t* builder, reduct_hand
             return true;
         }
 
-        reduct_handle_t head = reduct_list_first(builder->reduct, list);
+        reduct_handle_t head = list->handles[0];
         return reduct_builder_is_data(builder, head);
     }
 
@@ -1149,7 +1128,7 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_list(reduct_builder_t
             ->output;
     }
 
-    reduct_handle_t head = reduct_list_first(builder->reduct, list);
+    reduct_handle_t head = list->handles[0];
     if (reduct_builder_is_data(builder, head))
     {
         return reduct_rvsdg_node_new_simple_constant(builder->reduct, builder->scope->region, handle)->output;
@@ -1164,10 +1143,9 @@ static inline reduct_rvsdg_origin_t* reduct_build_dispatch_list(reduct_builder_t
     reduct_rvsdg_origin_t* callable = reduct_build_handle(builder, head);
     reduct_rvsdg_node_t* call = reduct_rvsdg_node_new_call(builder->reduct, builder->scope->region, callable);
 
-    reduct_handle_t argH;
-    REDUCT_LIST_FOR_EACH_AT(&argH, list, 1)
+    for (uint32_t i = 1; i < list->length; i++)
     {
-        reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, argH);
+        reduct_rvsdg_origin_t* arg = reduct_build_handle(builder, list->handles[i]);
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_add_input(builder->reduct, call);
         reduct_rvsdg_edge_connect(builder->reduct, arg, input);
     }
@@ -1229,10 +1207,9 @@ static reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* builde
     reduct_rvsdg_node_t* node =
         reduct_rvsdg_node_new_simple_opcode(builder->reduct, builder->scope->region, REDUCT_OPCODE_LIST);
 
-    reduct_handle_t handle;
-    REDUCT_LIST_FOR_EACH_AT(&handle, listPtr, startIdx)
+    for (uint32_t i = startIdx; i < listPtr->length; i++)
     {
-        reduct_rvsdg_origin_t* input = reduct_build_handle(builder, handle);
+        reduct_rvsdg_origin_t* input = reduct_build_handle(builder, listPtr->handles[i]);
         reduct_rvsdg_user_t* user = reduct_rvsdg_node_add_input(builder->reduct, node);
         reduct_rvsdg_edge_connect(builder->reduct, input, user);
     }
@@ -1250,10 +1227,10 @@ static reduct_rvsdg_origin_t* reduct_build_generic_block(reduct_builder_t* build
         REDUCT_ERROR_COMPILE(builder, list, "expected list, got %s", REDUCT_HANDLE_GET_TYPE_STRING(list));
     }
 
-    reduct_handle_t handle;
-    REDUCT_LIST_FOR_EACH_AT(&handle, REDUCT_HANDLE_TO_LIST(list), startIdx)
+    reduct_list_t* listPtr = REDUCT_HANDLE_TO_LIST(list);
+    for (uint32_t i = startIdx; i < listPtr->length; i++)
     {
-        last = reduct_build_handle(builder, handle);
+        last = reduct_build_handle(builder, listPtr->handles[i]);
     }
 
     if (last == NULL)

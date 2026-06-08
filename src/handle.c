@@ -56,10 +56,6 @@ REDUCT_API reduct_handle_type_t reduct_handle_get_type(reduct_handle_t handle)
     {
         return REDUCT_HANDLE_TYPE_ARENA;
     }
-    case REDUCT_ITEM_TYPE_LIST_NODE:
-    {
-        return REDUCT_HANDLE_TYPE_LIST_NODE;
-    }
     case REDUCT_ITEM_TYPE_RVSDG_NODE:
     {
         return REDUCT_HANDLE_TYPE_RVSDG_NODE;
@@ -97,8 +93,6 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type)
         return "closure";
     case REDUCT_HANDLE_TYPE_ARENA:
         return "arena";
-    case REDUCT_HANDLE_TYPE_LIST_NODE:
-        return "list node";
     case REDUCT_HANDLE_TYPE_RVSDG_NODE:
         return "ir node";
     case REDUCT_HANDLE_TYPE_RVSDG_EDGE:
@@ -181,24 +175,11 @@ REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t a, redu
             return false;
         }
 
-        reduct_list_iter_t iterA = REDUCT_LIST_ITER(listA);
-        reduct_list_iter_t iterB = REDUCT_LIST_ITER(listB);
-
-        reduct_list_chunk_t chunkA;
-        reduct_list_chunk_t chunkB;
-        while (reduct_list_iter_next_chunk(&iterA, &chunkA) && reduct_list_iter_next_chunk(&iterB, &chunkB))
+        for (uint32_t i = 0; i < listA->length; i++)
         {
-            if (chunkA.count != chunkB.count)
+            if (!reduct_handle_is_equal(reduct, listA->handles[i], listB->handles[i]))
             {
                 return false;
-            }
-
-            for (size_t i = 0; i < chunkA.count && i < chunkB.count; i++)
-            {
-                if (!reduct_handle_is_equal(reduct, chunkA.handles[i], chunkB.handles[i]))
-                {
-                    return false;
-                }
             }
         }
 
@@ -308,8 +289,8 @@ REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t a, re
 
     for (size_t i = 0; i < minLen; i++)
     {
-        reduct_handle_t ha = reduct_list_nth(reduct, listA, i);
-        reduct_handle_t hb = reduct_list_nth(reduct, listB, i);
+        reduct_handle_t ha = listA->handles[i];
+        reduct_handle_t hb = listB->handles[i];
         int64_t cmp = reduct_handle_compare(reduct, ha, hb);
         if (cmp != 0)
         {
@@ -333,19 +314,7 @@ REDUCT_API void reduct_handle_atom_string(reduct_t* reduct, reduct_handle_t* han
     *outLen = item->length;
 }
 
-REDUCT_API void reduct_handle_push(reduct_t* reduct, reduct_handle_t list, reduct_handle_t val)
-{
-    assert(reduct != NULL);
-
-    if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_LIST(list)))
-    {
-        REDUCT_ERROR_THROW(reduct, "push: expected list, got %s", REDUCT_HANDLE_GET_TYPE_STRING(list));
-    }
-
-    reduct_list_push(reduct, REDUCT_HANDLE_TO_LIST(list), val);
-}
-
-REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t handle, size_t index)
+REDUCT_API reduct_handle_t reduct_handle_nth(reduct_t* reduct, reduct_handle_t handle, size_t index)
 {
     assert(reduct != NULL);
 
@@ -360,7 +329,7 @@ REDUCT_API reduct_handle_t reduct_handle_at(reduct_t* reduct, reduct_handle_t ha
     switch (item->type)
     {
     case REDUCT_ITEM_TYPE_LIST:
-        return reduct_list_nth(reduct, &item->list, index);
+        return item->list.handles[index];
     case REDUCT_ITEM_TYPE_ATOM:
     {
         char c = item->atom.string[index];

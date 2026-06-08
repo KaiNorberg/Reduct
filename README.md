@@ -916,11 +916,15 @@ Calls the currently executing lambda with the provided arguments.
 
 Returns the total number of items in the list and the number of characters in the atom.
 
-**`(nth <item> <n: number> [default: item]) -> <item>`**
+**`(range [start: number] <end: number> [step: number]) -> <list>`**
 
-Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
+Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
 
-If the index is out of bounds, returns `[default]` or `nil`.
+**`(repeat <item> <n: number>) -> <list>`**
+
+Returns a new list containing the original item repeated `<n>` times.
+
+Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
 
 **`(list {expression} ) -> <list>`**
 
@@ -1134,30 +1138,6 @@ Calls the provided callable. If an error occurs during evaluation, the `<catch>`
 
 Returns a new list by applying `<callable>` to each item in `<list>`. The `<callable>` must accept a single argument.
 
-**`(grid <extents: list> <callable>) -> <list>`**
-
-Returns a new `n` dimensional list where `n` is the number of arguments that `<callable>` accepts and the length of `<list>`. Each item in `<list>` is the extent of the corresponding argument in `<callable>`, and the value of each item in the resulting list is the result of calling `<callable>` with some integer point representing the index within the extent of the arguments.
-
-Each element in `<extents>` defines the range for the corresponding argument of the callable:
-
-- If the element is a single number `n`, the range is from `0` to `n - 1`.
-- If the element is a list of two numbers `(start end)`, the range is from `start` to `end - 1`.
-- If the element is a list of three numbers `(start end step)`, the range is from `start` to `end - 1` with increments of `step`.
-
-For example:
-
-```lisp
-(grid (3 3) (lambda (x y) {x + y})) 
-// Evaluates to "((0 1 2) (1 2 3) (2 3 4))"
-
-(grid ((-1 2) (10 13)) (lambda (x y) (+ x y)))
-// Evaluates to "((9 10 11) (10 11 12) (11 12 13))"
-```
-
-**`(compute <extents: list> <callable>) -> <list>`**
-
-Similar to `grid`, but the resulting list is flattened.
-
 **`(filter <list> <callable>) -> <list>`**
 
 Returns a new list containing only items from `<list>` for which `<callable>` returns a truthy value. The `<callable>` must accept a single argument.
@@ -1194,21 +1174,23 @@ Returns the first item in the list for which the `<callable>` returns a truthy v
 
 #### Sequences (Lists & Strings)
 
-**`(range [start: number] <end: number> [step: number]) -> <list>`**
-
-Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
-
 **`(concat {item}) -> <item>`**
 
 Returns a new atom or list by concatenating all items. If any of the items is a list, the result will be a list, otherwise it will be an atom.
 
 **`(append <list> {item}) -> <item>`**
 
-Returns a new list or atom by appending all items to the end of the first argument.
+Returns a new list by appending all items to the end of the first argument.
 
 **`(prepend <list> {item}) -> <item>`**
 
-Returns a new list or atom by prepending all items to the beginning of the first argument.
+Returns a new list by prepending all items to the beginning of the first argument.
+
+**`(nth <item> <n: number> [default: item]) -> <item>`**
+
+Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
+
+If the index is out of bounds, returns `[default]` or `nil`.
 
 **`(first <item>) -> <atom>`**
 
@@ -1225,6 +1207,10 @@ Returns a new list containing all except the first item of a list or an atom con
 **`(init <item>) -> <item>`**
 
 Returns a new list containing all but the last item of a list or an atom containing all but the last character of an atom.
+
+**`(slice <item> <start: number> [end: number]) -> <item>`**
+
+Returns a sub-list or sub-atom of `<item>` starting from the `<start>` index to the `<end>` index. If `<end>` is not provided, it slices to the end of the item. Negative indices can be used to count from the end.
 
 **`(assoc <item> <n: number> <value: item> [fill: item]) -> <item>`**
 
@@ -1251,10 +1237,6 @@ If the subitem is not found, returns nil.
 **`(reverse <item>) -> <item>`**
 
 Returns a new list containing the items of `<item>` in reverse order or an atom containing the characters of `<item>` in reverse order.
-
-**`(slice <item> <start: number> [end: number]) -> <item>`**
-
-Returns a sub-list or sub-atom of `<item>` starting from the `<start>` index to the `<end>` index. If `<end>` is not provided, it slices to the end of the item. Negative indices can be used to count from the end.
 
 **`(flatten <list> [depth: number]) -> <list>`**
 
@@ -1316,10 +1298,6 @@ Returns the provided atoms as a list of the integer values for each character.
 **`(implode <list> {list}) -> <atom>`**
 
 Returns a new atom created by converting the provided lists of integer values back into their corresponding ASCII characters.
-
-**`(repeat <item> <n: number>) -> <list>`**
-
-Returns a new list containing the original item repeated `<n>` times.
 
 ---
 

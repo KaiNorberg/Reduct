@@ -185,7 +185,7 @@ REDUCT_API void reduct_task_global_deinit(reduct_task_global_t* global)
     mtx_unlock(&global->mutex);
 }
 
-REDUCT_API bool reduct_task_create_try(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg), void* arg,
+REDUCT_API bool reduct_task_create(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg), void* arg,
     reduct_task_id_t* outId)
 {
     reduct_task_global_t* global = &reduct->global->task;
@@ -207,24 +207,13 @@ REDUCT_API bool reduct_task_create_try(reduct_t* reduct, void (*func)(struct red
     return true;
 }
 
-REDUCT_API reduct_task_id_t reduct_task_create(reduct_t* reduct, void (*func)(struct reduct* reduct, void* arg),
-    void* arg)
-{
-    reduct_task_id_t id;
-
-    /// @todo Can deadlock if the queue is full.
-    while (!reduct_task_create_try(reduct, func, arg, &id))
-    {
-        reduct_task_try_work(reduct);
-        REDUCT_GC_CHECK(reduct);
-        thrd_yield();
-    }
-
-    return id;
-}
-
 REDUCT_API void reduct_task_join(reduct_t* reduct, reduct_task_id_t id)
 {
+    if (id.index >= REDUCT_TASK_QUEUE_MAX)
+    {
+        return;
+    }
+
     while (!reduct_task_done(&reduct->global->task, id))
     {
         reduct_task_try_work(reduct);

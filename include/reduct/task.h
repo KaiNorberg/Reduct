@@ -35,6 +35,8 @@ typedef struct
         generation; ///< Incrementally increasing counter to avoid ABA problems when reusing task slots in the queue.
 } reduct_task_id_t;
 
+#define REDUCT_TASK_ID_INVALID ((reduct_task_id_t){ .index = UINT16_MAX, .generation = UINT16_MAX }) ///< Invalid task ID.
+
 /**
  * @brief Task structure.
  * @struct reduct_task_t
@@ -85,18 +87,7 @@ REDUCT_API void reduct_task_global_init(reduct_task_global_t* global);
 REDUCT_API void reduct_task_global_deinit(reduct_task_global_t* global);
 
 /**
- * @brief Create a new task.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param func The function to execute in the task.
- * @param arg The argument to pass to the function.
- * @return The ID of the created task.
- */
-REDUCT_API reduct_task_id_t reduct_task_create(struct reduct* reduct, void (*func)(struct reduct* reduct, void* arg),
-    void* arg);
-
-/**
- * @brief Try to create a new task without blocking.
+ * @brief Try to create a new task.
  *
  * @param reduct Pointer to the Reduct structure.
  * @param func The function to execute in the task.
@@ -104,7 +95,7 @@ REDUCT_API reduct_task_id_t reduct_task_create(struct reduct* reduct, void (*fun
  * @param outId Pointer to store the ID of the created task.
  * @return `true` if the task was created, `false` if the queue is full.
  */
-REDUCT_API bool reduct_task_create_try(struct reduct* reduct, void (*func)(struct reduct* reduct, void* arg), void* arg,
+REDUCT_API bool reduct_task_create(struct reduct* reduct, void (*func)(struct reduct* reduct, void* arg), void* arg,
     reduct_task_id_t* outId);
 
 /**

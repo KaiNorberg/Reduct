@@ -22,6 +22,7 @@ REDUCT_API void reduct_item_global_init(reduct_item_global_t* global)
 REDUCT_API void reduct_item_global_deinit(reduct_t* reduct, reduct_item_global_t* global)
 {
     assert(global != NULL);
+
     reduct_item_block_t* block = global->block;
     while (block != NULL)
     {
@@ -29,10 +30,17 @@ REDUCT_API void reduct_item_global_deinit(reduct_t* reduct, reduct_item_global_t
         {
             reduct_item_deinit(reduct, &block->items[i]);
         }
+        block = block->next;
+    }
+
+    block = global->block;
+    while (block != NULL)
+    {
         reduct_item_block_t* next = block->next;
         free(block->allocated);
         block = next;
     }
+
     global->block = NULL;
     mtx_destroy(&global->mutex);
     global->globalFreeList = NULL;
@@ -176,9 +184,13 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         {
             arena->prev->next = arena->next;
         }
-        else if (reduct->arena.current == arena)
+
+        for (size_t i = 0; i < reduct->global->threadCount; i++)
         {
-            reduct->arena.current = arena->next;
+            if (reduct->global->threads[i].arena.current == arena)
+            {
+                reduct->global->threads[i].arena.current = arena->next;
+            }
         }
     }
     break;
@@ -274,8 +286,6 @@ REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)
         return "arena";
     case REDUCT_ITEM_TYPE_LIST:
         return "list";
-    case REDUCT_ITEM_TYPE_LIST_NODE:
-        return "list node";
     case REDUCT_ITEM_TYPE_FUNCTION:
         return "function";
     case REDUCT_ITEM_TYPE_CLOSURE:
@@ -297,50 +307,22 @@ REDUCT_API const char* reduct_item_type_str(reduct_item_t* item)
     }
 }
 
-static inline void reduct_item_mark_node(uint32_t shift, reduct_list_node_t* node);
-
-static inline void reduct_item_mark_node_contents(uint32_t shift, reduct_list_node_t* node)
-{
-    if (shift == 0)
-    {
-        for (uint32_t i = 0; i < REDUCT_LIST_WIDTH; i++)
-        {
-            reduct_handle_t handle = node->handles[i];
-            if (REDUCT_HANDLE_IS_ITEM(handle))
-            {
-                reduct_item_mark(REDUCT_HANDLE_TO_ITEM(handle));
-            }
-        }
-    }
-    else
-    {
-        for (uint32_t i = 0; i < REDUCT_LIST_WIDTH; i++)
-        {
-            reduct_item_mark_node(shift - REDUCT_LIST_BITS, node->children[i]);
-        }
-    }
-}
-
-static inline void reduct_item_mark_node(uint32_t shift, reduct_list_node_t* node)
-{
-    if (node == NULL)
-    {
-        return;
-    }
-
-    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, listNode);
-    if (atomic_fetch_or(&item->flags, REDUCT_ITEM_FLAG_MARKED) & REDUCT_ITEM_FLAG_MARKED)
-    {
-        return;
-    }
-
-    reduct_item_mark_node_contents(shift, node);
-}
-
 static inline void reduct_item_mark_list(reduct_list_t* list)
 {
-    reduct_item_mark_node(list->shift, list->root);
-    reduct_item_mark_node_contents(0, &list->tail);
+    reduct_handle_t* handles = list->handles;
+    uint32_t len = list->length;
+    for (uint32_t i = 0; i < len; i++)
+    {
+        reduct_handle_t handle = handles[i];
+        if (REDUCT_HANDLE_IS_ITEM(handle))
+        {
+            reduct_item_mark(REDUCT_HANDLE_TO_ITEM(handle));
+        }
+    }
+    if (list->flags & REDUCT_LIST_FLAG_LARGE && list->arena != NULL)
+    {
+        reduct_item_mark(REDUCT_CONTAINER_OF(list->arena, reduct_item_t, arena));
+    }
 }
 
 static inline void reduct_item_mark_atom(reduct_atom_t* atom)
@@ -518,9 +500,6 @@ REDUCT_API void reduct_item_mark(reduct_item_t* item)
     {
     case REDUCT_ITEM_TYPE_LIST:
         reduct_item_mark_list(&item->list);
-        break;
-    case REDUCT_ITEM_TYPE_LIST_NODE:
-        reduct_item_mark_node(0, &item->listNode);
         break;
     case REDUCT_ITEM_TYPE_ATOM:
         reduct_item_mark_atom(&item->atom);

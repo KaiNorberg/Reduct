@@ -64,7 +64,7 @@ REDUCT_API reduct_future_t* reduct_future_new(struct reduct* reduct, reduct_hand
 
     reduct_item_retain(item);
 
-    if (!reduct_task_create_try(reduct, reduct_future_worker, item, &future->taskId))
+    if (!reduct_task_create(reduct, reduct_future_worker, item, &future->taskId))
     {
         future->result = reduct_eval_call(reduct, callable, argc, argv);
 

@@ -1,15 +1,15 @@
-#include <reduct/function.h>
-#include <reduct/handle.h>
-#include <reduct/opcode.h>
-#include <reduct/rvsdg.h>
 #include <reduct/atom.h>
 #include <reduct/core.h>
 #include <reduct/defs.h>
 #include <reduct/emit.h>
+#include <reduct/function.h>
 #include <reduct/gc.h>
+#include <reduct/handle.h>
 #include <reduct/inst.h>
 #include <reduct/item.h>
 #include <reduct/list.h>
+#include <reduct/opcode.h>
+#include <reduct/rvsdg.h>
 #include <reduct/scratch.h>
 
 #include <stdlib.h>

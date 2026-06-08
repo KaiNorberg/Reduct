@@ -133,7 +133,7 @@ REDUCT_API reduct_t* reduct_new(void)
 
     reduct_t* master = &global->threads[0];
     master->thrd = thrd_current();
-    global->nil = REDUCT_HANDLE_CREATE_LIST(master);
+    global->nil = REDUCT_HANDLE_CREATE_LIST(master, 0);
 
     for (size_t i = 1; i < global->threadCount; i++)
     {

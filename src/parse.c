@@ -66,32 +66,26 @@ static reduct_handle_t reduct_parse_dot_finalize(reduct_parse_ctx_t* ctx, reduct
             "dot notation: missing target");
     }
 
-    reduct_list_t* wrapper = reduct_list_new(ctx->reduct);
+    reduct_list_t* wrapper = reduct_list_new(ctx->reduct, 3);
     reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
     reduct_item_t* pathItem = REDUCT_CONTAINER_OF(path, reduct_item_t, list);
     wrapperItem->inputId = pathItem->inputId;
     wrapperItem->position = pathItem->position;
 
-    reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "get-in"));
-    reduct_list_push(ctx->reduct, wrapper, target);
-
-    if (path->length == 2)
-    {
-        reduct_list_push(ctx->reduct, wrapper, reduct_list_second(ctx->reduct, path));
-    }
-    else
-    {
-        reduct_list_push(ctx->reduct, wrapper, REDUCT_HANDLE_FROM_LIST(path));
-    }
+    wrapper->handles[0] = REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "get-in");
+    wrapper->handles[1] = target;
+    wrapper->handles[2] = (path->length == 2) ? path->handles[1] : REDUCT_HANDLE_FROM_LIST(path);
 
     return REDUCT_HANDLE_FROM_LIST(wrapper);
 }
 
 static reduct_handle_t reduct_parse_dot_chain(reduct_parse_ctx_t* ctx, reduct_handle_t head)
 {
+    REDUCT_SCRATCH_GET(ctx->reduct, pathHandles, reduct_handle_t, 16);
+    pathHandles[0] = REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "list");
+    size_t pathCount = 1;
+
     reduct_handle_t target = REDUCT_HANDLE_NIL(ctx->reduct);
-    reduct_list_t* path = reduct_list_new(ctx->reduct);
-    reduct_list_push(ctx->reduct, path, REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "list"));
 
     bool isFirst = true;
     reduct_handle_t current = head;
@@ -99,7 +93,8 @@ static reduct_handle_t reduct_parse_dot_chain(reduct_parse_ctx_t* ctx, reduct_ha
     {
         if (!REDUCT_HANDLE_IS_ATOM(current))
         {
-            reduct_list_push(ctx->reduct, path, current);
+            REDUCT_SCRATCH_GROW(ctx->reduct, pathHandles, reduct_handle_t, pathCount + 1);
+            pathHandles[pathCount++] = current;
             break;
         }
 
@@ -121,7 +116,8 @@ static reduct_handle_t reduct_parse_dot_chain(reduct_parse_ctx_t* ctx, reduct_ha
                 }
                 else
                 {
-                    reduct_list_push(ctx->reduct, path, REDUCT_HANDLE_FROM_ATOM(part));
+                    REDUCT_SCRATCH_GROW(ctx->reduct, pathHandles, reduct_handle_t, pathCount + 1);
+                    pathHandles[pathCount++] = REDUCT_HANDLE_FROM_ATOM(part);
                 }
             }
             start = dot + 1;
@@ -139,8 +135,8 @@ static reduct_handle_t reduct_parse_dot_chain(reduct_parse_ctx_t* ctx, reduct_ha
             }
             else
             {
-
-                reduct_list_push(ctx->reduct, path, REDUCT_HANDLE_FROM_ATOM(part));
+                REDUCT_SCRATCH_GROW(ctx->reduct, pathHandles, reduct_handle_t, pathCount + 1);
+                pathHandles[pathCount++] = REDUCT_HANDLE_FROM_ATOM(part);
             }
         }
 
@@ -156,6 +152,9 @@ static reduct_handle_t reduct_parse_dot_chain(reduct_parse_ctx_t* ctx, reduct_ha
         }
         break;
     }
+
+    reduct_list_t* path = reduct_list_new_handles(ctx->reduct, pathCount, pathHandles);
+    REDUCT_SCRATCH_PUT(ctx->reduct, pathHandles);
 
     return reduct_parse_dot_finalize(ctx, target, path);
 }
@@ -232,10 +231,10 @@ static reduct_atom_t* reduct_parse_get_operator_atom(reduct_parse_ctx_t* ctx, re
     else if (!unary && item->type == REDUCT_ITEM_TYPE_LIST && item->length >= 3)
     {
         reduct_list_t* list = &item->list;
-        reduct_handle_t head = reduct_list_first(ctx->reduct, list);
+        reduct_handle_t head = list->handles[0];
         if (REDUCT_HANDLE_IS_ATOM(head) && reduct_atom_is_equal(REDUCT_HANDLE_TO_ATOM(head), "get-in", 6))
         {
-            reduct_handle_t last = reduct_list_nth(ctx->reduct, list, list->length - 1);
+            reduct_handle_t last = list->handles[list->length - 1];
             if (REDUCT_HANDLE_IS_ATOM(last))
             {
                 return REDUCT_HANDLE_TO_ATOM(last);
@@ -353,7 +352,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
         return REDUCT_HANDLE_NIL(ctx->reduct);
     }
 
-    reduct_handle_t first = reduct_list_nth(ctx->reduct, list, *pos);
+    reduct_handle_t first = list->handles[*pos];
     reduct_handle_t left;
     reduct_parse_precedence_t unaryPrecedence = reduct_parse_get_precedence(ctx, first, true);
 
@@ -361,9 +360,9 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
     {
         (*pos)++;
         reduct_handle_t operand = reduct_parse_infix_transform_recursive(ctx, list, pos, unaryPrecedence);
-        reduct_list_t* call = reduct_list_new(ctx->reduct);
-        reduct_list_push(ctx->reduct, call, first);
-        reduct_list_push(ctx->reduct, call, operand);
+        reduct_list_t* call = reduct_list_new(ctx->reduct, 2);
+        call->handles[0] = first;
+        call->handles[1] = operand;
         left = REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(call, reduct_item_t, list));
     }
     else
@@ -374,7 +373,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
 
     while (*pos < list->length)
     {
-        reduct_handle_t op = reduct_list_nth(ctx->reduct, list, *pos);
+        reduct_handle_t op = list->handles[*pos];
         reduct_parse_precedence_t prec = reduct_parse_get_precedence(ctx, op, false);
         if (prec == REDUCT_PARSE_PRECEDENCE_NONE || prec < minPrecedence)
         {
@@ -392,10 +391,10 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
 
         reduct_handle_t right = reduct_parse_infix_transform_recursive(ctx, list, pos, prec + 1);
 
-        reduct_list_t* call = reduct_list_new(ctx->reduct);
-        reduct_list_push(ctx->reduct, call, op);
-        reduct_list_push(ctx->reduct, call, left);
-        reduct_list_push(ctx->reduct, call, right);
+        reduct_list_t* call = reduct_list_new(ctx->reduct, 3);
+        call->handles[0] = op;
+        call->handles[1] = left;
+        call->handles[2] = right;
         left = REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(call, reduct_item_t, list));
     }
 
@@ -406,7 +405,7 @@ static reduct_list_t* reduct_parse_infix_transform(reduct_parse_ctx_t* ctx, redu
 {
     if (list->length == 0)
     {
-        return reduct_list_new(ctx->reduct);
+        return reduct_list_new(ctx->reduct, 0);
     }
 
     size_t pos = 0;
@@ -489,10 +488,8 @@ static inline reduct_atom_t* reduct_parse_unquoted_atom(reduct_parse_ctx_t* ctx)
 
 static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char expectedClose, size_t position)
 {
-    reduct_list_t* list = reduct_list_new(ctx->reduct);
-    reduct_item_t* listItem = REDUCT_CONTAINER_OF(list, reduct_item_t, list);
-    listItem->inputId = ctx->input->id;
-    listItem->position = position;
+    REDUCT_SCRATCH_GET(ctx->reduct, handles, reduct_handle_t, 16);
+    size_t count = 0;
 
     if (ctx->ptr >= ctx->input->end)
     {
@@ -516,12 +513,19 @@ static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char exp
         if (*ctx->ptr == expectedClose)
         {
             ctx->ptr++;
-            return list;
+            break;
         }
 
-        reduct_list_push(ctx->reduct, list, reduct_parse_expression(ctx));
+        REDUCT_SCRATCH_GROW(ctx->reduct, handles, reduct_handle_t, count + 1);
+        handles[count++] = reduct_parse_expression(ctx);
     }
 
+    reduct_list_t* list = reduct_list_new_handles(ctx->reduct, count, handles);
+    reduct_item_t* listItem = REDUCT_CONTAINER_OF(list, reduct_item_t, list);
+    listItem->inputId = ctx->input->id;
+    listItem->position = position;
+
+    REDUCT_SCRATCH_PUT(ctx->reduct, handles);
     return list;
 }
 
@@ -552,16 +556,16 @@ REDUCT_API reduct_handle_t reduct_parse_input(reduct_t* reduct, reduct_input_t* 
 
     if (list->length == 1)
     {
-        return reduct_list_first(reduct, list);
+        return list->handles[0];
     }
 
-    reduct_list_t* wrapper = reduct_list_new(reduct);
+    reduct_list_t* wrapper = reduct_list_new(reduct, list->length + 1);
     reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
     wrapperItem->inputId = input->id;
     wrapperItem->position = 0;
 
-    reduct_list_push(reduct, wrapper, REDUCT_HANDLE_CREATE_SYMBOL(reduct, "do"));
-    reduct_list_push_list(reduct, wrapper, list);
+    wrapper->handles[0] = REDUCT_HANDLE_CREATE_SYMBOL(reduct, "do");
+    memcpy(wrapper->handles + 1, list->handles, list->length * sizeof(reduct_handle_t));
 
     return REDUCT_HANDLE_FROM_LIST(wrapper);
 }

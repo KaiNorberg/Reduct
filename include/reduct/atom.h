@@ -1,11 +1,11 @@
 #ifndef REDUCT_ATOM_H
 #define REDUCT_ATOM_H 1
 
+#include <reduct/arena.h>
 #include <reduct/defs.h>
 #include <reduct/native.h>
 #include <reduct/schema.h>
 #include <reduct/sync.h>
-#include <reduct/arena.h>
 
 #include <assert.h>
 #include <stdbool.h>
