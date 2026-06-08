@@ -31,6 +31,8 @@ typedef struct reduct_builder
 static reduct_rvsdg_origin_t* reduct_build_handle(reduct_builder_t* builder, reduct_handle_t handle);
 static reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* builder, reduct_handle_t list,
     uint32_t startIdx);
+static reduct_rvsdg_origin_t* reduct_build_generic_list_op(reduct_builder_t* builder, reduct_handle_t list,
+    uint32_t startIdx, reduct_opcode_t op);
 static reduct_rvsdg_origin_t* reduct_build_generic_block(reduct_builder_t* builder, reduct_handle_t list,
     uint32_t startIdx);
 
@@ -874,6 +876,51 @@ static reduct_handle_t reduct_build_not_native(reduct_t* reduct, size_t argc, re
         return reduct_build_variadic_op(builder, list, _opcode); \
     }
 
+static reduct_rvsdg_origin_t* reduct_build_concat(reduct_builder_t* builder, reduct_list_t* list)
+{
+    return reduct_build_generic_list_op(builder, REDUCT_HANDLE_FROM_LIST(list), 1, REDUCT_OPCODE_CONCAT);
+}
+
+static reduct_rvsdg_origin_t* reduct_build_append(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 2, "append: expected at least 1 argument");
+    return reduct_build_generic_list_op(builder, REDUCT_HANDLE_FROM_LIST(list), 1, REDUCT_OPCODE_APPEND);
+}
+
+static reduct_rvsdg_origin_t* reduct_build_prepend(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 2, "prepend: expected at least 1 argument");
+    return reduct_build_generic_list_op(builder, REDUCT_HANDLE_FROM_LIST(list), 1, REDUCT_OPCODE_PREPEND);
+}
+
+static reduct_rvsdg_origin_t* reduct_build_first(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "first: expected 1 argument");
+    return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_FIRST,
+        reduct_build_handle(builder, list->handles[1]))->output;
+}
+
+static reduct_rvsdg_origin_t* reduct_build_last(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "last: expected 1 argument");
+    return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_LAST,
+        reduct_build_handle(builder, list->handles[1]))->output;
+}
+
+static reduct_rvsdg_origin_t* reduct_build_rest(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "rest: expected 1 argument");
+    return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_REST,
+        reduct_build_handle(builder, list->handles[1]))->output;
+}
+
+static reduct_rvsdg_origin_t* reduct_build_init(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 2, "init: expected 1 argument");
+    return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_INIT,
+        reduct_build_handle(builder, list->handles[1]))->output;
+}
+
 REDUCT_BUILD_INTRINSIC_VARIADIC(add, REDUCT_OPCODE_ADD)
 REDUCT_BUILD_INTRINSIC_VARIADIC(sub, REDUCT_OPCODE_SUB)
 REDUCT_BUILD_INTRINSIC_VARIADIC(mul, REDUCT_OPCODE_MUL)
@@ -902,6 +949,18 @@ static reduct_handle_t reduct_build_len_native(reduct_t* reduct, size_t argc, re
 {
     REDUCT_ERROR_ASSERT(reduct, argc == 1, "len: expected 1 argument, got %zu", argc);
     return REDUCT_HANDLE_FROM_NUMBER((double)reduct_handle_len(reduct, argv[0]));
+}
+
+static reduct_handle_t reduct_build_nth2_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+{
+    REDUCT_ERROR_ASSERT(reduct, argc == 2, "nth: expected 2 arguments, got %zu", argc);
+    return reduct_nth(reduct, argv[0], argv[1], REDUCT_HANDLE_NIL(reduct));
+}
+
+static reduct_handle_t reduct_build_nth3_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+{
+    REDUCT_ERROR_ASSERT(reduct, argc == 3, "nth: expected 3 arguments, got %zu", argc);
+    return reduct_nth(reduct, argv[0], argv[1], argv[2]);
 }
 
 static reduct_handle_t reduct_build_range1_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
@@ -953,6 +1012,49 @@ static reduct_rvsdg_origin_t* reduct_build_len(reduct_builder_t* builder, reduct
     return reduct_rvsdg_node_new_simple_unary(builder->reduct, builder->scope->region, REDUCT_OPCODE_LEN, arg)->output;
 }
 
+static reduct_handle_t reduct_build_first_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+{
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "first: expected 1 argument, got %zu", argc);
+    return reduct_first(reduct, argv[0]);
+}
+static reduct_handle_t reduct_build_last_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+{
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "last: expected 1 argument, got %zu", argc);
+    return reduct_last(reduct, argv[0]);
+}
+static reduct_handle_t reduct_build_rest_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+{
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "rest: expected 1 argument, got %zu", argc);
+    return reduct_rest(reduct, argv[0]);
+}
+static reduct_handle_t reduct_build_init_native(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+{
+    REDUCT_ERROR_ASSERT(reduct, argc == 1, "init: expected 1 argument, got %zu", argc);
+    return reduct_init(reduct, argv[0]);
+}
+
+static reduct_rvsdg_origin_t* reduct_build_nth(reduct_builder_t* builder, reduct_list_t* list)
+{
+    REDUCT_ERROR_COMPILE_ASSERT(builder, list->length == 3 || list->length == 4,
+        "nth: expected 2 or 3 arguments, got %zu", (size_t)list->length - 1);
+
+    if (list->length == 3)
+    {
+        reduct_rvsdg_origin_t* src = reduct_build_handle(builder, list->handles[1]);
+        reduct_rvsdg_origin_t* idx = reduct_build_handle(builder, list->handles[2]);
+        return reduct_rvsdg_node_new_simple_binary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH2, src,
+            idx)
+            ->output;
+    }
+
+    reduct_rvsdg_origin_t* src = reduct_build_handle(builder, list->handles[1]);
+    reduct_rvsdg_origin_t* idx = reduct_build_handle(builder, list->handles[2]);
+    reduct_rvsdg_origin_t* def = reduct_build_handle(builder, list->handles[3]);
+    return reduct_rvsdg_node_new_simple_ternary(builder->reduct, builder->scope->region, REDUCT_OPCODE_NTH3, src, idx,
+        def)
+        ->output;
+}
+
 static reduct_rvsdg_origin_t* reduct_build_range(reduct_builder_t* builder, reduct_list_t* list)
 {
     REDUCT_ERROR_COMPILE_ASSERT(builder, list->length >= 2 && list->length <= 4,
@@ -997,10 +1099,19 @@ const reduct_native_t reductIntrinsics[UINT8_MAX + 1] = {
     [REDUCT_OPCODE_RECUR] = {"recur", NULL, reduct_build_recur},
     [REDUCT_OPCODE_LIST] = {"list", reduct_build_list_native, reduct_build_list},
     [REDUCT_OPCODE_LEN] = {"len", reduct_build_len_native, reduct_build_len},
+    [REDUCT_OPCODE_NTH2] = {"nth", reduct_build_nth2_native, reduct_build_nth},
+    [REDUCT_OPCODE_NTH3] = {"nth", reduct_build_nth3_native, reduct_build_nth},
     [REDUCT_OPCODE_RANGE1] = {"range", reduct_build_range1_native, reduct_build_range},
     [REDUCT_OPCODE_RANGE2] = {"range", reduct_build_range2_native, reduct_build_range},
     [REDUCT_OPCODE_RANGE3] = {"range", reduct_build_range3_native, reduct_build_range},
     [REDUCT_OPCODE_REPEAT] = {"repeat", reduct_build_repeat_native, reduct_build_repeat},
+    [REDUCT_OPCODE_CONCAT] = {"concat", reduct_concat, reduct_build_concat},
+    [REDUCT_OPCODE_APPEND] = {"append", reduct_append, reduct_build_append},
+    [REDUCT_OPCODE_PREPEND] = {"prepend", reduct_prepend, reduct_build_prepend},
+    [REDUCT_OPCODE_FIRST] = {"first", reduct_build_first_native, reduct_build_first},
+    [REDUCT_OPCODE_LAST] = {"last", reduct_build_last_native, reduct_build_last},
+    [REDUCT_OPCODE_REST] = {"rest", reduct_build_rest_native, reduct_build_rest},
+    [REDUCT_OPCODE_INIT] = {"init", reduct_build_init_native, reduct_build_init},
     [REDUCT_OPCODE_ADD] = {"+", reduct_build_add_native, reduct_build_add},
     [REDUCT_OPCODE_SUB] = {"-", reduct_build_sub_native, reduct_build_sub},
     [REDUCT_OPCODE_MUL] = {"*", reduct_build_mul_native, reduct_build_mul},
@@ -1194,9 +1305,8 @@ static reduct_rvsdg_origin_t* reduct_build_handle(reduct_builder_t* builder, red
     builder->lastItem = previousItem;
     return out;
 }
-
-static reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* builder, reduct_handle_t list,
-    uint32_t startIdx)
+static reduct_rvsdg_origin_t* reduct_build_generic_list_op(reduct_builder_t* builder, reduct_handle_t list,
+    uint32_t startIdx, reduct_opcode_t op)
 {
     if (!REDUCT_HANDLE_IS_LIST(list))
     {
@@ -1204,8 +1314,7 @@ static reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* builde
     }
     reduct_list_t* listPtr = REDUCT_HANDLE_TO_LIST(list);
 
-    reduct_rvsdg_node_t* node =
-        reduct_rvsdg_node_new_simple_opcode(builder->reduct, builder->scope->region, REDUCT_OPCODE_LIST);
+    reduct_rvsdg_node_t* node = reduct_rvsdg_node_new_simple_opcode(builder->reduct, builder->scope->region, op);
 
     for (uint32_t i = startIdx; i < listPtr->length; i++)
     {
@@ -1215,6 +1324,12 @@ static reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* builde
     }
 
     return node->output;
+}
+
+static reduct_rvsdg_origin_t* reduct_build_generic_list(reduct_builder_t* builder, reduct_handle_t list,
+    uint32_t startIdx)
+{
+    return reduct_build_generic_list_op(builder, list, startIdx, REDUCT_OPCODE_LIST);
 }
 
 static reduct_rvsdg_origin_t* reduct_build_generic_block(reduct_builder_t* builder, reduct_handle_t list,

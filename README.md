@@ -916,6 +916,12 @@ Calls the currently executing lambda with the provided arguments.
 
 Returns the total number of items in the list and the number of characters in the atom.
 
+**`(nth <item> <n: number> [default: item]) -> <item>`**
+
+Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
+
+If the index is out of bounds, returns `[default]` or `nil`.
+
 **`(range [start: number] <end: number> [step: number]) -> <list>`**
 
 Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
@@ -925,6 +931,34 @@ Returns a new list containing a sequence of numbers from `<start>` up to (but no
 Returns a new list containing the original item repeated `<n>` times.
 
 Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
+
+**`(concat {item}) -> <item>`**
+
+Returns a new atom or list by concatenating all items. If any of the items is a list, the result will be a list, otherwise it will be an atom.
+
+**`(append <list> {item}) -> <item>`**
+
+Returns a new list by appending all items to the end of the first argument.
+
+**`(prepend <list> {item}) -> <item>`**
+
+Returns a new list by prepending all items to the beginning of the first argument.
+
+**`(first <item>) -> <atom>`**
+
+Returns the first item of a list or the first character of an atom as a new atom.
+
+**`(last <item>) -> <atom>`**
+
+Returns the last item of a list or the last character of an atom as a new atom.
+
+**`(rest <item>) -> <item>`**
+
+Returns a new list containing all except the first item of a list or an atom containing all except the first character of an atom.
+
+**`(init <item>) -> <item>`**
+
+Returns a new list containing all but the last item of a list or an atom containing all but the last character of an atom.
 
 **`(list {expression} ) -> <list>`**
 
@@ -1173,40 +1207,6 @@ Returns the first item in the list for which the `<callable>` returns a truthy v
 ---
 
 #### Sequences (Lists & Strings)
-
-**`(concat {item}) -> <item>`**
-
-Returns a new atom or list by concatenating all items. If any of the items is a list, the result will be a list, otherwise it will be an atom.
-
-**`(append <list> {item}) -> <item>`**
-
-Returns a new list by appending all items to the end of the first argument.
-
-**`(prepend <list> {item}) -> <item>`**
-
-Returns a new list by prepending all items to the beginning of the first argument.
-
-**`(nth <item> <n: number> [default: item]) -> <item>`**
-
-Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
-
-If the index is out of bounds, returns `[default]` or `nil`.
-
-**`(first <item>) -> <atom>`**
-
-Returns the first item of a list or the first character of an atom as a new atom.
-
-**`(last <item>) -> <atom>`**
-
-Returns the last item of a list or the last character of an atom as a new atom.
-
-**`(rest <item>) -> <item>`**
-
-Returns a new list containing all except the first item of a list or an atom containing all except the first character of an atom.
-
-**`(init <item>) -> <item>`**
-
-Returns a new list containing all but the last item of a list or an atom containing all but the last character of an atom.
 
 **`(slice <item> <start: number> [end: number]) -> <item>`**
 

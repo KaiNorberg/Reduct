@@ -2861,33 +2861,12 @@ REDUCT_STDLIB_WRAPPER_R12(sort, reduct_sort)
 REDUCT_STDLIB_WRAPPER_R12(flatten, reduct_flatten)
 REDUCT_STDLIB_WRAPPER_R12(log, reduct_log)
 
-static reduct_handle_t reduct_stdlib_concat(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    return reduct_concat(reduct, argc, argv);
-}
-
-static reduct_handle_t reduct_stdlib_append(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    REDUCT_ERROR_ASSERT(reduct, argc >= 2, "append: expected at least 2 argument(s), got %zu", (size_t)argc);
-    return reduct_append(reduct, argc, &argv[0]);
-}
-
-static reduct_handle_t reduct_stdlib_prepend(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    REDUCT_ERROR_ASSERT(reduct, argc >= 2, "prepend: expected at least 2 argument(s), got %zu", (size_t)argc);
-    return reduct_prepend(reduct, argc, &argv[0]);
-}
-
 static reduct_handle_t reduct_stdlib_nth(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_ASSERT(reduct, argc != 2 && argc != 3, "nth: expected 2 or 3 argument(s), got %zu", (size_t)argc);
+    REDUCT_ERROR_ASSERT(reduct, argc == 2 || argc == 3, "nth: expected 2 or 3 argument(s), got %zu", (size_t)argc);
     return reduct_nth(reduct, argv[0], argv[1], argc == 3 ? argv[2] : REDUCT_HANDLE_NIL(reduct));
 }
 
-REDUCT_STDLIB_WRAPPER_1(first, reduct_first)
-REDUCT_STDLIB_WRAPPER_1(last, reduct_last)
-REDUCT_STDLIB_WRAPPER_1(rest, reduct_rest)
-REDUCT_STDLIB_WRAPPER_1(init, reduct_init)
 REDUCT_STDLIB_WRAPPER_1(reverse, reduct_reverse)
 REDUCT_STDLIB_WRAPPER_1(unique, reduct_unique)
 REDUCT_STDLIB_WRAPPER_1(keys, reduct_keys)
@@ -3050,14 +3029,6 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
     if (sets & REDUCT_STDLIB_SEQUENCES)
     {
         static reduct_native_t natives[] = {
-            {"concat", reduct_stdlib_concat, NULL},
-            {"append", reduct_stdlib_append, NULL},
-            {"prepend", reduct_stdlib_prepend, NULL},
-            {"nth", reduct_stdlib_nth, NULL},
-            {"first", reduct_stdlib_first, NULL},
-            {"last", reduct_stdlib_last, NULL},
-            {"rest", reduct_stdlib_rest, NULL},
-            {"init", reduct_stdlib_init, NULL},
             {"assoc", reduct_stdlib_assoc, NULL},
             {"dissoc", reduct_stdlib_dissoc, NULL},
             {"update", reduct_stdlib_update, NULL},
