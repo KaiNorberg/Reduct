@@ -641,7 +641,7 @@ All benchmarks were performed on the following system:
 - **CPU:** `AMD Ryzen 5 3600X 6-Core Processor`
 - **OS:** `Fedora Linux 43 (KDE Plasma Desktop Edition)`
 - **Kernel:** `7.0.10-100.fc43.x86_64`
-- **Reduct:** `Reduct 4.1.0+ef1b2ed`
+- **Reduct:** `Reduct 4.0.2+ef1b2ed`
 - **Hyperfine:** `hyperfine 1.20.0`
 - **Heaptrack:** `heaptrack 1.5.0`
 - **Lua:** `Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio`
