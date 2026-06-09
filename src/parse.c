@@ -554,11 +554,6 @@ REDUCT_API reduct_handle_t reduct_parse_input(reduct_t* reduct, reduct_input_t* 
         return REDUCT_HANDLE_NIL(reduct);
     }
 
-    if (list->length == 1)
-    {
-        return list->handles[0];
-    }
-
     reduct_list_t* wrapper = reduct_list_new(reduct, list->length + 1);
     reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
     wrapperItem->inputId = input->id;
