@@ -495,7 +495,6 @@ LABEL_C_OP(label_ret, {
     if (REDUCT_UNLIKELY(reduct->eval.frameCount == initialFrameCount))
     {
         result = valC;
-        REDUCT_GC_CHECK(reduct);
         goto eval_end;
     }
     UPDATE_STATE();

@@ -2331,7 +2331,7 @@ REDUCT_API reduct_handle_t reduct_print(reduct_t* reduct, size_t argc, reduct_ha
     {
         if (REDUCT_HANDLE_IS_NUMBER(argv[i]))
         {
-            fprintf(stdout, "%f", REDUCT_HANDLE_TO_NUMBER(argv[i]));
+            fprintf(stdout, "%g", REDUCT_HANDLE_TO_NUMBER(argv[i]));
         }
         else if (REDUCT_HANDLE_IS_ATOM(argv[i]) && REDUCT_HANDLE_TO_ATOM(argv[i])->flags & REDUCT_ATOM_FLAG_QUOTED)
         {

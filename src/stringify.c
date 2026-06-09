@@ -17,7 +17,7 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, cha
     {
         if (REDUCT_HANDLE_IS_NUMBER(handle))
         {
-            return snprintf(buffer, size, "%f", REDUCT_HANDLE_TO_NUMBER(handle));
+            return snprintf(buffer, size, "%g", REDUCT_HANDLE_TO_NUMBER(handle));
         }
 
         return snprintf(buffer, size, "<unknown>");
@@ -33,7 +33,7 @@ REDUCT_API size_t reduct_stringify(reduct_t* reduct, reduct_handle_t handle, cha
         {
             if (reduct_atom_is_number(atom))
             {
-                return snprintf(buffer, size, "%f", reduct_atom_get_number(atom));
+                return snprintf(buffer, size, "%g", reduct_atom_get_number(atom));
             }
             else if (reduct_atom_is_native(reduct, atom))
             {

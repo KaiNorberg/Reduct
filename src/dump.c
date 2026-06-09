@@ -11,7 +11,7 @@ static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
 {
     if (REDUCT_HANDLE_IS_NUMBER(handle))
     {
-        fprintf(out, "%f", REDUCT_HANDLE_TO_NUMBER(handle));
+        fprintf(out, "%g", REDUCT_HANDLE_TO_NUMBER(handle));
     }
     else if (REDUCT_HANDLE_IS_ATOM(handle))
     {
@@ -202,7 +202,7 @@ static void reduct_dump_gv_print_handle(reduct_handle_t handle, FILE* out)
 {
     if (REDUCT_HANDLE_IS_NUMBER(handle))
     {
-        fprintf(out, "%f", REDUCT_HANDLE_TO_NUMBER(handle));
+        fprintf(out, "%g", REDUCT_HANDLE_TO_NUMBER(handle));
     }
     else if (REDUCT_HANDLE_IS_ATOM(handle))
     {
