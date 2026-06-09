@@ -120,9 +120,8 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
  * @param id The ID of the schema to apply.
  * @param listH The handle to the association list.
  * @param out Pointer to the destination C structure.
- * @return `true` if the schema was applied successfully, `false` otherwise.
  */
-REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listH, void* out);
+REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listH, void* out);
 
 /**
  * @brief Get the number of fields in a schema.

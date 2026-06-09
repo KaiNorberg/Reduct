@@ -288,7 +288,7 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
     return REDUCT_HANDLE_NIL(reduct);
 }
 
-REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listHandle, void* out)
+REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listHandle, void* out)
 {
     assert(reduct != NULL);
     assert(out != NULL);
@@ -298,20 +298,20 @@ REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
     if (id >= reduct->global->schema.count)
     {
         reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
-        return false;
+        REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
 
     reduct_schema_internal_t* schema = reduct->global->schema.schemas[id];
     if (schema == NULL)
     {
         reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
-        return false;
+        REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
 
     if (!REDUCT_HANDLE_IS_LIST(listHandle))
     {
         reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
-        return false;
+        REDUCT_ERROR_THROW(reduct, "invalid list handle");
     }
 
     reduct_list_t* list = REDUCT_HANDLE_TO_LIST(listHandle);
@@ -374,8 +374,8 @@ REDUCT_API bool reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
             reduct_schema_apply_primitive(reduct, field->type, field->size, target, valueHandle);
         }
     }
+    
     reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
-    return true;
 }
 
 REDUCT_API size_t reduct_schema_get_count(struct reduct* reduct, reduct_schema_id_t id)
