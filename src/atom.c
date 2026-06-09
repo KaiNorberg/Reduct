@@ -759,11 +759,6 @@ REDUCT_API reduct_atom_t* reduct_atom_superstr(struct reduct* reduct, reduct_ato
     assert(atom != NULL);
     assert(len > atom->length);
 
-    if (len == 0)
-    {
-        return reduct_atom_new(reduct, 0);
-    }
-
     if (!(atom->flags & REDUCT_ATOM_FLAG_LARGE))
     {
         reduct_atom_t* superAtom = reduct_atom_new(reduct, len);

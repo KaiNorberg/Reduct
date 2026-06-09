@@ -534,6 +534,11 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, size_t argc, reduct_h
     assert(reduct != NULL);
     assert(argv != NULL || argc == 0);
 
+    if (argc == 1)
+    {
+        return argv[0];
+    }
+
     bool resultIsList = false;
     for (size_t i = 0; i < argc; i++)
     {
@@ -552,12 +557,7 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, size_t argc, reduct_h
         {
             return REDUCT_HANDLE_NIL(reduct);
         }
-
-        if (argc == 1)
-        {
-            return argv[0];
-        }
-
+        
         if (argc == 2)
         {
             if (REDUCT_HANDLE_IS_LIST(argv[0]) && REDUCT_HANDLE_IS_LIST(argv[1]))
@@ -617,6 +617,11 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, size_t argc, reduct_h
     }
 
     reduct_atom_t* first = reduct_handle_as_atom(reduct, argv[0]);
+    if (totalLen == first->length)
+    {
+        return argv[0];
+    }
+
     reduct_atom_t* result = reduct_atom_superstr(reduct, first, totalLen);
     char* dst = result->string + first->length;
     for (size_t i = 1; i < argc; i++)
