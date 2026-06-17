@@ -197,16 +197,6 @@ REDUCT_API reduct_atom_t* reduct_atom_new_number(struct reduct* reduct, double v
 REDUCT_API reduct_atom_t* reduct_atom_new_native(struct reduct* reduct, reduct_native_fn native);
 
 /**
- * @brief Intern an existing atom into the Reduct structure.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param atom Pointer to the atom to intern.
- * @return `true` if the atom is already interned or it was successfully added, `false` if an identical atom is already
- * interned.
- */
-REDUCT_API bool reduct_atom_intern(struct reduct* reduct, reduct_atom_t* atom);
-
-/**
  * @brief Lookup an interned atom in the Reduct structure.
  *
  * Will create and intern a new atom if it does not exist.
@@ -248,12 +238,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_atom_ensure_interned(st
     {
         return atom;
     }
-
-    if (REDUCT_LIKELY(reduct_atom_intern(reduct, atom)))
-    {
-        return atom;
-    }
-
+    
     return reduct_atom_lookup(reduct, atom->string, atom->length, reduct_atom_get_lookup_flags(atom));
 }
 

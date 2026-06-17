@@ -15,11 +15,6 @@ REDUCT_API reduct_handle_type_t reduct_handle_get_type(reduct_handle_t handle)
         return REDUCT_HANDLE_TYPE_NUMBER;
     }
 
-    if (REDUCT_HANDLE_IS_NIL(handle))
-    {
-        return REDUCT_HANDLE_TYPE_NONE;
-    }
-
     if (!REDUCT_HANDLE_IS_ITEM(handle))
     {
         return REDUCT_HANDLE_TYPE_UNKNOWN;
@@ -142,16 +137,6 @@ REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t a, redu
     reduct_item_t* itemA = REDUCT_HANDLE_TO_ITEM(a);
     reduct_item_t* itemB = REDUCT_HANDLE_TO_ITEM(b);
 
-    if (itemA == itemB)
-    {
-        return true;
-    }
-
-    if (itemA == NULL || itemB == NULL)
-    {
-        return false;
-    }
-
     if (itemA->type != itemB->type)
     {
         return false;
@@ -161,8 +146,7 @@ REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t a, redu
     {
         reduct_atom_t* atomA = &itemA->atom;
         reduct_atom_t* atomB = &itemB->atom;
-        return (atomA->flags & REDUCT_ATOM_FLAG_QUOTED) == (atomB->flags & REDUCT_ATOM_FLAG_QUOTED) &&
-            atomA->length == atomB->length && memcmp(atomA->string, atomB->string, atomA->length) == 0;
+        return reduct_atom_ensure_interned(reduct, atomA) == reduct_atom_ensure_interned(reduct, atomB);
     }
 
     if (itemA->type == REDUCT_ITEM_TYPE_LIST)
@@ -189,48 +173,6 @@ REDUCT_API bool reduct_handle_is_equal(reduct_t* reduct, reduct_handle_t a, redu
     return false;
 }
 
-typedef struct
-{
-    int group;
-    double num;
-    reduct_item_t* item;
-} reduct_cmp_val_t;
-
-static inline void reduct_handle_unpack(reduct_handle_t handle, reduct_cmp_val_t* out)
-{
-    assert(out != NULL);
-
-    if (REDUCT_HANDLE_IS_NUMBER(handle))
-    {
-        out->group = 0;
-        out->num = REDUCT_HANDLE_TO_NUMBER(handle);
-        out->item = NULL;
-        return;
-    }
-
-    out->item = REDUCT_HANDLE_TO_ITEM(handle);
-    if (out->item == NULL)
-    {
-        out->group = 1;
-        return;
-    }
-
-    if (out->item->type == REDUCT_ITEM_TYPE_LIST)
-    {
-        out->group = 2;
-        return;
-    }
-
-    if (out->item->type == REDUCT_ITEM_TYPE_ATOM && reduct_atom_is_number(&out->item->atom))
-    {
-        out->group = 0;
-        out->num = reduct_atom_get_number(&out->item->atom);
-        return;
-    }
-
-    out->group = 1;
-}
-
 REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t a, reduct_handle_t b)
 {
     assert(reduct != NULL);
@@ -240,65 +182,54 @@ REDUCT_API int64_t reduct_handle_compare(reduct_t* reduct, reduct_handle_t a, re
         return 0;
     }
 
-    reduct_cmp_val_t va, vb;
-    reduct_handle_unpack(a, &va);
-    reduct_handle_unpack(b, &vb);
+    reduct_handle_type_t typeA = reduct_handle_get_type(a);
+    reduct_handle_type_t typeB = reduct_handle_get_type(b);
 
-    if (va.group != vb.group)
+    if (typeA != typeB)
     {
-        return va.group - vb.group;
+        return (int64_t)typeA - (int64_t)typeB;
     }
 
-    if (va.group == 0)
+    switch (typeA)
     {
-        if (va.num < vb.num)
-        {
-            return -1;
-        }
-        if (va.num > vb.num)
-        {
-            return 1;
-        }
-        return 0;
-    }
-    else if (va.group == 1)
+    case REDUCT_HANDLE_TYPE_NUMBER:
     {
-        reduct_atom_t* atomA = &va.item->atom;
-        reduct_atom_t* atomB = &vb.item->atom;
-        size_t lenA = atomA->length;
-        size_t lenB = atomB->length;
-        size_t minLen = lenA < lenB ? lenA : lenB;
-
-        const char* strA = atomA->string;
-        const char* strB = atomB->string;
-
-        int cmp = memcmp(strA, strB, minLen);
-        if (cmp != 0)
-        {
-            return cmp;
-        }
-
-        return (int64_t)lenA - (int64_t)lenB;
+        double da = reduct_handle_as_number(reduct, a);
+        double db = reduct_handle_as_number(reduct, b);
+        return (da > db) - (da < db);
     }
-
-    reduct_list_t* listA = va.item ? &va.item->list : NULL;
-    reduct_list_t* listB = vb.item ? &vb.item->list : NULL;
-    size_t lenA = listA ? listA->length : 0;
-    size_t lenB = listB ? listB->length : 0;
-    size_t minLen = lenA < lenB ? lenA : lenB;
-
-    for (size_t i = 0; i < minLen; i++)
+    case REDUCT_HANDLE_TYPE_ATOM:
     {
-        reduct_handle_t ha = listA->handles[i];
-        reduct_handle_t hb = listB->handles[i];
-        int64_t cmp = reduct_handle_compare(reduct, ha, hb);
-        if (cmp != 0)
+        reduct_atom_t* atomA = REDUCT_HANDLE_TO_ATOM(a);
+        reduct_atom_t* atomB = REDUCT_HANDLE_TO_ATOM(b);
+        uint32_t minLen = REDUCT_MIN(atomA->length, atomB->length);
+        int res = memcmp(atomA->string, atomB->string, minLen);
+        if (res != 0)
         {
-            return cmp;
+            return (int64_t)res;
         }
+        return (int64_t)atomA->length - (int64_t)atomB->length;
     }
-
-    return (int64_t)lenA - (int64_t)lenB;
+    case REDUCT_HANDLE_TYPE_LIST:
+    {
+        reduct_list_t* listA = REDUCT_HANDLE_TO_LIST(a);
+        reduct_list_t* listB = REDUCT_HANDLE_TO_LIST(b);
+        uint32_t minLen = REDUCT_MIN(listA->length, listB->length);
+        for (uint32_t i = 0; i < minLen; i++)
+        {
+            int64_t res = reduct_handle_compare(reduct, listA->handles[i], listB->handles[i]);
+            if (res != 0)
+            {
+                return res;
+            }
+        }
+        return (int64_t)listA->length - (int64_t)listB->length;
+    }
+    default:
+    {
+        return (a._value > b._value) - (a._value < b._value);
+    }
+    }
 }
 
 REDUCT_API void reduct_handle_atom_string(reduct_t* reduct, reduct_handle_t* handle, const char** outStr,
@@ -331,10 +262,7 @@ REDUCT_API reduct_handle_t reduct_handle_nth(reduct_t* reduct, reduct_handle_t h
     case REDUCT_ITEM_TYPE_LIST:
         return item->list.handles[index];
     case REDUCT_ITEM_TYPE_ATOM:
-    {
-        char c = item->atom.string[index];
-        return REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_copy(reduct, &c, 1));
-    }
+        return REDUCT_HANDLE_FROM_ATOM(reduct_atom_new_copy(reduct, &item->atom.string[index], 1));
     default:
         REDUCT_ERROR_THROW(reduct, "expected list or atom, got %s", reduct_item_type_str(item));
     }

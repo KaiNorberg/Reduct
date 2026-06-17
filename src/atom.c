@@ -292,47 +292,6 @@ static inline void reduct_atom_normalize_escape(reduct_atom_t* atom)
     atom->length = j;
 }
 
-REDUCT_API bool reduct_atom_intern(reduct_t* reduct, reduct_atom_t* atom)
-{
-    assert(reduct != NULL);
-    assert(atom != NULL);
-
-    if (atom->index != REDUCT_ATOM_INDEX_NONE)
-    {
-        return true;
-    }
-
-    uint32_t hash = reduct_hash(atom->string, atom->length);
-    reduct_atom_lookup_flags_t flags = reduct_atom_get_lookup_flags(atom);
-
-    reduct_rwmutex_read_lock(&reduct->global->atom.mutex);
-    if (REDUCT_LIKELY(reduct->global->atom.capacity != 0))
-    {
-        size_t index = reduct_atom_map_find(reduct, hash, atom->string, atom->length, flags);
-        if (reduct_atom_map_is_alive(reduct->global->atom.map[index]))
-        {
-            reduct_rwmutex_read_unlock(&reduct->global->atom.mutex);
-            return false;
-        }
-    }
-    reduct_rwmutex_read_unlock(&reduct->global->atom.mutex);
-
-    reduct_rwmutex_write_lock(&reduct->global->atom.mutex);
-    size_t index = reduct_atom_map_find_or_alloc(reduct, hash, atom->string, atom->length, flags);
-    if (reduct_atom_map_is_alive(reduct->global->atom.map[index]))
-    {
-        atom->index = (uint32_t)index;
-        reduct_rwmutex_write_unlock(&reduct->global->atom.mutex);
-        return false;
-    }
-
-    reduct->global->atom.map[index] = atom;
-    atom->index = (uint32_t)index;
-    atom->hash = hash;
-    reduct_rwmutex_write_unlock(&reduct->global->atom.mutex);
-    return true;
-}
-
 REDUCT_API reduct_atom_t* reduct_atom_lookup(reduct_t* reduct, const char* str, size_t len,
     reduct_atom_lookup_flags_t flags)
 {

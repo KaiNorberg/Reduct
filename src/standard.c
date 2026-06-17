@@ -2912,7 +2912,6 @@ static reduct_handle_t reduct_stdlib_number_impl(reduct_t* reduct, reduct_handle
 {
     return REDUCT_HANDLE_FROM_NUMBER(reduct_handle_as_number(reduct, arg));
 }
-
 REDUCT_STDLIB_WRAPPER_1(number, reduct_stdlib_number_impl)
 
 REDUCT_STDLIB_WRAPPER_1(eval, reduct_eval)
