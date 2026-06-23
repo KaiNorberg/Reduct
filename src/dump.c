@@ -432,39 +432,59 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
     }
 }
 
+static void reduct_dump_collect_nodes(reduct_t* reduct, reduct_rvsdg_node_t* node, reduct_rvsdg_node_t*** nodes,
+    size_t* count, size_t* capacity)
+{
+    for (size_t i = 0; i < *count; i++)
+    {
+        if ((*nodes)[i] == node)
+        {
+            return;
+        }
+    }
+
+    if (*count >= *capacity)
+    {
+        *capacity = (*capacity == 0) ? 16 : *capacity * 2;
+        REDUCT_SCRATCH_GROW(reduct, *nodes, reduct_rvsdg_node_t*, *capacity);
+    }
+    (*nodes)[(*count)++] = node;
+
+    for (reduct_rvsdg_user_t* input = node->firstInput; input != NULL; input = input->next)
+    {
+        if (input->edge != NULL && input->edge->origin != NULL && input->edge->origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+        {
+            reduct_dump_collect_nodes(reduct, input->edge->origin->node, nodes, count, capacity);
+        }
+    }
+
+    for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+    {
+        for (reduct_rvsdg_node_t* child = region->firstNode; child != NULL; child = child->next)
+        {
+            reduct_dump_collect_nodes(reduct, child, nodes, count, capacity);
+        }
+
+        if (region->result != NULL && region->result->edge != NULL && region->result->edge->origin != NULL &&
+            region->result->edge->origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+        {
+            reduct_dump_collect_nodes(reduct, region->result->edge->origin->node, nodes, count, capacity);
+        }
+    }
+}
+
 REDUCT_API void reduct_dump_rvsdg(reduct_t* reduct, reduct_handle_t graph, FILE* out)
 {
     assert(reduct != NULL);
     assert(out != NULL);
 
-    size_t nodeCount = 0;
-    reduct_item_block_t* block = reduct->global->item.block;
-    while (block != NULL)
-    {
-        for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
-        {
-            if (block->items[i].type == REDUCT_ITEM_TYPE_RVSDG_NODE)
-            {
-                nodeCount++;
-            }
-        }
-        block = block->next;
-    }
+    reduct_rvsdg_node_t* root = REDUCT_HANDLE_TO_RVSDG_NODE(graph);
 
-    REDUCT_SCRATCH_GET(reduct, nodes, reduct_rvsdg_node_t*, nodeCount);
-    size_t idx = 0;
-    block = reduct->global->item.block;
-    while (block != NULL)
-    {
-        for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
-        {
-            if (block->items[i].type == REDUCT_ITEM_TYPE_RVSDG_NODE)
-            {
-                nodes[idx++] = &block->items[i].rvsdgNode;
-            }
-        }
-        block = block->next;
-    }
+    size_t capacity = 16;
+    size_t nodeCount = 0;
+    REDUCT_SCRATCH_GET(reduct, nodes, reduct_rvsdg_node_t*, capacity);
+
+    reduct_dump_collect_nodes(reduct, root, &nodes, &nodeCount, &capacity);
 
     fprintf(out, "digraph RVSDG {\n");
     fprintf(out, "  node [shape=record, fontname=\"Courier\"];\n");

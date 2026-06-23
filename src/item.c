@@ -65,7 +65,7 @@ static inline void reduct_item_init(reduct_item_t* item)
 {
     item->type = REDUCT_ITEM_TYPE_NONE;
     atomic_init(&item->flags, REDUCT_ITEM_FLAG_NONE);
-    item->inputId = REDUCT_INPUT_ID_NONE;
+    item->moduleId = REDUCT_MODULE_ID_NONE;
     item->position = 0;
 }
 

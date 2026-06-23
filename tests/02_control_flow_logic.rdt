@@ -1,4 +1,4 @@
-(-> (world)
+(-> (world!)
     (assert! (== (if true 10 20) 10) "if should return the 'then' branch when condition is truthy")
     (assert! (== (if false 10 20) 20) "if should return the 'else' branch when condition is falsy")
     (assert! (== (if false 10) ()) "if should return an empty list '()' when condition is falsy and no 'else' is provided")

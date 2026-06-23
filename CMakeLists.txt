@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(reduct VERSION 4.0.7 LANGUAGES C)
+project(reduct VERSION 4.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -55,6 +55,7 @@ set(REDUCT_SOURCES
     src/future.c
     src/gc.c
     src/handle.c
+    src/module.c
     src/opcode.c
     src/item.c
     src/list.c

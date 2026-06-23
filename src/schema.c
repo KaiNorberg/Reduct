@@ -36,25 +36,7 @@ REDUCT_API void reduct_schema_global_deinit(reduct_schema_global_t* global)
     reduct_rwmutex_destroy(&global->mutex);
 }
 
-REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t count, ...)
-{
-    REDUCT_SCRATCH_GET(reduct, fields, reduct_schema_t, count);
-
-    va_list args;
-    va_start(args, count);
-    for (size_t i = 0; i < count; i++)
-    {
-        fields[i] = va_arg(args, reduct_schema_t);
-    }
-    va_end(args);
-
-    reduct_schema_id_t id = reduct_schema_new_fields(reduct, count, fields);
-    REDUCT_SCRATCH_PUT(reduct, fields);
-    return id;
-}
-
-REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, size_t count,
-    const reduct_schema_t* fields)
+REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t count, const reduct_schema_t* fields)
 {
     assert(reduct != NULL);
     assert(count > 0);
@@ -133,7 +115,7 @@ REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, si
         atom->schemaCount = (uint32_t)newSchemaCount;
 
         atom->schema[id] = i;
-        reduct_item_retain(REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
+        reduct_atom_retain(reduct, atom);
     }
 
     reduct_rwmutex_write_unlock(&reduct->global->schema.mutex);
@@ -203,8 +185,6 @@ static void reduct_schema_apply_primitive(struct reduct* reduct, reduct_schema_t
     break;
     case REDUCT_SCHEMA_TYPE_STRING:
     {
-        if (!REDUCT_HANDLE_IS_ATOM(valueHandle))
-            return;
         const char* string;
         size_t stringLen;
         reduct_handle_atom_string(reduct, &valueHandle, &string, &stringLen);
@@ -216,6 +196,20 @@ static void reduct_schema_apply_primitive(struct reduct* reduct, reduct_schema_t
     case REDUCT_SCHEMA_TYPE_HANDLE:
     {
         *(reduct_handle_t*)target = valueHandle;
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_ATOM:
+    {
+        REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM_LIKE(valueHandle), "expected an atom handle, got %p",
+            REDUCT_HANDLE_GET_TYPE_STRING(valueHandle));
+        *(reduct_atom_t**)target = reduct_handle_as_atom(reduct, valueHandle);
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_LIST:
+    {
+        REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_LIST(valueHandle), "expected a list handle, got %p",
+            REDUCT_HANDLE_GET_TYPE_STRING(valueHandle));
+        *(reduct_list_t**)target = REDUCT_HANDLE_TO_LIST(valueHandle);
     }
     break;
     default:
@@ -282,6 +276,16 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
         return *(reduct_handle_t*)val;
     }
     break;
+    case REDUCT_SCHEMA_TYPE_ATOM:
+    {
+        return REDUCT_HANDLE_FROM_ATOM(*(reduct_atom_t**)val);
+    }
+    break;
+    case REDUCT_SCHEMA_TYPE_LIST:
+    {
+        return REDUCT_HANDLE_FROM_LIST(*(reduct_list_t**)val);
+    }
+    break;
     default:
         break;
     }
@@ -323,13 +327,12 @@ REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
             continue;
         }
 
-        reduct_list_t* pair = REDUCT_HANDLE_TO_LIST(list->handles[i]);
-        if (pair->length < 2)
+        reduct_list_t* entry = REDUCT_HANDLE_TO_LIST(list->handles[i]);
+        if (entry->length < 2)
         {
             continue;
         }
-        reduct_handle_t keyHandle = pair->handles[0];
-        reduct_handle_t valueHandle = pair->handles[1];
+        reduct_handle_t keyHandle = entry->handles[0];
 
         if (!REDUCT_HANDLE_IS_ATOM(keyHandle))
         {
@@ -351,14 +354,15 @@ REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
         const reduct_schema_t* field = &schema->fields[fieldIdx];
         void* target = (char*)out + field->offset;
 
-        if (field->type == REDUCT_SCHEMA_TYPE_ARRAY)
+        if (field->type != REDUCT_SCHEMA_TYPE_ARRAY)
         {
-            if (!REDUCT_HANDLE_IS_LIST(valueHandle))
-            {
-                continue;
-            }
+            reduct_schema_apply_primitive(reduct, field->type, field->size, target, entry->handles[1]);
+            continue;
+        }
 
-            reduct_list_t* subList = REDUCT_HANDLE_TO_LIST(valueHandle);
+        if (REDUCT_HANDLE_IS_LIST(entry->handles[1]))
+        {
+            reduct_list_t* subList = REDUCT_HANDLE_TO_LIST(entry->handles[1]);
             for (uint32_t j = 0; j < subList->length; j++)
             {
                 if (j * field->elementSize >= field->size)
@@ -368,13 +372,20 @@ REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
                 reduct_schema_apply_primitive(reduct, field->subtype, field->elementSize,
                     (char*)target + j * field->elementSize, subList->handles[j]);
             }
+            continue;
         }
-        else
+
+        for (uint32_t j = 1; j < entry->length; j++)
         {
-            reduct_schema_apply_primitive(reduct, field->type, field->size, target, valueHandle);
+            if ((j - 1) * field->elementSize >= field->size)
+            {
+                break;
+            }
+            reduct_schema_apply_primitive(reduct, field->subtype, field->elementSize,
+                (char*)target + (j - 1) * field->elementSize, entry->handles[j]);
         }
     }
-    
+
     reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
 }
 

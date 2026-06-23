@@ -307,7 +307,7 @@ static inline void reduct_emit_inst_at(reduct_emitter_t* emitter, reduct_inst_t 
 {
     assert(emitter != NULL);
     reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
-    uint32_t pos = (item->inputId != REDUCT_INPUT_ID_NONE) ? item->position : 0;
+    uint32_t pos = (item->moduleId != REDUCT_MODULE_ID_NONE) ? item->position : 0;
     reduct_function_emit(emitter->reduct, emitter->function, inst, pos);
 }
 
@@ -437,8 +437,8 @@ static inline reduct_emitter_expr_t reduct_emit_origin(reduct_emitter_t* emitter
             }
             else
             {
-                uint16_t inputIdx = (uint16_t)(origin->index - recurSlots);
-                reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(phiNode, inputIdx);
+                uint16_t moduleIdx = (uint16_t)(origin->index - recurSlots);
+                reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(phiNode, moduleIdx);
                 if (input != NULL && input->edge != NULL)
                 {
                     return reduct_emit_origin(emitter, input->edge->origin, target);
@@ -502,10 +502,10 @@ static inline bool reduct_emitter_origin_is_phi_recur(reduct_emitter_t* emitter,
             reduct_rvsdg_region_t* region = origin->region;
             reduct_rvsdg_node_t* parent = (region != NULL) ? region->parent : NULL;
 
-            uint16_t inputIdx;
-            if (parent != NULL && reduct_rvsdg_node_map_argument_to_input(parent, region, origin->index, &inputIdx))
+            uint16_t moduleIdx;
+            if (parent != NULL && reduct_rvsdg_node_map_argument_to_input(parent, region, origin->index, &moduleIdx))
             {
-                reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(parent, inputIdx);
+                reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(parent, moduleIdx);
                 if (input == NULL || input->edge == NULL)
                 {
                     return false;
@@ -525,7 +525,7 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
     reduct_opcode_t op, reduct_reg_t target)
 {
     uint32_t arity;
-    uint32_t inputIdx = 0;
+    uint32_t moduleIdx = 0;
     reduct_emitter_expr_t cExpr = REDUCT_EMITTER_EXPR_REG(REDUCT_REGISTER_INVALID);
     bool isRecur = false;
 
@@ -554,12 +554,12 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
         }
         cExpr = reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID);
         arity = node->inputCount - 1;
-        inputIdx = 1;
+        moduleIdx = 1;
     }
     else if (isRecur)
     {
         arity = node->inputCount > 0 ? (uint32_t)node->inputCount - 1 : 0;
-        inputIdx = 1;
+        moduleIdx = 1;
     }
     else
     {
@@ -571,7 +571,7 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
 
     for (uint32_t i = 0; i < arity; i++)
     {
-        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(inputIdx + i));
+        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(moduleIdx + i));
         args[i] = (input != NULL && input->edge != NULL)
             ? reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID)
             : REDUCT_EMITTER_EXPR_NONE;
@@ -595,7 +595,7 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
 
     for (uint32_t i = 0; i < arity; i++)
     {
-        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(inputIdx + i));
+        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(moduleIdx + i));
         if (input != NULL && input->edge != NULL)
         {
             reduct_emitter_release_origin(emitter, input->edge->origin);
@@ -986,7 +986,7 @@ static inline reduct_emitter_expr_t reduct_emit_node(reduct_emitter_t* emitter, 
 
     reduct_item_t* previousItem = emitter->lastItem;
     reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
-    if (item->inputId != REDUCT_INPUT_ID_NONE)
+    if (item->moduleId != REDUCT_MODULE_ID_NONE)
     {
         emitter->lastItem = item;
     }
@@ -1045,7 +1045,7 @@ static inline reduct_function_t* reduct_emit_parse_lambda(reduct_t* reduct, redu
     reduct_function_t* function = reduct_function_new(reduct);
     reduct_item_t* functionItem = REDUCT_CONTAINER_OF(function, reduct_item_t, function);
     reduct_item_t* lambdaItem = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
-    functionItem->inputId = lambdaItem->inputId;
+    functionItem->moduleId = lambdaItem->moduleId;
     functionItem->position = lambdaItem->position;
     if (node->flags & REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC)
     {

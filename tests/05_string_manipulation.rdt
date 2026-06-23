@@ -2,7 +2,7 @@
 (def pure-text "Hello, World!")
 (def words ("Hello" "World!"))
 
-(-> (world)
+(-> (world!)
     (assert! (== (starts-with? pure-text "Hello") true) "starts-with? should return true for string matching prefix")
     (assert! (== (starts-with? pure-text "World") false) "starts-with? should return false for string non-matching prefix")
     (assert! (== (starts-with? words "Hello") true) "starts-with? should return true for list matching first item")

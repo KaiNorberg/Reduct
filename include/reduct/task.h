@@ -35,7 +35,7 @@ typedef struct
         generation; ///< Incrementally increasing counter to avoid ABA problems when reusing task slots in the queue.
 } reduct_task_id_t;
 
-#define REDUCT_TASK_ID_INVALID ((reduct_task_id_t){ .index = UINT16_MAX, .generation = UINT16_MAX }) ///< Invalid task ID.
+#define REDUCT_TASK_ID_INVALID ((reduct_task_id_t){.index = UINT16_MAX, .generation = UINT16_MAX}) ///< Invalid task ID.
 
 /**
  * @brief Task structure.

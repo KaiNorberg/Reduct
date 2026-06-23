@@ -156,7 +156,7 @@ REDUCT_API reduct_list_t* reduct_list_concat(struct reduct* reduct, reduct_list_
  * @brief Retain a list, preventing it from being collected by the garbage collector.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param list Pointer to the list.
+ * @param list Pointer to the list, can be `NULL`.
  */
 REDUCT_API void reduct_list_retain(struct reduct* reduct, reduct_list_t* list);
 
@@ -164,7 +164,7 @@ REDUCT_API void reduct_list_retain(struct reduct* reduct, reduct_list_t* list);
  * @brief Release a list, potentially allowing the garbage collector to collect it.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param list Pointer to the list.
+ * @param list Pointer to the list, can be `NULL`.
  */
 REDUCT_API void reduct_list_release(struct reduct* reduct, reduct_list_t* list);
 

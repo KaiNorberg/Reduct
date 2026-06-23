@@ -126,7 +126,10 @@ REDUCT_API reduct_const_t reduct_function_add_capture(reduct_t* reduct, reduct_f
 REDUCT_API void reduct_function_retain(reduct_t* reduct, reduct_function_t* function)
 {
     assert(reduct != NULL);
-    assert(function != NULL);
+    if (function == NULL)
+    {
+        return;
+    }
 
     reduct_item_retain(REDUCT_CONTAINER_OF(function, reduct_item_t, function));
 }
@@ -134,7 +137,10 @@ REDUCT_API void reduct_function_retain(reduct_t* reduct, reduct_function_t* func
 REDUCT_API void reduct_function_release(reduct_t* reduct, reduct_function_t* function)
 {
     assert(reduct != NULL);
-    assert(function != NULL);
+    if (function == NULL)
+    {
+        return;
+    }
 
     reduct_item_release(REDUCT_CONTAINER_OF(function, reduct_item_t, function));
 }

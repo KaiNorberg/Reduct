@@ -109,8 +109,6 @@ REDUCT_API reduct_handle_t reduct_is_empty(struct reduct* reduct, size_t argc, r
 REDUCT_API reduct_handle_t reduct_is_nil(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 
 REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t handle);
-REDUCT_API reduct_handle_t reduct_import(struct reduct* reduct, reduct_handle_t path, reduct_handle_t compiler,
-    reduct_handle_t compilerArgs);
 REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle_t path);
 REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handle_t state, reduct_handle_t path,
     reduct_handle_t content);

@@ -51,7 +51,10 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
 REDUCT_API void reduct_closure_retain(reduct_t* reduct, reduct_closure_t* closure)
 {
     assert(reduct != NULL);
-    assert(closure != NULL);
+    if (closure == NULL)
+    {
+        return;
+    }
 
     reduct_item_retain(REDUCT_CONTAINER_OF(closure, reduct_item_t, closure));
 }
@@ -59,7 +62,10 @@ REDUCT_API void reduct_closure_retain(reduct_t* reduct, reduct_closure_t* closur
 REDUCT_API void reduct_closure_release(reduct_t* reduct, reduct_closure_t* closure)
 {
     assert(reduct != NULL);
-    assert(closure != NULL);
+    if (closure == NULL)
+    {
+        return;
+    }
 
     reduct_item_release(REDUCT_CONTAINER_OF(closure, reduct_item_t, closure));
 }

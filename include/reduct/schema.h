@@ -16,6 +16,15 @@ struct reduct;
  * Schemas provide a way to validate the structure of Reduct association lists and transform them
  * into native C structures.
  *
+ * ## Applying a Schema
+ *
+ * The `reduct_schema_apply()` function expects an association list where each key corresponds to a field in the schema
+ * and the value is the data for that field.
+ *
+ * Arrays are an exception to the above and can be specified in two ways:
+ * - `("my-key" ("first" "second" "third"))`
+ * - `("my-key" "first" "second" "third")`
+ *
  * @{
  */
 
@@ -32,6 +41,8 @@ typedef enum reduct_schema_type
     REDUCT_SCHEMA_TYPE_STRING, ///< An array of characters.
     REDUCT_SCHEMA_TYPE_HANDLE, ///< A `reduct_handle_t`.
     REDUCT_SCHEMA_TYPE_ARRAY,  ///< A fixed-size array of primitives.
+    REDUCT_SCHEMA_TYPE_ATOM,   ///< A pointer to a `reduct_atom_t`.
+    REDUCT_SCHEMA_TYPE_LIST,   ///< A pointer to a `reduct_list_t`.
 } reduct_schema_type_t;
 
 /**
@@ -91,16 +102,6 @@ REDUCT_API void reduct_schema_global_init(reduct_schema_global_t* global);
 REDUCT_API void reduct_schema_global_deinit(reduct_schema_global_t* global);
 
 /**
- * @brief Create a new schema.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param count Number of fields.
- * @param ... Variadic arguments for specifying the fields.
- * @return The ID of the newly created schema.
- */
-REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t count, ...);
-
-/**
  * @brief Create a new schema from an array of fields.
  *
  * @param reduct Pointer to the Reduct structure.
@@ -108,8 +109,7 @@ REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t co
  * @param fields Array of field definitions.
  * @return The ID of the newly created schema.
  */
-REDUCT_API reduct_schema_id_t reduct_schema_new_fields(struct reduct* reduct, size_t count,
-    const reduct_schema_t* fields);
+REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t count, const reduct_schema_t* fields);
 
 /**
  * @brief Apply a schema to an association list and populate a C structure.

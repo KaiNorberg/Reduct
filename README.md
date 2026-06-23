@@ -402,24 +402,24 @@ As an example, locals can be used to create a more traditional "function definit
 
 ### Side Effects
 
-Reduct does not have traditional side effects and can generally be considered a pure and "lazy" language. This means that any operation is assumed to have the same result given the same arguments and that a operation is not executed until its result is needed, if its result is never needed, it is never executed.
+Reduct avoids side effects and can generally be considered a pure and "lazy" language. This means that any operation is assumed to have the same result given the same arguments and that a operation is not executed until its result is needed, if its result is never needed, it is never executed.
 
-While Reduct does not have any build-in edge case handling for side effects, we can still achieve the same results by using state threading.
-
-State threading is a technique where we explicitly pass the state of the world as an argument to our functions, and return the new state. In practive, the "new state" might just some random meaningless value, but the fact that we have to return it and pass it around forces us, and the compiler, to acknowledge the side effect.
+For edge cases where some form of side effects are required, state threading is utilized where we explicitly pass some state as an argument to our functions, and return the new state. In practive, the "new state" might just some meaningless value, but the fact that we have to return it and pass it around forces us, and the compiler, to acknowledge the side effect.
 
 For example, to print a set of messages, we could write:
 
 ```lisp
-(-> (world)
+(-> (world!)
     (print! "Hello,")
     (print! "World!")
 ) 
 /// Expands to:
-(print! (print! (world) "Hello,") "World!")
+(print! (print! (world!) "Hello,") "World!")
 ```
 
-The `world` function just returns a dummy value, but since we "thread" it through the `print!` calls, we can be sure that they will be executed in the correct order.
+The `world!` function just returns a dummy value, but since we "thread" it through the `print!` calls, we can be sure that they will be executed in the correct order.
+
+> Note that any function ending in "!" will never be folded by the optimizer, since it is assumed to have some form of side effect.
 
 ### Automatic Parallelization
 
@@ -454,7 +454,7 @@ Use 4-space indentation.
 
 If a list spans multiple lines, the closing parentheses should be on its own line, aligned with the opening parentheses. If a list is not spanned across multiple lines, the closing parentheses should be on the same line as the last item.
 
-> The argument for placing parentheses on their own lines, breaking with Lisp tradition, is to allow for multiline lists to be easily copy, pasted and cut,
+> The argument for placing parentheses on their own lines, breaking with Lisp tradition, is to reduce the need for plugins or editor features to keep track of parentheses.
 
 For example:
 
@@ -912,54 +912,6 @@ Returns the provided expression without evaluating it.
 
 Calls the currently executing lambda with the provided arguments.
 
-**`(len <item>) -> <number>`**
-
-Returns the total number of items in the list and the number of characters in the atom.
-
-**`(nth <item> <n: number> [default: item]) -> <item>`**
-
-Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
-
-If the index is out of bounds, returns `[default]` or `nil`.
-
-**`(range [start: number] <end: number> [step: number]) -> <list>`**
-
-Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
-
-**`(repeat <item> <n: number>) -> <list>`**
-
-Returns a new list containing the original item repeated `<n>` times.
-
-Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
-
-**`(concat {item}) -> <item>`**
-
-Returns a new atom or list by concatenating all items. If any of the items is a list, the result will be a list, otherwise it will be an atom.
-
-**`(append <list> {item}) -> <item>`**
-
-Returns a new list by appending all items to the end of the first argument.
-
-**`(prepend <list> {item}) -> <item>`**
-
-Returns a new list by prepending all items to the beginning of the first argument.
-
-**`(first <item>) -> <atom>`**
-
-Returns the first item of a list or the first character of an atom as a new atom.
-
-**`(last <item>) -> <atom>`**
-
-Returns the last item of a list or the last character of an atom as a new atom.
-
-**`(rest <item>) -> <item>`**
-
-Returns a new list containing all except the first item of a list or an atom containing all except the first character of an atom.
-
-**`(init <item>) -> <item>`**
-
-Returns a new list containing all but the last item of a list or an atom containing all but the last character of an atom.
-
 **`(list {expression} ) -> <list>`**
 
 Returns a new list containing the results of evaluating each expression.
@@ -1008,6 +960,35 @@ For example:
 (let ((x 10) (y 20))
     (+ x y)
 ) // Would evaluate to "30"
+```
+
+**`(import <path: string> [compiler: string] [compiler-args: string]) -> <item>`**
+
+Offers three modes, depending on the file extension:
+
+1. **`.so` / `.dll` / `.dylib`**: Loads a pre-compiled shared library as a C module.
+2. **`.c`**: Compiles the C file into a shared library using the specified compiler and flags, then loads it.
+3. **`.rdt` / other**: Parses and evaluates the file at the provided path, returning the result.
+
+Primarily intended to be used for importing libraries or modules, where libraries return a association list.
+
+For example:
+
+```lisp
+// math.rdt
+(def add (lambda (a b) (+ a b)))
+(def sub (lambda (a b) (- a b)))
+
+(list
+    ("add" add)
+    ("sub" sub)
+)
+
+// my_file.rdt
+(def math (import "math.rdt"))
+
+((get-in math "add") 1 2) // Returns "3"
+(math.add 1 2) // Returns "3"
 ```
 
 ---
@@ -1142,11 +1123,9 @@ Will stop evaluating arguments as soon as one is not greater than or equal to th
 
 ### Standard Library
 
-Since Reduct is a functional language, side effects should be avoided when possible. As such, any native with side effects will be suffixed with an exclamation mark `!`.
-
 #### State Management
 
-**`(world) -> <list>`**
+**`(world!) -> <list>`**
 
 Returns an empty list representing the "world state". Intended to be utilized for state threading.
 
@@ -1156,7 +1135,7 @@ Returns an empty list representing the "world state". Intended to be utilized fo
 
 Evaluates `<cond>`. If it is falsy, the evaluation fails and throws an error with `<msg>` as the message. Will return the provided state as the first argument for easy threading.
 
-**`(throw <msg: atom>)`**
+**`(throw! <msg: atom>)`**
 
 Throws an error with the given atom being the error message.
 
@@ -1207,6 +1186,54 @@ Returns the first item in the list for which the `<callable>` returns a truthy v
 ---
 
 #### Sequences (Lists & Strings)
+
+**`(len <item>) -> <number>`**
+
+Returns the total number of items in the list and the number of characters in the atom.
+
+**`(nth <item> <n: number> [default: item]) -> <item>`**
+
+Returns the n-th item of a list or the n-th character of an atom as a new atom, if n is negative, it returns the n-th item or character from the end.
+
+If the index is out of bounds, returns `[default]` or `nil`.
+
+**`(range [start: number] <end: number> [step: number]) -> <list>`**
+
+Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
+
+**`(repeat <item> <n: number>) -> <list>`**
+
+Returns a new list containing the original item repeated `<n>` times.
+
+Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
+
+**`(concat {item}) -> <item>`**
+
+Returns a new atom or list by concatenating all items. If any of the items is a list, the result will be a list, otherwise it will be an atom.
+
+**`(append <list> {item}) -> <item>`**
+
+Returns a new list by appending all items to the end of the first argument.
+
+**`(prepend <list> {item}) -> <item>`**
+
+Returns a new list by prepending all items to the beginning of the first argument.
+
+**`(first <item>) -> <atom>`**
+
+Returns the first item of a list or the first character of an atom as a new atom.
+
+**`(last <item>) -> <atom>`**
+
+Returns the last item of a list or the last character of an atom as a new atom.
+
+**`(rest <item>) -> <item>`**
+
+Returns a new list containing all except the first item of a list or an atom containing all except the first character of an atom.
+
+**`(init <item>) -> <item>`**
+
+Returns a new list containing all but the last item of a list or an atom containing all but the last character of an atom.
 
 **`(slice <item> <start: number> [end: number]) -> <item>`**
 
@@ -1402,35 +1429,6 @@ Parses the provided string into a Reduct expression without evaluating it.
 **`(run <atom>) -> <item>`**
 
 Parses and evaluates the provided string.
-
-**`(import <path: string> [compiler: string] [compiler-args: string]) -> <item>`**
-
-Offers three modes, depending on the file extension:
-
-1. **`.so` / `.dll` / `.dylib`**: Loads a pre-compiled shared library as a C module.
-2. **`.c`**: Compiles the C file into a shared library using the specified compiler and flags, then loads it.
-3. **`.rdt` / other**: Parses and evaluates the file at the provided path, returning the result.
-
-Primarily intended to be used for importing libraries or modules, where libraries return a association list.
-
-For example:
-
-```lisp
-// math.rdt
-(def add (lambda (a b) (+ a b)))
-(def sub (lambda (a b) (- a b)))
-
-(list
-    ("add" add)
-    ("sub" sub)
-)
-
-// my_file.rdt
-(def math (import "math.rdt"))
-
-((get-in math "add") 1 2) // Returns "3"
-(math.add 1 2) // Returns "3"
-```
 
 **`(read-file! <path: string>) -> <string>`**
 

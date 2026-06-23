@@ -2,6 +2,7 @@
 #define REDUCT_ERROR_H 1
 
 #include <reduct/defs.h>
+#include <reduct/module.h>
 
 struct reduct;
 struct reduct_item;
@@ -43,8 +44,8 @@ typedef enum reduct_error_type
  */
 typedef struct reduct_error_frame
 {
-    reduct_input_id_t inputId; ///< The input ID of the source file.
-    uint32_t position;         ///< The position in the input buffer.
+    reduct_module_id_t moduleId; ///< The ID of the module that caused the error.
+    uint32_t position;           ///< The position in the input buffer.
 } reduct_error_frame_t;
 
 /**
@@ -212,7 +213,7 @@ REDUCT_API void reduct_error_pop(struct reduct* reduct);
  * @param _reduct Pointer to the Reduct structure.
  * @param _error Pointer to the error structure.
  */
-#define REDUCT_ERROR_RETHROW(_reduct, _error) REDUCT_ERROR_THROW(_reduct, "%s", (_error)->message);
+#define REDUCT_ERROR_RETHROW(_reduct, _error) REDUCT_ERROR_THROW(_reduct, "%s", (_error)->message)
 
 /**
  * @brief Throw a runtime error if the expression is false.
@@ -258,7 +259,7 @@ REDUCT_API void reduct_error_pop(struct reduct* reduct);
     { \
         struct reduct_item* __item = REDUCT_HANDLE_TO_ITEM(_handle); \
         REDUCT_ERROR_GENERIC((_compiler)->reduct, (_compiler)->reduct->error, \
-            (((__item) != NULL && (__item)->inputId != REDUCT_INPUT_ID_NONE) \
+            (((__item) != NULL && (__item)->moduleId != REDUCT_MODULE_ID_NONE) \
                     ? (__item) \
                     : ((_compiler)->lastItem != NULL ? (_compiler)->lastItem : (__item))), \
             COMPILE, __VA_ARGS__); \

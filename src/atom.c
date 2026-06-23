@@ -622,7 +622,10 @@ REDUCT_API void reduct_atom_check_number(reduct_atom_t* atom)
 REDUCT_API void reduct_atom_retain(reduct_t* reduct, reduct_atom_t* atom)
 {
     assert(reduct != NULL);
-    assert(atom != NULL);
+    if (atom == NULL)
+    {
+        return;
+    }
 
     reduct_item_retain(REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
 }
@@ -630,7 +633,10 @@ REDUCT_API void reduct_atom_retain(reduct_t* reduct, reduct_atom_t* atom)
 REDUCT_API void reduct_atom_release(reduct_t* reduct, reduct_atom_t* atom)
 {
     assert(reduct != NULL);
-    assert(atom != NULL);
+    if (atom == NULL)
+    {
+        return;
+    }
 
     reduct_item_release(REDUCT_CONTAINER_OF(atom, reduct_item_t, atom));
 }

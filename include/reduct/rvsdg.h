@@ -563,17 +563,6 @@ REDUCT_API bool reduct_rvsdg_node_is_identical(struct reduct* reduct, reduct_rvs
 REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_region_lift_origin(struct reduct* reduct, reduct_rvsdg_region_t* region,
     reduct_rvsdg_origin_t* outerValue);
 
-/**
- * @brief Recursively copy a node.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param region The region to add the copy to, or NULL.
- * @param node The node to copy.
- * @return The newly copied node.
- */
-REDUCT_API struct reduct_rvsdg_node* reduct_rvsdg_node_copy(struct reduct* reduct, reduct_rvsdg_region_t* region,
-    struct reduct_rvsdg_node* node);
-
 /** @} */
 
 #endif

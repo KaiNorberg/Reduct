@@ -440,9 +440,9 @@ REDUCT_API reduct_handle_t reduct_sort(reduct_t* reduct, reduct_handle_t list, r
 
 static inline uint64_t reduct_handle_normalize_index(reduct_t* reduct, reduct_handle_t index, size_t length)
 {
-    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NUMBER(index)))
+    if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NUMBER_SHAPED(index)))
     {
-        double d = REDUCT_HANDLE_TO_NUMBER(index);
+        double d = reduct_handle_as_number(reduct, index);
         if (REDUCT_LIKELY(d >= 0))
         {
             return (uint64_t)d;
@@ -557,7 +557,7 @@ REDUCT_API reduct_handle_t reduct_concat(reduct_t* reduct, size_t argc, reduct_h
         {
             return REDUCT_HANDLE_NIL(reduct);
         }
-        
+
         if (argc == 2)
         {
             if (REDUCT_HANDLE_IS_LIST(argv[0]) && REDUCT_HANDLE_IS_LIST(argv[1]))
@@ -834,6 +834,11 @@ REDUCT_API reduct_handle_t reduct_assoc(reduct_t* reduct, reduct_handle_t handle
     {
         reduct_list_t* list = REDUCT_HANDLE_TO_LIST(handle);
         size_t n = reduct_handle_normalize_index(reduct, index, list->length);
+
+        if (n >= list->length && REDUCT_HANDLE_IS_NIL(fillVal))
+        {
+            REDUCT_ERROR_THROW(reduct, "assoc: index %zu out of range for list and no fill value provided", n);
+        }
 
         size_t newLen = REDUCT_MAX(list->length, n + 1);
         reduct_list_t* newList = reduct_list_new(reduct, newLen);
@@ -1334,7 +1339,7 @@ REDUCT_API reduct_handle_t reduct_find(struct reduct* reduct, reduct_handle_t ha
         reduct_standard_task_t* task = &tasks[i];
         task->error = &error;
         task->callable = callable;
-        task->arg = list->handles[i];        
+        task->arg = list->handles[i];
         if (!reduct_task_create(reduct, reduct_standard_worker, task, &task->id))
         {
             task->id = REDUCT_TASK_ID_INVALID;
@@ -2111,116 +2116,14 @@ REDUCT_API reduct_handle_t reduct_run(struct reduct* reduct, reduct_handle_t han
     return reduct_eval(reduct, ast);
 }
 
-static void reduct_get_resolved_path(reduct_t* reduct, reduct_handle_t pathHandle, char* outBuf)
-{
-    const char* pathStr;
-    size_t pathLen;
-    reduct_handle_atom_string(reduct, &pathHandle, &pathStr, &pathLen);
-    reduct_resolve_path(reduct, pathStr, pathLen, outBuf, REDUCT_PATH_MAX, true);
-}
-
-REDUCT_API reduct_handle_t reduct_import(struct reduct* reduct, reduct_handle_t path, reduct_handle_t compiler,
-    reduct_handle_t compilerArgs)
-{
-    assert(reduct != NULL);
-    char libPathBuf[REDUCT_PATH_MAX];
-    char pathBuf[REDUCT_PATH_MAX];
-    reduct_lib_t lib;
-
-    reduct_get_resolved_path(reduct, path, pathBuf);
-    char* pathString = pathBuf;
-
-    const char* ext = strrchr(pathBuf, '.');
-    if (ext == NULL)
-    {
-        ext = "";
-    }
-    else
-    {
-        ext++;
-    }
-
-    if (strcmp(ext, "c") == 0)
-    {
-        strncpy(libPathBuf, pathBuf, REDUCT_PATH_MAX);
-
-        char* lastDot = strrchr(libPathBuf, '.');
-        if (lastDot != NULL)
-        {
-            *lastDot = '\0';
-        }
-        strncat(libPathBuf, ".rdt.so", REDUCT_PATH_MAX - 1);
-
-        struct stat statLib;
-        if (stat(libPathBuf, &statLib) == 0)
-        {
-            struct stat statSrc;
-            if (stat(pathBuf, &statSrc) == 0)
-            {
-                if (statLib.st_mtime >= statSrc.st_mtime)
-                {
-                    pathString = libPathBuf;
-                    ext = "so";
-                    goto load_shared_lib;
-                }
-            }
-        }
-
-        const char* compilerStr;
-        size_t compilerLen;
-        reduct_handle_atom_string(reduct, &compiler, &compilerStr, &compilerLen);
-
-        const char* compilerArgsStr;
-        size_t compilerArgsLen;
-        if (!REDUCT_HANDLE_IS_NIL(compilerArgs))
-        {
-            reduct_handle_atom_string(reduct, &compilerArgs, &compilerArgsStr, &compilerArgsLen);
-        }
-
-        size_t bufferCapacity = compilerLen + (!REDUCT_HANDLE_IS_NIL(compilerArgs) ? compilerArgsLen : 0) +
-            strlen(pathBuf) + strlen(libPathBuf) + 64;
-        REDUCT_SCRATCH_GET(reduct, buffer, char, bufferCapacity);
-        snprintf(buffer, bufferCapacity, "%.*s %.*s %s -shared -fPIC -o %s", (int)compilerLen, compilerStr,
-            (!REDUCT_HANDLE_IS_NIL(compilerArgs) ? (int)compilerArgsLen : 0),
-            (!REDUCT_HANDLE_IS_NIL(compilerArgs) ? compilerArgsStr : ""), pathBuf, libPathBuf);
-
-        int status = system(buffer);
-        REDUCT_SCRATCH_PUT(reduct, buffer);
-        REDUCT_ERROR_ASSERT(reduct, status == 0, "import: compilation failed with status %d", status);
-
-        pathString = libPathBuf;
-        ext = "so";
-        goto load_shared_lib;
-    }
-
-    if (strcmp(ext, "so") == 0 || strcmp(ext, "dll") == 0 || strcmp(ext, "dylib") == 0)
-    {
-load_shared_lib:
-        lib = REDUCT_LIB_OPEN(pathString);
-        if (lib == NULL)
-        {
-            REDUCT_ERROR_THROW(reduct, REDUCT_LIB_ERROR());
-        }
-
-        reduct_module_init_fn init = (reduct_module_init_fn)REDUCT_LIB_SYM(lib, REDUCT_LIB_ENTRY);
-        if (init == NULL)
-        {
-            REDUCT_LIB_CLOSE(lib);
-            REDUCT_ERROR_THROW(reduct, "could not find %s in %s", REDUCT_LIB_ENTRY, pathString);
-        }
-
-        reduct_global_lib_add(reduct, lib);
-        return init(reduct);
-    }
-
-    return reduct_eval_file(reduct, pathString, reduct->global->optimize.lastFlags);
-}
-
 REDUCT_API reduct_handle_t reduct_read_file(struct reduct* reduct, reduct_handle_t path)
 {
     assert(reduct != NULL);
     char pathBuf[REDUCT_PATH_MAX];
-    reduct_get_resolved_path(reduct, path, pathBuf);
+    const char* pathStr;
+    size_t pathLen;
+    reduct_handle_atom_string(reduct, &path, &pathStr, &pathLen);
+    reduct_module_resolve_path(reduct, pathStr, pathLen, pathBuf, REDUCT_PATH_MAX, false);
 
     FILE* file = fopen(pathBuf, "rb");
     if (file == NULL)
@@ -2258,7 +2161,7 @@ REDUCT_API reduct_handle_t reduct_write_file(struct reduct* reduct, reduct_handl
     const char* pathStr;
     size_t pathLen;
     reduct_handle_atom_string(reduct, &path, &pathStr, &pathLen);
-    reduct_resolve_path(reduct, pathStr, pathLen, pathBuf, REDUCT_PATH_MAX, false);
+    reduct_module_resolve_path(reduct, pathStr, pathLen, pathBuf, REDUCT_PATH_MAX, false);
 
     const char* contentStr;
     size_t contentLen;
@@ -2735,7 +2638,7 @@ REDUCT_API reduct_handle_t reduct_seed(struct reduct* reduct, reduct_handle_t va
 }
 
 #define REDUCT_STDLIB_WRAPPER_0(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc == 0, #_name ": expected 0 argument(s), got %zu", (size_t)argc); \
         (void)argv; \
@@ -2743,28 +2646,28 @@ REDUCT_API reduct_handle_t reduct_seed(struct reduct* reduct, reduct_handle_t va
     }
 
 #define REDUCT_STDLIB_WRAPPER_1(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc == 1, #_name ": expected 1 argument(s), got %zu", (size_t)argc); \
         return _impl(reduct, argv[0]); \
     }
 
 #define REDUCT_STDLIB_WRAPPER_2(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc == 2, #_name ": expected 2 argument(s), got %zu", (size_t)argc); \
         return _impl(reduct, argv[0], argv[1]); \
     }
 
 #define REDUCT_STDLIB_WRAPPER_3(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc == 3, #_name ": expected 3 argument(s), got %zu", (size_t)argc); \
         return _impl(reduct, argv[0], argv[1], argv[2]); \
     }
 
 #define REDUCT_STDLIB_WRAPPER_R12(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 2, #_name ": expected 1 to 2 argument(s), got %zu", \
             (size_t)argc); \
@@ -2772,7 +2675,7 @@ REDUCT_API reduct_handle_t reduct_seed(struct reduct* reduct, reduct_handle_t va
     }
 
 #define REDUCT_STDLIB_WRAPPER_R23(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc >= 2 && argc <= 3, #_name ": expected 2 to 3 argument(s), got %zu", \
             (size_t)argc); \
@@ -2780,22 +2683,15 @@ REDUCT_API reduct_handle_t reduct_seed(struct reduct* reduct, reduct_handle_t va
     }
 
 #define REDUCT_STDLIB_WRAPPER_R34(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc >= 3 && argc <= 4, #_name ": expected 3 to 4 argument(s), got %zu", \
             (size_t)argc); \
         return _impl(reduct, argv[0], argv[1], argv[2], argc == 4 ? argv[3] : REDUCT_HANDLE_NIL(reduct)); \
     }
 
-#define REDUCT_STDLIB_WRAPPER_ARG2(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
-    { \
-        REDUCT_ERROR_ASSERT(reduct, argc == 2, #_name ": expected 2 argument(s), got %zu", (size_t)argc); \
-        return _impl(reduct, argv[0], argv[1]); \
-    }
-
 #define REDUCT_STDLIB_WRAPPER_V1(_name, _impl) \
-    static reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
+    reduct_handle_t reduct_stdlib_##_name(reduct_t* reduct, size_t argc, reduct_handle_t* argv) \
     { \
         REDUCT_ERROR_ASSERT(reduct, argc >= 1, #_name ": expected at least 1 argument(s), got %zu", (size_t)argc); \
         return _impl(reduct, argc, argv); \
@@ -2853,7 +2749,7 @@ static reduct_handle_t reduct_exact_not_equal_impl(reduct_t* reduct, size_t argc
 REDUCT_STDLIB_WRAPPER_V1(exact_eq, reduct_exact_equal_impl)
 REDUCT_STDLIB_WRAPPER_V1(exact_neq, reduct_exact_not_equal_impl)
 
-static reduct_handle_t reduct_stdlib_reduce(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+reduct_handle_t reduct_stdlib_reduce(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
     REDUCT_ERROR_ASSERT(reduct, argc >= 2 && argc <= 3, "reduce: expected 2 to 3 argument(s), got %zu", (size_t)argc);
     return reduct_reduce(reduct, argv[0], argc == 3 ? argv[1] : REDUCT_HANDLE_NIL(reduct),
@@ -2865,50 +2761,63 @@ REDUCT_STDLIB_WRAPPER_R12(all, reduct_all)
 REDUCT_STDLIB_WRAPPER_R12(sort, reduct_sort)
 REDUCT_STDLIB_WRAPPER_R12(flatten, reduct_flatten)
 REDUCT_STDLIB_WRAPPER_R12(log, reduct_log)
+REDUCT_STDLIB_WRAPPER_V1(len, reduct_len)
+REDUCT_STDLIB_WRAPPER_R23(nth, reduct_nth)
 
-static reduct_handle_t reduct_stdlib_nth(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+reduct_handle_t reduct_stdlib_range(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
-    REDUCT_ERROR_ASSERT(reduct, argc == 2 || argc == 3, "nth: expected 2 or 3 argument(s), got %zu", (size_t)argc);
-    return reduct_nth(reduct, argv[0], argv[1], argc == 3 ? argv[2] : REDUCT_HANDLE_NIL(reduct));
+    REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 3, "range: expected 1 to 3 argument(s), got %zu", (size_t)argc);
+    reduct_handle_t start = (argc >= 2) ? argv[0] : REDUCT_HANDLE_NIL(reduct);
+    reduct_handle_t end = (argc == 1) ? argv[0] : (argc >= 2 ? argv[1] : REDUCT_HANDLE_NIL(reduct));
+    reduct_handle_t step = (argc == 3) ? argv[2] : REDUCT_HANDLE_NIL(reduct);
+
+    if (argc == 1)
+    {
+        reduct_handle_t zero = REDUCT_HANDLE_FROM_NUMBER((double)0);
+        return reduct_range(reduct, zero, end, REDUCT_HANDLE_NIL(reduct));
+    }
+
+    return reduct_range(reduct, start, end, step);
 }
 
+REDUCT_STDLIB_WRAPPER_2(repeat, reduct_repeat)
+REDUCT_STDLIB_WRAPPER_V1(concat, reduct_concat)
+REDUCT_STDLIB_WRAPPER_V1(append, reduct_append)
+REDUCT_STDLIB_WRAPPER_V1(prepend, reduct_prepend)
+REDUCT_STDLIB_WRAPPER_1(first, reduct_first)
+REDUCT_STDLIB_WRAPPER_1(last, reduct_last)
+REDUCT_STDLIB_WRAPPER_1(rest, reduct_rest)
+REDUCT_STDLIB_WRAPPER_1(init, reduct_init)
+REDUCT_STDLIB_WRAPPER_R23(slice, reduct_slice)
 REDUCT_STDLIB_WRAPPER_1(reverse, reduct_reverse)
 REDUCT_STDLIB_WRAPPER_1(unique, reduct_unique)
 REDUCT_STDLIB_WRAPPER_1(keys, reduct_keys)
 REDUCT_STDLIB_WRAPPER_1(values, reduct_values)
-REDUCT_STDLIB_WRAPPER_R23(slice, reduct_slice)
 REDUCT_STDLIB_WRAPPER_R23(get_in, reduct_get_in)
 REDUCT_STDLIB_WRAPPER_R34(assoc, reduct_assoc)
-REDUCT_STDLIB_WRAPPER_ARG2(dissoc, reduct_dissoc)
+REDUCT_STDLIB_WRAPPER_2(dissoc, reduct_dissoc)
 REDUCT_STDLIB_WRAPPER_R34(update, reduct_update)
-REDUCT_STDLIB_WRAPPER_ARG2(index_of, reduct_index_of)
-REDUCT_STDLIB_WRAPPER_ARG2(contains, reduct_contains)
+REDUCT_STDLIB_WRAPPER_2(index_of, reduct_index_of)
+REDUCT_STDLIB_WRAPPER_2(contains, reduct_contains)
 REDUCT_STDLIB_WRAPPER_3(replace, reduct_replace)
-REDUCT_STDLIB_WRAPPER_ARG2(chunk, reduct_chunk)
-REDUCT_STDLIB_WRAPPER_ARG2(find, reduct_find)
+REDUCT_STDLIB_WRAPPER_2(chunk, reduct_chunk)
+REDUCT_STDLIB_WRAPPER_2(find, reduct_find)
 REDUCT_STDLIB_WRAPPER_3(assoc_in, reduct_assoc_in)
-REDUCT_STDLIB_WRAPPER_ARG2(dissoc_in, reduct_dissoc_in)
+REDUCT_STDLIB_WRAPPER_2(dissoc_in, reduct_dissoc_in)
 REDUCT_STDLIB_WRAPPER_3(update_in, reduct_update_in)
 REDUCT_STDLIB_WRAPPER_V1(merge, reduct_merge)
 REDUCT_STDLIB_WRAPPER_V1(explode, reduct_explode)
 REDUCT_STDLIB_WRAPPER_V1(implode, reduct_implode)
-
-static reduct_handle_t reduct_stdlib_repeat(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    REDUCT_ERROR_ASSERT(reduct, argc == 2, "repeat: expected 2 argument(s), got %zu", (size_t)argc);
-    return reduct_repeat(reduct, argv[0], argv[1]);
-}
-
-REDUCT_STDLIB_WRAPPER_ARG2(starts_with, reduct_starts_with)
-REDUCT_STDLIB_WRAPPER_ARG2(ends_with, reduct_ends_with)
-REDUCT_STDLIB_WRAPPER_ARG2(join, reduct_join)
-REDUCT_STDLIB_WRAPPER_ARG2(split, reduct_split)
+REDUCT_STDLIB_WRAPPER_2(starts_with, reduct_starts_with)
+REDUCT_STDLIB_WRAPPER_2(ends_with, reduct_ends_with)
+REDUCT_STDLIB_WRAPPER_2(join, reduct_join)
+REDUCT_STDLIB_WRAPPER_2(split, reduct_split)
 
 REDUCT_STDLIB_WRAPPER_1(upper, reduct_upper)
 REDUCT_STDLIB_WRAPPER_1(lower, reduct_lower)
 REDUCT_STDLIB_WRAPPER_1(trim, reduct_trim)
 
-static reduct_handle_t reduct_stdlib_number_impl(reduct_t* reduct, reduct_handle_t arg)
+reduct_handle_t reduct_stdlib_number_impl(reduct_t* reduct, reduct_handle_t arg)
 {
     return REDUCT_HANDLE_FROM_NUMBER(reduct_handle_as_number(reduct, arg));
 }
@@ -2916,7 +2825,7 @@ REDUCT_STDLIB_WRAPPER_1(number, reduct_stdlib_number_impl)
 
 REDUCT_STDLIB_WRAPPER_1(eval, reduct_eval)
 
-static reduct_handle_t reduct_stdlib_parse_impl(reduct_t* reduct, reduct_handle_t arg)
+reduct_handle_t reduct_stdlib_parse_impl(reduct_t* reduct, reduct_handle_t arg)
 {
     const char* str;
     size_t len;
@@ -2926,37 +2835,15 @@ static reduct_handle_t reduct_stdlib_parse_impl(reduct_t* reduct, reduct_handle_
 REDUCT_STDLIB_WRAPPER_1(parse, reduct_stdlib_parse_impl)
 
 REDUCT_STDLIB_WRAPPER_1(run, reduct_run)
-
-static reduct_handle_t reduct_stdlib_import(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    REDUCT_ERROR_ASSERT(reduct, argc >= 1 && argc <= 3, "import: expected 1 to 3 argument(s), got %zu", (size_t)argc);
-    return reduct_import(reduct, argv[0], argc >= 2 ? argv[1] : REDUCT_HANDLE_NIL(reduct),
-        argc == 3 ? argv[2] : REDUCT_HANDLE_NIL(reduct));
-}
-
 REDUCT_STDLIB_WRAPPER_1(read_file, reduct_read_file)
 REDUCT_STDLIB_WRAPPER_3(write_file, reduct_write_file)
 REDUCT_STDLIB_WRAPPER_0(read_char, reduct_read_char)
 REDUCT_STDLIB_WRAPPER_0(read_line, reduct_read_line)
-
-static reduct_handle_t reduct_stdlib_print(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    return reduct_print(reduct, argc, argv);
-}
-
-static reduct_handle_t reduct_stdlib_println(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    return reduct_println(reduct, argc, argv);
-}
-
+REDUCT_STDLIB_WRAPPER_V1(print, reduct_print)
+REDUCT_STDLIB_WRAPPER_V1(println, reduct_println)
 REDUCT_STDLIB_WRAPPER_1(ord, reduct_ord)
 REDUCT_STDLIB_WRAPPER_1(chr, reduct_chr)
-
-static reduct_handle_t reduct_stdlib_format(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
-{
-    return reduct_format(reduct, argc, argv);
-}
-
+REDUCT_STDLIB_WRAPPER_V1(format, reduct_format)
 REDUCT_STDLIB_WRAPPER_0(now, reduct_now)
 REDUCT_STDLIB_WRAPPER_0(uptime, reduct_uptime)
 REDUCT_STDLIB_WRAPPER_0(env, reduct_env)
@@ -2989,7 +2876,7 @@ REDUCT_STDLIB_WRAPPER_2(atan2, reduct_atan2)
 REDUCT_STDLIB_WRAPPER_2(rand, reduct_rand)
 REDUCT_STDLIB_WRAPPER_1(seed, reduct_seed)
 
-static reduct_handle_t reduct_stdlib_world(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
+reduct_handle_t reduct_stdlib_world(reduct_t* reduct, size_t argc, reduct_handle_t* argv)
 {
     REDUCT_ERROR_ASSERT(reduct, argc == 0, "world: expected 0 argument(s), got %zu", (size_t)argc);
     (void)argv;
@@ -3003,7 +2890,7 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
     if (sets & REDUCT_STDLIB_STATE)
     {
         static reduct_native_t natives[] = {
-            {"world", reduct_stdlib_world, NULL},
+            {"world!", reduct_stdlib_world, NULL},
         };
         reduct_native_register(reduct, natives, sizeof(natives) / sizeof(reduct_native_t));
     }
@@ -3011,7 +2898,7 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
     {
         static reduct_native_t natives[] = {
             {"assert!", reduct_stdlib_assert, NULL},
-            {"throw", reduct_stdlib_throw, NULL},
+            {"throw!", reduct_stdlib_throw, NULL},
             {"try", reduct_stdlib_try, NULL},
         };
         reduct_native_register(reduct, natives, sizeof(natives) / sizeof(reduct_native_t));
@@ -3033,12 +2920,23 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
     if (sets & REDUCT_STDLIB_SEQUENCES)
     {
         static reduct_native_t natives[] = {
+            {"len", reduct_stdlib_len, NULL},
+            {"nth", reduct_stdlib_nth, NULL},
+            {"range", reduct_stdlib_range, NULL},
+            {"repeat", reduct_stdlib_repeat, NULL},
+            {"concat", reduct_stdlib_concat, NULL},
+            {"append", reduct_stdlib_append, NULL},
+            {"prepend", reduct_stdlib_prepend, NULL},
+            {"first", reduct_stdlib_first, NULL},
+            {"last", reduct_stdlib_last, NULL},
+            {"rest", reduct_stdlib_rest, NULL},
+            {"init", reduct_stdlib_init, NULL},
+            {"slice", reduct_stdlib_slice, NULL},
             {"assoc", reduct_stdlib_assoc, NULL},
             {"dissoc", reduct_stdlib_dissoc, NULL},
             {"update", reduct_stdlib_update, NULL},
             {"index-of", reduct_stdlib_index_of, NULL},
             {"reverse", reduct_stdlib_reverse, NULL},
-            {"slice", reduct_stdlib_slice, NULL},
             {"flatten", reduct_stdlib_flatten, NULL},
             {"contains?", reduct_stdlib_contains, NULL},
             {"replace", reduct_stdlib_replace, NULL},
@@ -3098,7 +2996,6 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
             {"eval", reduct_stdlib_eval, NULL},
             {"parse", reduct_stdlib_parse, NULL},
             {"run", reduct_stdlib_run, NULL},
-            {"import", reduct_stdlib_import, NULL},
             {"read-file!", reduct_stdlib_read_file, NULL},
             {"write-file!", reduct_stdlib_write_file, NULL},
             {"read-char!", reduct_stdlib_read_char, NULL},

@@ -1,2 +1,2 @@
 (def a 10)
-(assert! (world) (== a 10) "def should bind 'a' to 10")
+(assert! (world!) (== a 10) "def should bind 'a' to 10")

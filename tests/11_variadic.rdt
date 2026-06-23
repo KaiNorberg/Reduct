@@ -1,7 +1,7 @@
 (def sum (lambda (*numbers)
     (reduce numbers 0 +)
 ))
-(-> (world)
+(-> (world!)
     (println! (sum))
     (assert! (== (sum 1 2 3) 6) "variadic lambda should work with multiple arguments")
     (assert! (== (sum) 0) "variadic lambda with no arguments should work")

@@ -249,9 +249,9 @@ REDUCT_API void reduct_error_print(reduct_error_t* error, FILE* file)
             const char* finput = NULL;
             size_t fpos = f->position;
 
-            if (f->inputId != REDUCT_INPUT_ID_NONE)
+            if (f->moduleId != REDUCT_MODULE_ID_NONE)
             {
-                reduct_input_t* fInput = reduct_input_lookup(error->reduct, f->inputId);
+                reduct_module_t* fInput = reduct_module_lookup(error->reduct, f->moduleId);
                 if (fInput != NULL)
                 {
                     fpath = fInput->path[0] != '\0' ? fInput->path : "<eval>";
@@ -339,9 +339,9 @@ REDUCT_API void reduct_error_pop(reduct_t* reduct)
 REDUCT_API void reduct_error_get_item_params(reduct_t* reduct, reduct_item_t* item, const char** path,
     const char** input, size_t* inputLength, size_t* regionLength, size_t* position)
 {
-    if (item != NULL && item->inputId != REDUCT_INPUT_ID_NONE)
+    if (item != NULL && item->moduleId != REDUCT_MODULE_ID_NONE)
     {
-        reduct_input_t* itemInput = reduct_input_lookup(reduct, item->inputId);
+        reduct_module_t* itemInput = reduct_module_lookup(reduct, item->moduleId);
         if (itemInput != NULL)
         {
             *path = itemInput->path;
@@ -387,9 +387,9 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
             }
 
             reduct_item_t* funcItem = REDUCT_CONTAINER_OF(func, reduct_item_t, function);
-            if (funcItem->inputId != REDUCT_INPUT_ID_NONE)
+            if (funcItem->moduleId != REDUCT_MODULE_ID_NONE)
             {
-                reduct_input_t* itemInput = reduct_input_lookup(reduct, funcItem->inputId);
+                reduct_module_t* itemInput = reduct_module_lookup(reduct, funcItem->moduleId);
                 if (itemInput != NULL)
                 {
                     path = itemInput->path;
@@ -435,7 +435,7 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
             uint32_t btPos =
                 (btInstIndex < btFunc->instCount && btFunc->positions != NULL) ? btFunc->positions[btInstIndex] : 0;
 
-            reduct->error->frames[reduct->error->frameCount].inputId = btFuncItem->inputId;
+            reduct->error->frames[reduct->error->frameCount].moduleId = btFuncItem->moduleId;
             reduct->error->frames[reduct->error->frameCount].position = btPos;
             reduct->error->frameCount++;
         }

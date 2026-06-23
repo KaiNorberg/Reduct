@@ -7,7 +7,7 @@
 #include <string.h>
 
 int main(int argc, char **argv)
-{    
+{
     static int result = 0;
     const char* irOutputFile = NULL;
     int isSilent = 0;
@@ -123,7 +123,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "  -d             Output the compiled bytecode (disassemble)\n");
         fprintf(stderr, "  --ir <file>    Output the IR graph (RVSDG) to a .dot file\n");
         fprintf(stderr, "  -O<level>      Set optimization level (0-3, default 3)\n");
-        fprintf(stderr, "  -v, --version  Output version information\n");        
+        fprintf(stderr, "  -v, --version  Output version information\n");
         fprintf(stderr, "Environment Variables:\n");
         fprintf(stderr, "  REDUCT_PATH    Colon-separated or semi-colon-separated list of directories for imports\n");
         return 1;
@@ -156,7 +156,7 @@ int main(int argc, char **argv)
                         {
                             memcpy(token, envp + start, tokLen);
                             token[tokLen] = '\0';
-                            reduct_add_import_path(reduct, token);
+                            reduct_module_add_path(reduct, token);
                             free(token);
                         }
                     }
@@ -166,16 +166,16 @@ int main(int argc, char **argv)
         }
 
 #if defined(__linux__) || defined(__APPLE__)
-        reduct_add_import_path(reduct, "/usr/local/lib/reduct");
-        reduct_add_import_path(reduct, "/usr/lib/reduct");
-        reduct_add_import_path(reduct, "/lib/reduct");
+        reduct_module_add_path(reduct, "/usr/local/lib/reduct");
+        reduct_module_add_path(reduct, "/usr/lib/reduct");
+        reduct_module_add_path(reduct, "/lib/reduct");
 #endif
 
         for (int i = 1; i < argc; ++i)
         {
             if (strcmp(argv[i], "-I") == 0 && i + 1 < argc)
             {
-                reduct_add_import_path(reduct, argv[++i]);
+                reduct_module_add_path(reduct, argv[++i]);
             }
             else if ((strcmp(argv[i], "-e") == 0 || strcmp(argv[i], "--ir") == 0) && i + 1 < argc)
             {
@@ -198,14 +198,14 @@ int main(int argc, char **argv)
         static char buffer[0x10000];
 
         if (parseOnly)
-        {    
+        {
             reduct_stringify(reduct, ast, buffer, sizeof(buffer));
             printf("%s", buffer);
             goto cleanup;
         }
-        
+
         reduct_stdlib_register(reduct, REDUCT_STDLIB_ALL);
-        
+
         reduct_handle_t node = reduct_build(reduct, ast);
         reduct_optimize(reduct, node, optimizeFlags);
 

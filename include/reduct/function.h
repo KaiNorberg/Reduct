@@ -148,7 +148,7 @@ REDUCT_API reduct_const_t reduct_function_add_capture(struct reduct* reduct, red
  * @brief Retain a function, preventing it from being collected by the garbage collector.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param function Pointer to the function.
+ * @param function Pointer to the function, can be `NULL`.
  */
 REDUCT_API void reduct_function_retain(struct reduct* reduct, reduct_function_t* function);
 
@@ -156,7 +156,7 @@ REDUCT_API void reduct_function_retain(struct reduct* reduct, reduct_function_t*
  * @brief Release a function, potentially allowing the garbage collector to collect it.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param function Pointer to the function.
+ * @param function Pointer to the function, can be `NULL`.
  */
 REDUCT_API void reduct_function_release(struct reduct* reduct, reduct_function_t* function);
 
