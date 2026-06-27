@@ -138,6 +138,33 @@ typedef enum
     REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_edge, reduct_item_t, rvsdgEdge))
 
 /**
+ * @brief Create a handle from an IR origin pointer.
+ *
+ * @param _origin The pointer to the reduct_rvsdg_origin_t.
+ * @return The handle.
+ */
+#define REDUCT_HANDLE_FROM_RVSDG_ORIGIN(_origin) \
+    REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_origin, reduct_item_t, rvsdgOrigin))
+
+/**
+ * @brief Create a handle from an IR user pointer.
+ *
+ * @param _user The pointer to the reduct_rvsdg_user_t.
+ * @return The handle.
+ */
+#define REDUCT_HANDLE_FROM_RVSDG_USER(_user) \
+    REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_user, reduct_item_t, rvsdgUser))
+
+/**
+ * @brief Create a handle from an IR region pointer.
+ *
+ * @param _region The pointer to the reduct_rvsdg_region_t.
+ * @return The handle.
+ */
+#define REDUCT_HANDLE_FROM_RVSDG_REGION(_region) \
+    REDUCT_HANDLE_FROM_ITEM(REDUCT_CONTAINER_OF(_region, reduct_item_t, rvsdgRegion))
+
+/**
  * @brief Create a boolean handle from a C condition.
  *
  * @param _reduct Pointer to the Reduct structure.
@@ -274,6 +301,24 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
     (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_RVSDG_EDGE)
 
 /**
+ * @brief Check if a handle is an IR origin.
+ *
+ * @param _handle Pointer to the handle.
+ * @return Non-zero if the handle is an IR origin, zero otherwise.
+ */
+#define REDUCT_HANDLE_IS_RVSDG_ORIGIN(_handle) \
+    (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_RVSDG_ORIGIN)
+
+/**
+ * @brief Check if a handle is an IR user.
+ *
+ * @param _handle Pointer to the handle.
+ * @return Non-zero if the handle is an IR user, zero otherwise.
+ */
+#define REDUCT_HANDLE_IS_RVSDG_USER(_handle) \
+    (REDUCT_HANDLE_IS_ITEM(_handle) && REDUCT_HANDLE_TO_ITEM(_handle)->type == REDUCT_ITEM_TYPE_RVSDG_USER)
+
+/**
  * @brief Check if a handle is a future.
  *
  * @param _handle Pointer to the handle.
@@ -393,6 +438,22 @@ REDUCT_API const char* reduct_handle_type_string(reduct_handle_type_t type);
  * @return The IR edge pointer.
  */
 #define REDUCT_HANDLE_TO_RVSDG_EDGE(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->rvsdgEdge)
+
+/**
+ * @brief Get the IR origin pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The IR origin pointer.
+ */
+#define REDUCT_HANDLE_TO_RVSDG_ORIGIN(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->rvsdgOrigin)
+
+/**
+ * @brief Get the IR user pointer of a handle.
+ *
+ * @param _handle Pointer to the handle.
+ * @return The IR user pointer.
+ */
+#define REDUCT_HANDLE_TO_RVSDG_USER(_handle) (&REDUCT_HANDLE_TO_ITEM(_handle)->rvsdgUser)
 
 /**
  * @brief Get the future pointer of a handle.

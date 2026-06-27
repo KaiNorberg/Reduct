@@ -57,10 +57,10 @@ typedef uint8_t reduct_item_flags_t;       ///< Item flags enumeration.
  */
 typedef struct reduct_item
 {
-    uint32_t position;                  ///< The position in the input buffer where the item was parsed.
+    uint32_t modulePos;                 ///< The position within the modules buffer that created the item.
+    reduct_module_id_t moduleId;        ///< The ID of the module that created the item.
     _Atomic(reduct_item_flags_t) flags; ///< Flags for the item.
     reduct_item_type_t type;            ///< The type of the item.
-    reduct_input_id_t inputId;          ///< The input ID of the item.
     union {
         uint32_t length;                   ///< Common length for the item. (Stored in the union due to padding rules.)
         reduct_atom_t atom;                ///< An atom.
@@ -204,22 +204,28 @@ REDUCT_API void reduct_item_mark(reduct_item_t* item);
 /**
  * @brief Retain an item, preventing it from being collected by the garbage collector.
  *
- * @param item Pointer to the item to retain.
+ * @param item Pointer to the item to retain, can be `NULL`.
  */
 static inline REDUCT_ALWAYS_INLINE void reduct_item_retain(struct reduct_item* item)
 {
-    assert(item != NULL);
+    if (item == NULL)
+    {
+        return;
+    }
     atomic_fetch_or(&item->flags, REDUCT_ITEM_FLAG_RETAINED);
 }
 
 /**
  * @brief Release an item, potentially allowing the garbage collector to collect it.
  *
- * @param item Pointer to the item to release.
+ * @param item Pointer to the item to release, can be `NULL`.
  */
 static inline REDUCT_ALWAYS_INLINE void reduct_item_release(struct reduct_item* item)
 {
-    assert(item != NULL);
+    if (item == NULL)
+    {
+        return;
+    }
     atomic_fetch_and(&item->flags, ~REDUCT_ITEM_FLAG_RETAINED);
 }
 

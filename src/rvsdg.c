@@ -24,13 +24,13 @@ REDUCT_API void reduct_rvsdg_edge_connect(reduct_t* reduct, reduct_rvsdg_origin_
     edge->origin = origin;
     edge->user = user;
 
-    edge->next = origin->edges;
+    edge->next = origin->firstEdge;
     edge->prev = NULL;
-    if (origin->edges != NULL)
+    if (origin->firstEdge != NULL)
     {
-        origin->edges->prev = edge;
+        origin->firstEdge->prev = edge;
     }
-    origin->edges = edge;
+    origin->firstEdge = edge;
     origin->useCount++;
 
     user->edge = edge;
@@ -49,7 +49,7 @@ REDUCT_API void reduct_rvsdg_edge_disconnect(reduct_rvsdg_edge_t* edge)
     }
     else
     {
-        edge->origin->edges = edge->next;
+        edge->origin->firstEdge = edge->next;
     }
     if (edge->next != NULL)
     {
@@ -125,6 +125,51 @@ REDUCT_API reduct_rvsdg_user_t* reduct_rvsdg_node_add_input(reduct_t* reduct, re
     return user;
 }
 
+REDUCT_API void reduct_rvsdg_node_remove_input(reduct_rvsdg_user_t* user)
+{
+    if (user == NULL || user->ownerKind != REDUCT_RVSDG_OWNER_NODE || user->node == NULL)
+    {
+        return;
+    }
+
+    reduct_rvsdg_node_t* node = user->node;
+    reduct_rvsdg_edge_disconnect(user->edge);
+
+    reduct_rvsdg_user_t* prev = NULL;
+    reduct_rvsdg_user_t* curr = node->firstInput;
+    while (curr != NULL && curr != user)
+    {
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if (curr == NULL)
+    {
+        return; // Not found
+    }
+
+    if (prev == NULL)
+    {
+        node->firstInput = user->next;
+    }
+    else
+    {
+        prev->next = user->next;
+    }
+
+    node->inputCount--;
+
+    curr = (prev == NULL) ? node->firstInput : prev->next;
+    while (curr != NULL)
+    {
+        if (curr->index > user->index)
+        {
+            curr->index--;
+        }
+        curr = curr->next;
+    }
+}
+
 REDUCT_API reduct_rvsdg_region_t* reduct_rvsdg_node_add_region(reduct_t* reduct, reduct_rvsdg_node_t* node)
 {
     reduct_rvsdg_region_t* region = reduct_rvsdg_region_new(reduct);
@@ -174,6 +219,49 @@ REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_region_add_argument(reduct_t* red
         curr->next = origin;
     }
     return origin;
+}
+
+REDUCT_API void reduct_rvsdg_region_remove_argument(reduct_rvsdg_origin_t* origin)
+{
+    if (origin == NULL || origin->ownerKind != REDUCT_RVSDG_OWNER_REGION || origin->region == NULL)
+    {
+        return;
+    }
+
+    reduct_rvsdg_region_t* region = origin->region;
+    if (origin->useCount > 0)
+    {
+        return;
+    }
+
+    reduct_rvsdg_origin_t* prev = NULL;
+    reduct_rvsdg_origin_t* curr = region->firstArgument;
+    while (curr != NULL && curr != origin)
+    {
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if (curr == NULL)
+    {
+        return; // Not found
+    }
+
+    if (prev == NULL)
+    {
+        region->firstArgument = origin->next;
+    }
+    else
+    {
+        prev->next = origin->next;
+    }
+
+    region->argumentCount--;
+
+    for (curr = (prev == NULL) ? region->firstArgument : prev->next; curr != NULL; curr = curr->next)
+    {
+        curr->index--;
+    }
 }
 
 REDUCT_API void reduct_rvsdg_region_add_node(reduct_rvsdg_region_t* region, reduct_rvsdg_node_t* node)
@@ -258,7 +346,7 @@ REDUCT_API void reduct_rvsdg_node_delete(struct reduct* reduct, reduct_rvsdg_nod
         reduct_rvsdg_origin_t* arg = region->firstArgument;
         while (arg != NULL)
         {
-            reduct_rvsdg_edge_t* edge = arg->edges;
+            reduct_rvsdg_edge_t* edge = arg->firstEdge;
             while (edge != NULL)
             {
                 reduct_rvsdg_edge_t* next_edge = edge->next;
@@ -295,11 +383,11 @@ REDUCT_API void reduct_rvsdg_node_delete(struct reduct* reduct, reduct_rvsdg_nod
     reduct_rvsdg_origin_t* output = node->output;
     while (output != NULL)
     {
-        reduct_rvsdg_edge_t* edge = output->edges;
+        reduct_rvsdg_edge_t* edge = output->firstEdge;
         while (edge != NULL)
         {
             reduct_rvsdg_edge_disconnect(edge);
-            edge = output->edges;
+            edge = output->firstEdge;
         }
         output = output->next;
     }
@@ -433,15 +521,14 @@ REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_phi(reduct_t* reduct, redu
     return node;
 }
 
-REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_gamma(reduct_t* reduct, reduct_rvsdg_region_t* region,
-    uint8_t regionCount)
+REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_new_gamma(reduct_t* reduct, reduct_rvsdg_region_t* region)
 {
     reduct_rvsdg_node_t* node = reduct_rvsdg_node_new(reduct);
     node->type = REDUCT_RVSDG_NODE_TYPE_GAMMA;
 
     reduct_rvsdg_node_add_input(reduct, node);
 
-    for (uint8_t i = 0; i < regionCount; i++)
+    for (uint8_t i = 0; i < 2; i++)
     {
         reduct_rvsdg_node_add_region(reduct, node);
     }
@@ -517,7 +604,7 @@ REDUCT_API void reduct_rvsdg_origin_redirect_users(struct reduct_rvsdg_origin* o
         return;
     }
 
-    reduct_rvsdg_edge_t* edge = origin->edges;
+    reduct_rvsdg_edge_t* edge = origin->firstEdge;
     while (edge != NULL)
     {
         reduct_rvsdg_edge_t* next = edge->next;
@@ -565,7 +652,7 @@ REDUCT_API void reduct_rvsdg_edge_redirect(reduct_rvsdg_edge_t* edge, reduct_rvs
     }
     else
     {
-        edge->origin->edges = edge->next;
+        edge->origin->firstEdge = edge->next;
     }
     if (edge->next != NULL)
     {
@@ -574,13 +661,13 @@ REDUCT_API void reduct_rvsdg_edge_redirect(reduct_rvsdg_edge_t* edge, reduct_rvs
     edge->origin->useCount--;
 
     edge->origin = newOrigin;
-    edge->next = newOrigin->edges;
+    edge->next = newOrigin->firstEdge;
     edge->prev = NULL;
-    if (newOrigin->edges)
+    if (newOrigin->firstEdge)
     {
-        newOrigin->edges->prev = edge;
+        newOrigin->firstEdge->prev = edge;
     }
-    newOrigin->edges = edge;
+    newOrigin->firstEdge = edge;
     newOrigin->useCount++;
 }
 
@@ -633,7 +720,7 @@ REDUCT_API void reduct_rvsdg_node_phi_wrap_lambda(reduct_t* reduct, reduct_rvsdg
     reduct_rvsdg_origin_t* lambdaOut = lambda->output;
     reduct_rvsdg_origin_t* phiOut = phi->output;
 
-    reduct_rvsdg_edge_t* edge = lambdaOut->edges;
+    reduct_rvsdg_edge_t* edge = lambdaOut->firstEdge;
     while (edge != NULL)
     {
         reduct_rvsdg_edge_t* next = edge->next;
@@ -692,28 +779,32 @@ REDUCT_API bool reduct_rvsdg_node_map_input_to_argument(reduct_rvsdg_node_t* nod
     }
 }
 
-REDUCT_API bool reduct_rvsdg_node_map_argument_to_input(reduct_rvsdg_node_t* node, reduct_rvsdg_region_t* region,
-    uint16_t argIndex, uint16_t* outInputIndex)
+REDUCT_API bool reduct_rvsdg_node_argument_to_input(reduct_rvsdg_region_t* region, uint16_t argIndex,
+    uint16_t* outInputIndex)
 {
-    assert(node != NULL);
     assert(region != NULL);
-    assert(region->parent == node);
 
-    switch (node->type)
+    switch (region->parent->type)
     {
     case REDUCT_RVSDG_NODE_TYPE_GAMMA:
     {
-        const reduct_rvsdg_node_info_t* info = reduct_rvsdg_node_get_info(node->type);
-        *outInputIndex = (uint16_t)(argIndex + info->dataInputOffset);
+        const reduct_rvsdg_node_info_t* info = reduct_rvsdg_node_get_info(region->parent->type);
+        if (outInputIndex != NULL)
+        {
+            *outInputIndex = (uint16_t)(argIndex + info->dataInputOffset);
+        }
         return true;
     }
     case REDUCT_RVSDG_NODE_TYPE_LAMBDA:
     case REDUCT_RVSDG_NODE_TYPE_PHI:
     {
-        uint16_t base = (uint16_t)(region->argumentCount - node->inputCount);
+        uint16_t base = (uint16_t)(region->argumentCount - region->parent->inputCount);
         if (argIndex >= base)
         {
-            *outInputIndex = (uint16_t)(argIndex - base);
+            if (outInputIndex != NULL)
+            {
+                *outInputIndex = (uint16_t)(argIndex - base);
+            }
             return true;
         }
         return false;
@@ -801,129 +892,47 @@ REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_region_lift_origin(reduct_t* redu
     return outerValue;
 }
 
-typedef struct
+REDUCT_API reduct_rvsdg_origin_t* reduct_rvsdg_resolve_origin(reduct_rvsdg_origin_t* origin)
 {
-    reduct_rvsdg_origin_t* old;
-    reduct_rvsdg_origin_t* new;
-} reduct_rvsdg_copy_entry_t;
-
-typedef struct
-{
-    reduct_t* reduct;
-    reduct_rvsdg_copy_entry_t* entries;
-    size_t count;
-    size_t capacity;
-} reduct_rvsdg_copy_map_t;
-
-static reduct_rvsdg_origin_t* reduct_rvsdg_copy_map_find(reduct_rvsdg_copy_map_t* map, reduct_rvsdg_origin_t* origin)
-{
-    for (size_t i = 0; i < map->count; i++)
+    while (origin != NULL && origin->ownerKind == REDUCT_RVSDG_OWNER_REGION)
     {
-        if (map->entries[i].old == origin)
+        reduct_rvsdg_region_t* region = origin->region;
+        reduct_rvsdg_node_t* parentNode = region->parent;
+
+        if (parentNode->type == REDUCT_RVSDG_NODE_TYPE_PHI)
         {
-            return map->entries[i].new;
+            break;
         }
+
+        uint16_t inputIndex;
+        if (!reduct_rvsdg_node_argument_to_input(region, origin->index, &inputIndex))
+        {
+            break;
+        }
+
+        reduct_rvsdg_origin_t* parentInputOrigin = reduct_rvsdg_node_get_input_origin(parentNode, inputIndex);
+        if (parentInputOrigin == NULL)
+        {
+            break;
+        }
+
+        origin = parentInputOrigin;
     }
+
     return origin;
 }
 
-static void reduct_rvsdg_copy_map_add(reduct_rvsdg_copy_map_t* map, reduct_rvsdg_origin_t* old,
-    reduct_rvsdg_origin_t* new)
+REDUCT_API struct reduct_rvsdg_node* reduct_rvsdg_node_get_resolved_input_node(reduct_rvsdg_node_t* node,
+    uint16_t index)
 {
-    if (map->count >= map->capacity)
+    reduct_rvsdg_origin_t* origin = reduct_rvsdg_node_get_input_origin(node, index);
+
+    origin = reduct_rvsdg_resolve_origin(origin);
+
+    if (origin != NULL && origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
     {
-        map->capacity = map->capacity == 0 ? 16 : map->capacity * 2;
-        REDUCT_SCRATCH_GROW(map->reduct, map->entries, reduct_rvsdg_copy_entry_t, map->capacity);
-    }
-    map->entries[map->count].old = old;
-    map->entries[map->count].new = new;
-    map->count++;
-}
-
-static reduct_rvsdg_node_t* reduct_rvsdg_node_copy_internal(reduct_t* reduct, reduct_rvsdg_region_t* region,
-    reduct_rvsdg_node_t* node, reduct_rvsdg_copy_map_t* map);
-
-static void reduct_rvsdg_region_copy_internal(reduct_t* reduct, reduct_rvsdg_node_t* parent,
-    reduct_rvsdg_region_t* oldRegion, reduct_rvsdg_copy_map_t* map)
-{
-    reduct_rvsdg_region_t* newRegion = reduct_rvsdg_node_add_region(reduct, parent);
-
-    reduct_rvsdg_origin_t* oldArg = oldRegion->firstArgument;
-    while (oldArg != NULL)
-    {
-        reduct_rvsdg_origin_t* newArg = reduct_rvsdg_region_add_argument(reduct, newRegion);
-        reduct_rvsdg_copy_map_add(map, oldArg, newArg);
-        oldArg = oldArg->next;
+        return origin->node;
     }
 
-    reduct_rvsdg_node_t* oldNode = oldRegion->firstNode;
-    while (oldNode != NULL)
-    {
-        reduct_rvsdg_node_copy_internal(reduct, newRegion, oldNode, map);
-        oldNode = oldNode->next;
-    }
-
-    if (oldRegion->result->edge != NULL)
-    {
-        reduct_rvsdg_origin_t* origin = reduct_rvsdg_copy_map_find(map, oldRegion->result->edge->origin);
-        reduct_rvsdg_edge_connect(reduct, origin, newRegion->result);
-    }
-}
-
-static reduct_rvsdg_node_t* reduct_rvsdg_node_copy_internal(reduct_t* reduct, reduct_rvsdg_region_t* region,
-    reduct_rvsdg_node_t* node, reduct_rvsdg_copy_map_t* map)
-{
-    reduct_rvsdg_node_t* newNode = reduct_rvsdg_node_new(reduct);
-    newNode->type = node->type;
-    newNode->flags = node->flags;
-
-    if (newNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
-    {
-        newNode->opcode = node->opcode;
-    }
-    else if (newNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
-    {
-        newNode->constant = node->constant;
-    }
-
-    if (region != NULL)
-    {
-        reduct_rvsdg_region_add_node(region, newNode);
-    }
-
-    reduct_rvsdg_copy_map_add(map, node->output, newNode->output);
-
-    reduct_rvsdg_user_t* oldInput = node->firstInput;
-    while (oldInput != NULL)
-    {
-        reduct_rvsdg_user_t* newInput = reduct_rvsdg_node_add_input(reduct, newNode);
-        if (oldInput->edge != NULL)
-        {
-            reduct_rvsdg_origin_t* origin = reduct_rvsdg_copy_map_find(map, oldInput->edge->origin);
-            reduct_rvsdg_edge_connect(reduct, origin, newInput);
-        }
-        oldInput = oldInput->next;
-    }
-
-    reduct_rvsdg_region_t* oldRegion = node->firstRegion;
-    while (oldRegion != NULL)
-    {
-        reduct_rvsdg_region_copy_internal(reduct, newNode, oldRegion, map);
-        oldRegion = oldRegion->next;
-    }
-
-    return newNode;
-}
-
-REDUCT_API reduct_rvsdg_node_t* reduct_rvsdg_node_copy(reduct_t* reduct, reduct_rvsdg_region_t* region,
-    reduct_rvsdg_node_t* node)
-{
-    REDUCT_SCRATCH_GET(reduct, entries, reduct_rvsdg_copy_entry_t, 16);
-    reduct_rvsdg_copy_map_t map = {reduct, entries, 0, 16};
-
-    reduct_rvsdg_node_t* copy = reduct_rvsdg_node_copy_internal(reduct, region, node, &map);
-
-    entries = map.entries;
-    REDUCT_SCRATCH_PUT(reduct, entries);
-    return copy;
+    return NULL;
 }

@@ -1,4 +1,4 @@
-(-> (world)
+(-> (world!)
     (println! (format "Hello, {}!" "World"))
     (assert! (== (format "Hello, {}!" "World") "Hello, World!") "format should replace {} with arguments")
     (assert! (== (format "{1} {0}" "World" "Hello") "Hello World") "format should support explicit indexing")
@@ -8,16 +8,16 @@
     (assert! (== (chr 65) "A") "chr should return character from ASCII code")
 
     (assert! (number? (now!)) "now! should return a number (unix timestamp)")
-    
+
     (assert! (number? (uptime!)) "uptime! should return a number (ms since start)")
 
     (assert! (list? (env!)) "env! should return a list of environment variables")
-    
+
     (assert! (list? (args!)) "args! should return the command line arguments list")
 
     (assert! (atom? (read-file! "01_variables_scope.rdt")) "read-file! should read a file as a string atom")
     (assert! (!= (len (read-file! "01_variables_scope.rdt")) 0) "read-file! should read non-empty content")
-    
+
     (assert! (== (run "(+ 1 2)") 3) "run should allow dynamic code execution")
 
     (assert! (list? (parse "(1 2 3)")) "parse should return a list structure")

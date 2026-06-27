@@ -238,7 +238,7 @@ static inline REDUCT_ALWAYS_INLINE reduct_atom_t* reduct_atom_ensure_interned(st
     {
         return atom;
     }
-    
+
     return reduct_atom_lookup(reduct, atom->string, atom->length, reduct_atom_get_lookup_flags(atom));
 }
 
@@ -261,7 +261,7 @@ REDUCT_API void reduct_atom_check_native(struct reduct* reduct, reduct_atom_t* a
  * @brief Retain an atom, preventing it from being collected by the garbage collector.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param atom Pointer to the atom.
+ * @param atom Pointer to the atom, can be `NULL`.
  */
 REDUCT_API void reduct_atom_retain(struct reduct* reduct, reduct_atom_t* atom);
 
@@ -269,7 +269,7 @@ REDUCT_API void reduct_atom_retain(struct reduct* reduct, reduct_atom_t* atom);
  * @brief Release an atom, potentially allowing the garbage collector to collect it.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param atom Pointer to the atom.
+ * @param atom Pointer to the atom, can be `NULL`.
  */
 REDUCT_API void reduct_atom_release(struct reduct* reduct, reduct_atom_t* atom);
 

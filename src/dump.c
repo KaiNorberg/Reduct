@@ -27,8 +27,17 @@ static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
     }
     else if (REDUCT_HANDLE_IS_LIST(handle))
     {
-        reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(handle);
-        fprintf(out, "(list of %u items)", (unsigned int)item->length);
+        reduct_list_t* list = REDUCT_HANDLE_TO_LIST(handle);
+        fprintf(out, "(");
+        for (uint32_t i = 0; i < list->length; ++i)
+        {
+            reduct_dump_print_handle(list->handles[i], out);
+            if (i < list->length - 1)
+            {
+                fprintf(out, " ");
+            }
+        }
+        fprintf(out, ")");
     }
     else if (REDUCT_HANDLE_IS_FUNCTION(handle))
     {
@@ -36,19 +45,22 @@ static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
     }
     else
     {
-        fprintf(out, "(handle)");
+        fprintf(out, "(%s)", REDUCT_HANDLE_GET_TYPE_STRING(handle));
     }
 }
 
-static void reduct_dump_print_const_slot(reduct_const_slot_t* slot, FILE* out)
+static void reduct_dump_print_const(reduct_function_t* function, uint16_t index, FILE* out)
 {
-    if (slot->type == REDUCT_CONST_SLOT_TYPE_STATIC)
-    {
-        reduct_dump_print_handle(slot->handle, out);
-    }
-    else if (slot->type == REDUCT_CONST_SLOT_TYPE_CAPTURE)
+    if (index < function->captureCount)
     {
         fprintf(out, "(capture)");
+        return;
+    }
+
+    uint16_t staticIndex = (uint16_t)(index - function->captureCount);
+    if (staticIndex < function->constantCount)
+    {
+        reduct_dump_print_handle(function->constants[staticIndex], out);
     }
     else
     {
@@ -67,11 +79,14 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
         return;
     }
 
+    uint32_t slotCount = (uint32_t)function->captureCount + (uint32_t)function->constantCount;
+
     fprintf(out, "================================================================================\n");
     fprintf(out, "Function: %p\n", (void*)function);
     fprintf(out, "Arity: %u\n", (unsigned int)function->arity);
     fprintf(out, "Instruction count: %u\n", (unsigned int)function->instCount);
-    fprintf(out, "Constant count: %u\n", (unsigned int)function->constantCount);
+    fprintf(out, "Capture count: %u\n", (unsigned int)function->captureCount);
+    fprintf(out, "Static constant count: %u\n", (unsigned int)function->constantCount);
     fprintf(out, "Register count: %u\n", (unsigned int)function->registerCount);
     fprintf(out, "--------------------------------------------------------------------------------\n");
 
@@ -92,25 +107,25 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
 
         switch (layout)
         {
-        case REDUCT_LAYOUT_AB_RANGE:
+        case REDUCT_OPCODE_LAYOUT_AB_RANGE:
             fprintf(out, "R%-5u %-6u", a, b);
             break;
-        case REDUCT_LAYOUT_SAX:
+        case REDUCT_OPCODE_LAYOUT_SAX:
             fprintf(out, "%-6d %-6s %-6s", sax, "", "");
             break;
-        case REDUCT_LAYOUT_SAXC:
+        case REDUCT_OPCODE_LAYOUT_SAXC:
             fprintf(out, "%-6d %-6s R%-5u", sax, "", c);
             break;
-        case REDUCT_LAYOUT_ABC_RANGE:
+        case REDUCT_OPCODE_LAYOUT_ABC_RANGE:
             fprintf(out, "R%-5u %-6u %c%-5u", a, b, isConst ? 'K' : 'R', c);
             break;
-        case REDUCT_LAYOUT_C:
+        case REDUCT_OPCODE_LAYOUT_C:
             fprintf(out, "%c%-5u %-6s %-6s", isConst ? 'K' : 'R', c, "", "");
             break;
-        case REDUCT_LAYOUT_AC:
+        case REDUCT_OPCODE_LAYOUT_AC:
             fprintf(out, "R%-5u %-6s %c%-5u", a, "", isConst ? 'K' : 'R', c);
             break;
-        case REDUCT_LAYOUT_NONE:
+        case REDUCT_OPCODE_LAYOUT_NONE:
             fprintf(out, "%-6s %-6s %-6s", "", "", "");
             break;
         default:
@@ -130,10 +145,10 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
             int target = (int)i + 1 + sax;
             fprintf(out, " ; -> [%04u]\n", target);
         }
-        else if (hasInlineConst && c < function->constantCount)
+        else if (hasInlineConst && c < slotCount)
         {
             fprintf(out, " ; ");
-            reduct_dump_print_const_slot(&function->constants[c], out);
+            reduct_dump_print_const(function, (uint16_t)c, out);
             fprintf(out, "\n");
         }
         else
@@ -142,13 +157,13 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
         }
     }
 
-    if (function->constantCount > 0)
+    if (slotCount > 0)
     {
         fprintf(out, "--------------------------------------------------------------------------------\n");
-        for (uint16_t i = 0; i < function->constantCount; ++i)
+        for (uint16_t i = 0; i < slotCount; ++i)
         {
             fprintf(out, "[K%03u] ", (unsigned int)i);
-            reduct_dump_print_const_slot(&function->constants[i], out);
+            reduct_dump_print_const(function, i, out);
             fprintf(out, "\n");
         }
     }
@@ -157,14 +172,10 @@ static void reduct_dump_internal(reduct_t* reduct, reduct_function_t* function, 
 
     for (uint16_t i = 0; i < function->constantCount; ++i)
     {
-        reduct_const_slot_t* slot = &function->constants[i];
-        if (slot->type == REDUCT_CONST_SLOT_TYPE_STATIC)
+        reduct_handle_t handle = function->constants[i];
+        if (REDUCT_HANDLE_IS_FUNCTION(handle))
         {
-            reduct_handle_t handle = slot->handle;
-            if (REDUCT_HANDLE_IS_FUNCTION(handle))
-            {
-                reduct_dump_internal(reduct, REDUCT_HANDLE_TO_FUNCTION(handle), out);
-            }
+            reduct_dump_internal(reduct, REDUCT_HANDLE_TO_FUNCTION(handle), out);
         }
     }
 }
@@ -220,8 +231,17 @@ static void reduct_dump_gv_print_handle(reduct_handle_t handle, FILE* out)
     }
     else if (REDUCT_HANDLE_IS_LIST(handle))
     {
-        reduct_item_t* item = REDUCT_HANDLE_TO_ITEM(handle);
-        fprintf(out, "(list of %u items)", (unsigned int)item->length);
+        reduct_list_t* list = REDUCT_HANDLE_TO_LIST(handle);
+        fprintf(out, "(");
+        for (uint32_t i = 0; i < list->length; ++i)
+        {
+            reduct_dump_gv_print_handle(list->handles[i], out);
+            if (i < list->length - 1)
+            {
+                fprintf(out, " ");
+            }
+        }
+        fprintf(out, ")");
     }
     else if (REDUCT_HANDLE_IS_FUNCTION(handle))
     {
@@ -229,7 +249,7 @@ static void reduct_dump_gv_print_handle(reduct_handle_t handle, FILE* out)
     }
     else
     {
-        fprintf(out, "(handle)");
+        fprintf(out, "(%s)", REDUCT_HANDLE_GET_TYPE_STRING(handle));
     }
 }
 
@@ -373,7 +393,7 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
         reduct_rvsdg_node_t* node = nodes[n];
         if (node->output != NULL)
         {
-            for (reduct_rvsdg_edge_t* edge = node->output->edges; edge != NULL; edge = edge->next)
+            for (reduct_rvsdg_edge_t* edge = node->output->firstEdge; edge != NULL; edge = edge->next)
             {
                 if (node->regionCount > 0)
                 {
@@ -407,7 +427,7 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
         {
             for (reduct_rvsdg_origin_t* arg = region->firstArgument; arg != NULL; arg = arg->next)
             {
-                for (reduct_rvsdg_edge_t* edge = arg->edges; edge != NULL; edge = edge->next)
+                for (reduct_rvsdg_edge_t* edge = arg->firstEdge; edge != NULL; edge = edge->next)
                 {
                     fprintf(out, "  region_%p_args:arg_%u -> ", (void*)region, arg->index);
                     if (edge->user->ownerKind == REDUCT_RVSDG_OWNER_NODE)
@@ -432,39 +452,60 @@ static void reduct_dump_gv_edges(reduct_rvsdg_node_t** nodes, size_t count, FILE
     }
 }
 
+static void reduct_dump_collect_nodes(reduct_t* reduct, reduct_rvsdg_node_t* node, reduct_rvsdg_node_t*** nodes,
+    size_t* count, size_t* capacity)
+{
+    for (size_t i = 0; i < *count; i++)
+    {
+        if ((*nodes)[i] == node)
+        {
+            return;
+        }
+    }
+
+    if (*count >= *capacity)
+    {
+        *capacity = (*capacity == 0) ? 16 : *capacity * 2;
+        REDUCT_SCRATCH_GROW(reduct, *nodes, reduct_rvsdg_node_t*, *capacity);
+    }
+    (*nodes)[(*count)++] = node;
+
+    for (reduct_rvsdg_user_t* input = node->firstInput; input != NULL; input = input->next)
+    {
+        if (input->edge != NULL && input->edge->origin != NULL &&
+            input->edge->origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+        {
+            reduct_dump_collect_nodes(reduct, input->edge->origin->node, nodes, count, capacity);
+        }
+    }
+
+    for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+    {
+        for (reduct_rvsdg_node_t* child = region->firstNode; child != NULL; child = child->next)
+        {
+            reduct_dump_collect_nodes(reduct, child, nodes, count, capacity);
+        }
+
+        if (region->result != NULL && region->result->edge != NULL && region->result->edge->origin != NULL &&
+            region->result->edge->origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+        {
+            reduct_dump_collect_nodes(reduct, region->result->edge->origin->node, nodes, count, capacity);
+        }
+    }
+}
+
 REDUCT_API void reduct_dump_rvsdg(reduct_t* reduct, reduct_handle_t graph, FILE* out)
 {
     assert(reduct != NULL);
     assert(out != NULL);
 
-    size_t nodeCount = 0;
-    reduct_item_block_t* block = reduct->global->item.block;
-    while (block != NULL)
-    {
-        for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
-        {
-            if (block->items[i].type == REDUCT_ITEM_TYPE_RVSDG_NODE)
-            {
-                nodeCount++;
-            }
-        }
-        block = block->next;
-    }
+    reduct_rvsdg_node_t* root = REDUCT_HANDLE_TO_RVSDG_NODE(graph);
 
-    REDUCT_SCRATCH_GET(reduct, nodes, reduct_rvsdg_node_t*, nodeCount);
-    size_t idx = 0;
-    block = reduct->global->item.block;
-    while (block != NULL)
-    {
-        for (uint32_t i = 0; i < REDUCT_ITEM_BLOCK_MAX; i++)
-        {
-            if (block->items[i].type == REDUCT_ITEM_TYPE_RVSDG_NODE)
-            {
-                nodes[idx++] = &block->items[i].rvsdgNode;
-            }
-        }
-        block = block->next;
-    }
+    size_t capacity = 16;
+    size_t nodeCount = 0;
+    REDUCT_SCRATCH_GET(reduct, nodes, reduct_rvsdg_node_t*, capacity);
+
+    reduct_dump_collect_nodes(reduct, root, &nodes, &nodeCount, &capacity);
 
     fprintf(out, "digraph RVSDG {\n");
     fprintf(out, "  node [shape=record, fontname=\"Courier\"];\n");

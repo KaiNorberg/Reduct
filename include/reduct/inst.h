@@ -36,6 +36,11 @@
 typedef uint16_t reduct_const_t;
 
 /**
+ * @brief Invalid constant value.
+ */
+#define REDUCT_CONST_INVALID ((reduct_const_t) - 1)
+
+/**
  * @brief Register type.
  */
 typedef uint16_t reduct_reg_t;

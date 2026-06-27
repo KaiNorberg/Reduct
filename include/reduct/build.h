@@ -45,7 +45,7 @@ REDUCT_API void reduct_build_register_intrinsics(struct reduct* reduct);
  * @param op The opcode.
  * @return The native function, or NULL if not found.
  */
-REDUCT_API reduct_native_fn reduct_builder_get_native_fn(reduct_opcode_t op);
+REDUCT_API reduct_native_fn reduct_builder_get_opcode_native(reduct_opcode_t op);
 
 /** @} */
 

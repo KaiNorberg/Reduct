@@ -2,7 +2,7 @@
 (def text "hello")
 (def data (("a" 1) ("b" 2) ("c" (("d" 3)))))
 (def alist (("a" 1) ("b" 2) ("c" 3)))
-(-> (world)
+(-> (world!)
     (assert! (== (len nums) 5) "len should return the number of items in a list")
     (assert! (== (len text) 5) "len should return the number of characters in a string")
     (assert! (== (len ()) 0) "len of an empty list should be 0")

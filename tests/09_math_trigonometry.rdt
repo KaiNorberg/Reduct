@@ -1,4 +1,4 @@
-(-> (world)
+(-> (world!)
     (assert! (== (+ 1 2) 3) "addition should work")
     (assert! (== (- 10 4) 6) "subtraction should work")
     (assert! (== (* 3 4) 12) "multiplication should work")
@@ -17,7 +17,7 @@
     (assert! (== (min 5 3 9) 3) "min should return the smallest argument")
     (assert! (== (max 5 3 9) 9) "max should return the largest argument")
     (assert! (== (min 5 3.0 9) 3.0) "min should support mixed types with promotion")
-    
+
     (assert! (== (clamp 10 1 5) 5) "clamp should restrict value to maximum")
     (assert! (== (clamp 0 1 5) 1) "clamp should restrict value to minimum")
     (assert! (== (clamp 3 1 5) 3) "clamp should leave value unchanged if within range")
@@ -42,7 +42,7 @@
     (assert! (number? (acos 1)) "acos should return a number")
     (assert! (number? (atan 0)) "atan should return a number")
     (assert! (number? (atan2 0 1)) "atan2 should return a number")
-    
+
     (assert! (number? (sinh 0)) "sinh should return a number")
     (assert! (number? (cosh 0)) "cosh should return a number")
     (assert! (number? (tanh 0)) "tanh should return a number")
@@ -51,6 +51,6 @@
     (assert! (number? (atanh 0)) "atanh should return a number")
 
     (assert! (number? (rand 1 10)) "rand should return a number")
-    
+
     (assert! (== (seed! 42) ()) "seed! should return nil")
 )

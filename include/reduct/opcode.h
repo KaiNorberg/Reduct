@@ -27,15 +27,14 @@ typedef enum
  */
 typedef enum
 {
-    REDUCT_LAYOUT_ABC,       ///< R(A) R(B) R/K(C)
-    REDUCT_LAYOUT_AB,        ///< R(A) R(B)
-    REDUCT_LAYOUT_AC,        ///< R(A) R/K(C)
-    REDUCT_LAYOUT_C,         ///< R/K(C)
-    REDUCT_LAYOUT_SAX,       ///< sAx
-    REDUCT_LAYOUT_SAXC,      ///< sAx R/K(C)
-    REDUCT_LAYOUT_ABC_RANGE, ///< R(A) B R/K(C)
-    REDUCT_LAYOUT_AB_RANGE,  ///< R(A) B
-    REDUCT_LAYOUT_NONE       ///< No operands
+    REDUCT_OPCODE_LAYOUT_ABC,       ///< R(A) R(B) R/K(C)
+    REDUCT_OPCODE_LAYOUT_AC,        ///< R(A) R/K(C)
+    REDUCT_OPCODE_LAYOUT_ABC_RANGE, ///< R(A) B R/K(C)
+    REDUCT_OPCODE_LAYOUT_AB_RANGE,  ///< R(A) B
+    REDUCT_OPCODE_LAYOUT_C,         ///< R/K(C)
+    REDUCT_OPCODE_LAYOUT_SAX,       ///< sAx, no operands
+    REDUCT_OPCODE_LAYOUT_SAXC,      ///< sAx R/K(C)
+    REDUCT_OPCODE_LAYOUT_NONE       ///< No operands
 } reduct_opcode_layout_t;
 
 /**
@@ -84,26 +83,13 @@ typedef enum
     REDUCT_OPCODE_JLE,        ///< (B, C) Skip the next instruction if R(B) <= R/K(C), else continue.
     REDUCT_OPCODE_JGT,        ///< (B, C) Skip the next instruction if R(B) > R/K(C), else continue.
     REDUCT_OPCODE_JGE,        ///< (B, C) Skip the next instruction if R(B) >= R/K(C), else continue.
-    REDUCT_OPCODE_LEN,        ///< (A, C) R(A) = length of R/K(C)
-    REDUCT_OPCODE_NTH2,       ///< (A, B, C) R(A) = R(B)[R/K(C)]
-    REDUCT_OPCODE_NTH3,       ///< (A, B, C) R(A) = R(A)[R(B)][R/K(C)]
-    REDUCT_OPCODE_RANGE1,     ///< (A, C) R(A) = range(0, R/K(C), 1)
-    REDUCT_OPCODE_RANGE2,     ///< (A, B, C) R(A) = range(R(B), R/K(C), 1)
-    REDUCT_OPCODE_RANGE3,     ///< (A, B, C) R(A) = range(R(A), R(B), R/K(C))
-    REDUCT_OPCODE_REPEAT,     ///< (A, B, C) R(A) = repeat(R(B), R/K(C))
     REDUCT_OPCODE_FORK, ///< (A, B, C) Spawn a thread for R/K(C) with B args starting at R(A). Task handle stored in
                         ///< R(A).
     REDUCT_OPCODE_JOIN, ///< (A, C) Wait for task handle in R(C) to complete, result stored in R(A).
-    REDUCT_OPCODE_CONCAT,  ///< (A, B) R(A) = concat(R(A) ... R(A + B - 1))
-    REDUCT_OPCODE_APPEND,  ///< (A, B) R(A) = append(R(A), R(A + 1) ... R(A + B - 1))
-    REDUCT_OPCODE_PREPEND, ///< (A, B) R(A) = prepend(R(A), R(A + 1) ... R(A + B - 1))
-    REDUCT_OPCODE_FIRST,   ///< (A, C) R(A) = first(R/K(C))
-    REDUCT_OPCODE_LAST,    ///< (A, C) R(A) = last(R/K(C))
-    REDUCT_OPCODE_REST,    ///< (A, C) R(A) = rest(R/K(C))
-    REDUCT_OPCODE_INIT,    ///< (A, C) R(A) = init(R/K(C))
     REDUCT_OPCODE_MOV_CONST = REDUCT_OPCODE_MOV | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_CALL_CONST = REDUCT_OPCODE_CALL | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_RET_CONST = REDUCT_OPCODE_RET | REDUCT_OPCODE_MODE_CONST,
+    REDUCT_OPCODE_CLOSURE_CONST = REDUCT_OPCODE_CLOSURE | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_CAPTURE_CONST = REDUCT_OPCODE_CAPTURE | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_TAILCALL_CONST = REDUCT_OPCODE_TAILCALL | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_EQ_CONST = REDUCT_OPCODE_EQ | REDUCT_OPCODE_MODE_CONST,
@@ -129,19 +115,8 @@ typedef enum
     REDUCT_OPCODE_JLE_CONST = REDUCT_OPCODE_JLE | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_JGT_CONST = REDUCT_OPCODE_JGT | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_JGE_CONST = REDUCT_OPCODE_JGE | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_LEN_CONST = REDUCT_OPCODE_LEN | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_NTH2_CONST = REDUCT_OPCODE_NTH2 | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_NTH3_CONST = REDUCT_OPCODE_NTH3 | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_RANGE1_CONST = REDUCT_OPCODE_RANGE1 | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_RANGE2_CONST = REDUCT_OPCODE_RANGE2 | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_RANGE3_CONST = REDUCT_OPCODE_RANGE3 | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_REPEAT_CONST = REDUCT_OPCODE_REPEAT | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_FORK_CONST = REDUCT_OPCODE_FORK | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_JOIN_CONST = REDUCT_OPCODE_JOIN | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_FIRST_CONST = REDUCT_OPCODE_FIRST | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_LAST_CONST = REDUCT_OPCODE_LAST | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_REST_CONST = REDUCT_OPCODE_REST | REDUCT_OPCODE_MODE_CONST,
-    REDUCT_OPCODE_INIT_CONST = REDUCT_OPCODE_INIT | REDUCT_OPCODE_MODE_CONST,
 } reduct_opcode_t;
 
 /**
@@ -152,7 +127,7 @@ typedef enum
 {
     REDUCT_OPCODE_FLAG_HAS_TARGET = (1 << 0),     ///< Opcode modifies target register A.
     REDUCT_OPCODE_FLAG_IS_JUMP = (1 << 1),        ///< Opcode is a jump.
-    REDUCT_OPCODE_FLAG_HAS_CONST = (1 << 2),      ///< Opcode uses C operand and has both reg/const versions.
+    REDUCT_OPCODE_FLAG_HAS_CONST = (1 << 2),      ///< Opcode uses C operand and has a const version.
     REDUCT_OPCODE_FLAG_READ_A = (1 << 3),         ///< Opcode reads from register A (or range starting at A).
     REDUCT_OPCODE_FLAG_READ_B = (1 << 4),         ///< Opcode reads from register B.
     REDUCT_OPCODE_FLAG_READ_C = (1 << 5),         ///< Opcode reads from register/constant C.

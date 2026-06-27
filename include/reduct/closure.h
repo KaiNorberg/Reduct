@@ -25,7 +25,8 @@ struct reduct_item;
 typedef struct reduct_closure
 {
     reduct_function_t* function; ///< Pointer to the prototype function item.
-    reduct_handle_t* constants;  ///< The array of constant slots forming the constant template.
+    size_t constantCount;         ///< The number of constants in the constant pool (equal to the number of captured and static constants in the function).
+    reduct_handle_t* constants;  ///< The array of constants forming the constant pool.
     reduct_handle_t smallConstants[REDUCT_CLOSURE_SMALL_MAX];
 } reduct_closure_t;
 
@@ -42,7 +43,7 @@ REDUCT_API reduct_closure_t* reduct_closure_new(struct reduct* reduct, reduct_fu
  * @brief Retain a closure, preventing it from being collected by the garbage collector.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param closure Pointer to the closure.
+ * @param closure Pointer to the closure, can be `NULL`.
  */
 REDUCT_API void reduct_closure_retain(struct reduct* reduct, reduct_closure_t* closure);
 
@@ -50,7 +51,7 @@ REDUCT_API void reduct_closure_retain(struct reduct* reduct, reduct_closure_t* c
  * @brief Release a closure, potentially allowing the garbage collector to collect it.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param closure Pointer to the closure.
+ * @param closure Pointer to the closure, can be `NULL`.
  */
 REDUCT_API void reduct_closure_release(struct reduct* reduct, reduct_closure_t* closure);
 

@@ -268,7 +268,7 @@ LABEL_C_OP(_label, { \
         [REDUCT_OPCODE_NOP] = &&label_nop,
         [REDUCT_OPCODE_MOV] = &&label_mov, [REDUCT_OPCODE_MOV_CONST] = &&label_mov_k,
         [REDUCT_OPCODE_LIST] = &&label_list,
-        [REDUCT_OPCODE_CLOSURE] = &&label_closure,
+        [REDUCT_OPCODE_CLOSURE] = &&label_closure, [REDUCT_OPCODE_CLOSURE_CONST] = &&label_closure_k,
         [REDUCT_OPCODE_CAPTURE] = &&label_capture, [REDUCT_OPCODE_CAPTURE_CONST] = &&label_capture_k,
         [REDUCT_OPCODE_JMP] = &&label_jmp,
         [REDUCT_OPCODE_JMPF] = &&label_jmpf,
@@ -301,22 +301,8 @@ LABEL_C_OP(_label, { \
         [REDUCT_OPCODE_JLE] = &&label_jle, [REDUCT_OPCODE_JLE_CONST] = &&label_jle_k,
         [REDUCT_OPCODE_JGT] = &&label_jgt, [REDUCT_OPCODE_JGT_CONST] = &&label_jgt_k,
         [REDUCT_OPCODE_JGE] = &&label_jge, [REDUCT_OPCODE_JGE_CONST] = &&label_jge_k,
-        [REDUCT_OPCODE_LEN] = &&label_len, [REDUCT_OPCODE_LEN_CONST] = &&label_len_k,
-        [REDUCT_OPCODE_NTH2] = &&label_nth2, [REDUCT_OPCODE_NTH2_CONST] = &&label_nth2_k,
-        [REDUCT_OPCODE_NTH3] = &&label_nth3, [REDUCT_OPCODE_NTH3_CONST] = &&label_nth3_k,
-        [REDUCT_OPCODE_RANGE1] = &&label_range1, [REDUCT_OPCODE_RANGE1_CONST] = &&label_range1_k,
-        [REDUCT_OPCODE_RANGE2] = &&label_range2, [REDUCT_OPCODE_RANGE2_CONST] = &&label_range2_k,
-        [REDUCT_OPCODE_RANGE3] = &&label_range3, [REDUCT_OPCODE_RANGE3_CONST] = &&label_range3_k,
-        [REDUCT_OPCODE_REPEAT] = &&label_repeat, [REDUCT_OPCODE_REPEAT_CONST] = &&label_repeat_k,
         [REDUCT_OPCODE_FORK] = shouldFork ? &&label_fork : &&label_call, [REDUCT_OPCODE_FORK_CONST] = shouldFork ? &&label_fork_k : &&label_call_k,
         [REDUCT_OPCODE_JOIN] = shouldFork ? &&label_join : &&label_mov, [REDUCT_OPCODE_JOIN_CONST] = shouldFork ? &&label_join_k : &&label_mov_k,
-        [REDUCT_OPCODE_CONCAT] = &&label_concat,
-        [REDUCT_OPCODE_APPEND] = &&label_append,
-        [REDUCT_OPCODE_PREPEND] = &&label_prepend,
-        [REDUCT_OPCODE_FIRST] = &&label_first, [REDUCT_OPCODE_FIRST_CONST] = &&label_first_k,
-        [REDUCT_OPCODE_LAST] = &&label_last, [REDUCT_OPCODE_LAST_CONST] = &&label_last_k,
-        [REDUCT_OPCODE_REST] = &&label_rest, [REDUCT_OPCODE_REST_CONST] = &&label_rest_k,
-        [REDUCT_OPCODE_INIT] = &&label_init, [REDUCT_OPCODE_INIT_CONST] = &&label_init_k,
     };
 
 #define LABEL_C_OP(_label, ...) \
@@ -539,46 +525,6 @@ LABEL_C_OP(label_bnot, {
 })
 OP_SHIFT(label_shl, <<, "left")
 OP_SHIFT(label_shr, >>, "right")
-LABEL_C_OP(label_len, {
-    DECODE_A();
-    r[a] = REDUCT_HANDLE_FROM_NUMBER(reduct_handle_as_item(reduct, valC)->length);
-    DISPATCH();
-})
-LABEL_C_OP(label_nth2, {
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_nth(reduct, r[b], valC, REDUCT_HANDLE_NIL(reduct));
-    DISPATCH();
-})
-LABEL_C_OP(label_nth3, {
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_nth(reduct, r[a], r[b], valC);
-    DISPATCH();
-})
-LABEL_C_OP(label_range1, {
-    DECODE_A();
-    r[a] = reduct_range(reduct, REDUCT_HANDLE_FROM_NUMBER(0.0), valC, REDUCT_HANDLE_NIL(reduct));
-    DISPATCH();
-})
-LABEL_C_OP(label_range2, {
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_range(reduct, r[b], valC, REDUCT_HANDLE_NIL(reduct));
-    DISPATCH();
-})
-LABEL_C_OP(label_range3, {
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_range(reduct, r[a], r[b], valC);
-    DISPATCH();
-})
-LABEL_C_OP(label_repeat, {
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_repeat(reduct, r[b], valC);
-    DISPATCH();
-})
 LABEL_C_OP(label_fork, {
     DECODE_A();
     DECODE_B();
@@ -604,61 +550,17 @@ LABEL_C_OP(label_join, {
     REDUCT_GC_CHECK(reduct);
     DISPATCH();
 })
-LABEL_C_OP(label_first, {
+LABEL_C_OP(label_closure, {
     DECODE_A();
-    r[a] = reduct_first(reduct, valC);
-    DISPATCH();
-})
-LABEL_C_OP(label_last, {
-    DECODE_A();
-    r[a] = reduct_last(reduct, valC);
-    DISPATCH();
-})
-LABEL_C_OP(label_rest, {
-    DECODE_A();
-    r[a] = reduct_rest(reduct, valC);
-    DISPATCH();
-})
-LABEL_C_OP(label_init, {
-    DECODE_A();
-    r[a] = reduct_init(reduct, valC);
-    DISPATCH();
-})
-label_concat:
-{
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_concat(reduct, b, &r[a]);
-    DISPATCH();
-}
-label_append:
-{
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_append(reduct, b, &r[a]);
-    DISPATCH();
-}
-label_prepend:
-{
-    DECODE_A();
-    DECODE_B();
-    r[a] = reduct_prepend(reduct, b, &r[a]);
-    DISPATCH();
-}
-label_closure:
-{
-    DECODE_A();
-    DECODE_C();
-    reduct_handle_t protoHandle = k[c];
-    assert(REDUCT_HANDLE_IS_ITEM(protoHandle));
+    assert(REDUCT_HANDLE_IS_ITEM(valC));
 
-    reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(protoHandle);
+    reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(valC);
     assert(protoItem->type == REDUCT_ITEM_TYPE_FUNCTION);
 
     reduct_function_t* proto = &protoItem->function;
     r[a] = REDUCT_HANDLE_FROM_CLOSURE(reduct_closure_new(reduct, proto));
     DISPATCH();
-}
+})
 LABEL_C_OP(label_capture, {
     DECODE_A();
     DECODE_B();
@@ -684,6 +586,9 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t handle)
     }
 
     reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(handle);
+    REDUCT_ERROR_ASSERT(reduct, function->instCount > 0, "cannot evaluate empty function");
+    REDUCT_ERROR_ASSERT(reduct, function->arity == 0, "expected 0 arguments, got %u", function->arity);
+
     reduct_eval_ensure_ready(reduct);
 
     reduct_closure_t* closure = reduct_closure_new(reduct, function);
@@ -731,6 +636,11 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     {
         reduct_closure_t* closure = REDUCT_HANDLE_TO_CLOSURE(callable);
         reduct_function_t* func = closure->function;
+        if (func->instCount == 0)
+        {
+            return REDUCT_HANDLE_NIL(reduct);
+        }
+
         uint32_t arity = (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC) ? func->arity : (uint32_t)argc;
         uint32_t target = reduct->eval.regCount;
         uint32_t needed = REDUCT_MAX(arity, (uint32_t)argc);

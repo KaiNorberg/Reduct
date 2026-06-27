@@ -63,6 +63,8 @@ typedef void* reduct_lib_t;
 
 #define REDUCT_MIN(_a, _b) ((_a) < (_b) ? (_a) : (_b))
 #define REDUCT_MAX(_a, _b) ((_a) > (_b) ? (_a) : (_b))
+#define REDUCT_CLAMP(_v, _min, _max) (REDUCT_MAX(_min, REDUCT_MIN(_v, _max)))
+#define REDUCT_LERP(_a, _b, _t) ((_a) + ((_b) - (_a)) * (_t))
 
 #define REDUCT_UNUSED(_x) ((void)(_x))
 
@@ -130,26 +132,6 @@ typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, 
  */
 typedef struct reduct_rvsdg_origin* (
     *reduct_native_intrinsic_fn)(struct reduct_builder* builder, struct reduct_list* expr);
-
-/**
- * @brief Module initialization function type.
- */
-typedef reduct_handle_t (*reduct_module_init_fn)(struct reduct* reduct);
-
-#define REDUCT_LIB_ENTRY "reduct_module_init" ///< The name of the entry symbol for a Reduct module.
-
-/**
- * @brief Identifies a `reduct_input_t` within a Reduct structure.
- *
- * Avoid the need to store a `reduct_input_t*` within a `reduct_item_t` saving space.
- *
- */
-typedef uint16_t reduct_input_id_t;
-
-/**
- * @brief Invalid handle value.
- */
-#define REDUCT_INPUT_ID_NONE ((reduct_input_id_t) - 1)
 
 #define REDUCT_ALIGNMENT 64 ///< The memory alignment for items.
 

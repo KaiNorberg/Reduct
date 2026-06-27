@@ -3,6 +3,7 @@
 
 #include <reduct/defs.h>
 #include <reduct/inst.h>
+#include <reduct/module.h>
 #include <reduct/optimize.h>
 
 #include <assert.h>
@@ -22,32 +23,18 @@ struct reduct_atom;
  *
  * ## Constants Template
  *
- * A function's constant pool is actually a template of constant slots. These slots can either
- * contain ann item or a variable name that needs to be captured from the enclosing scope when a closure is created.
+ * A function's constant template is split into two contiguous regions and describe how a closures constant pool should
+ * be created.
+ *
+ * The inital `captureCount` number of constant slots are for captured variables and are specified in the same order as
+ * the RVSDG lambda nodes inputs. These are not actually stored physically within the function but instead will be
+ * created as empty constants within created closures which are then filled using capture opcodes.
+ *
+ * After the captured constants are a `constantCount` number of static constants which will be copied into the closure's
+ * constant pool.
  *
  * @{
  */
-
-/**
- * @brief Constant slot type.
- * @typedef reduct_const_slot_type_t
- */
-typedef enum
-{
-    REDUCT_CONST_SLOT_TYPE_NONE,    ///< No constant slot.
-    REDUCT_CONST_SLOT_TYPE_STATIC,  ///< A constant slot containing a static value.
-    REDUCT_CONST_SLOT_TYPE_CAPTURE, ///< A constant slot acting as a placeholder for a capture.
-} reduct_const_slot_type_t;
-
-/**
- * @brief Constant slot.
- * @struct reduct_const_slot_t
- */
-typedef struct reduct_const_slot
-{
-    reduct_const_slot_type_t type; ///< The type of the constant slot.
-    reduct_handle_t handle;        ///< The static handle, or `NIL` for captures.
-} reduct_const_slot_t;
 
 /**
  * @brief Function flags.
@@ -61,21 +48,32 @@ typedef enum reduct_function_flags
 } reduct_function_flags_t;
 
 /**
+ * @brief Source position of a parallel instruction.
+ * @struct reduct_function_inst_source_t
+ */
+typedef struct
+{
+    uint32_t modulePos;          ///< The index within the modules buffer that created the parallel instruction.
+    reduct_module_id_t moduleId; ///< The ID of the module that the parallel instruction is associated with.
+} reduct_function_inst_source_t;
+
+/**
  * @brief Compiled function structure.
  * @struct reduct_function_t
  */
 typedef struct reduct_function
 {
-    uint32_t instCount;             ///< Number of instructions.
-    uint32_t instCapacity;          ///< Capacity of the instruction array.
-    reduct_inst_t* insts;           ///< An array of instructions.
-    uint32_t* positions;            ///< An array of source positions parallel to the instructions.
-    reduct_const_slot_t* constants; ///< The array of constant slots forming the constant template.
-    uint16_t constantCount;         ///< Number of constants.
-    uint16_t constantCapacity;      ///< Capacity of the constant array.
-    uint16_t registerCount;         ///< The number of registers the function uses.
-    uint8_t arity;                  ///< The number of arguments the function expects.
-    reduct_function_flags_t flags;  ///< The function flags.
+    uint32_t instCount;                     ///< Number of instructions.
+    uint32_t instCapacity;                  ///< Capacity of the instruction array.
+    reduct_inst_t* insts;                   ///< An array of instructions.
+    reduct_function_inst_source_t* sources; ///< An array specifying the source of instructions.
+    reduct_handle_t* constants;             ///< Static constant values. Slot `i` is `captureCount + i`.
+    uint16_t constantCount;                 ///< Number of static constants.
+    uint16_t constantCapacity;              ///< Capacity of the constants array.
+    uint16_t captureCount;                  ///< Number of captured-variable slots.
+    uint16_t registerCount;                 ///< The number of registers the function uses.
+    uint8_t arity;                          ///< The number of arguments the function expects.
+    reduct_function_flags_t flags;          ///< The function flags.
 } reduct_function_t;
 
 /**
@@ -107,10 +105,11 @@ REDUCT_API void reduct_function_grow(struct reduct* reduct, reduct_function_t* f
  * @param reduct Pointer to the Reduct structure.
  * @param func The function to emit to.
  * @param inst The instruction to emit.
- * @param position The position in the source code.
+ * @param modulePos The index within the modules buffer that created the parallel instruction.
+ * @param moduleId The ID of the module that the parallel instruction is associated with.
  */
 static inline void reduct_function_emit(struct reduct* reduct, reduct_function_t* func, reduct_inst_t inst,
-    uint32_t position)
+    uint32_t modulePos, reduct_module_id_t moduleId)
 {
     assert(reduct != NULL);
     assert(func != NULL);
@@ -118,9 +117,20 @@ static inline void reduct_function_emit(struct reduct* reduct, reduct_function_t
     {
         reduct_function_grow(reduct, func);
     }
-    func->positions[func->instCount] = position;
+    func->sources[func->instCount].modulePos = modulePos;
+    func->sources[func->instCount].moduleId = moduleId;
     func->insts[func->instCount++] = inst;
 }
+
+/**
+ * @brief Set the number of captured variables for a function.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param func The function to modify.
+ * @param captureCount The new number of captured variables.
+ */
+REDUCT_API void reduct_function_set_capture_count(struct reduct* reduct, reduct_function_t* func,
+    uint16_t captureCount);
 
 /**
  * @brief Add a static constant to the function's template, returning its index.
@@ -136,19 +146,10 @@ REDUCT_API reduct_const_t reduct_function_add_constant(struct reduct* reduct, re
     reduct_handle_t handle);
 
 /**
- * @brief Add a capture placeholder slot to the function's template, returning its index.
- *
- * @param reduct Pointer to the Reduct structure.
- * @param func The function.
- * @return The index in the constant pool.
- */
-REDUCT_API reduct_const_t reduct_function_add_capture(struct reduct* reduct, reduct_function_t* func);
-
-/**
  * @brief Retain a function, preventing it from being collected by the garbage collector.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param function Pointer to the function.
+ * @param function Pointer to the function, can be `NULL`.
  */
 REDUCT_API void reduct_function_retain(struct reduct* reduct, reduct_function_t* function);
 
@@ -156,7 +157,7 @@ REDUCT_API void reduct_function_retain(struct reduct* reduct, reduct_function_t*
  * @brief Release a function, potentially allowing the garbage collector to collect it.
  *
  * @param reduct Pointer to the Reduct structure.
- * @param function Pointer to the function.
+ * @param function Pointer to the function, can be `NULL`.
  */
 REDUCT_API void reduct_function_release(struct reduct* reduct, reduct_function_t* function);
 

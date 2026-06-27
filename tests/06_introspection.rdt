@@ -4,7 +4,7 @@
 (def my-list (list 1 2 3))
 (def my-lambda (lambda (x) x))
 
-(-> (world)
+(-> (world!)
     (assert! (== (atom? text) true) "atom? should return true for string atoms")
     (assert! (== (atom? num-int) true) "atom? should return true for number atoms")
     (assert! (== (atom? my-list) false) "atom? should return false for lists")

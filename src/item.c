@@ -65,8 +65,8 @@ static inline void reduct_item_init(reduct_item_t* item)
 {
     item->type = REDUCT_ITEM_TYPE_NONE;
     atomic_init(&item->flags, REDUCT_ITEM_FLAG_NONE);
-    item->inputId = REDUCT_INPUT_ID_NONE;
-    item->position = 0;
+    item->moduleId = REDUCT_MODULE_ID_NONE;
+    item->modulePos = 0;
 }
 
 static inline reduct_item_t* reduct_item_pop_free_list(reduct_t* reduct)
@@ -215,10 +215,10 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
             free(item->function.insts);
             item->function.insts = NULL;
         }
-        if (item->function.positions != NULL)
+        if (item->function.sources != NULL)
         {
-            free(item->function.positions);
-            item->function.positions = NULL;
+            free(item->function.sources);
+            item->function.sources = NULL;
         }
         if (item->function.constants != NULL)
         {
@@ -337,23 +337,26 @@ static inline void reduct_item_mark_function(reduct_function_t* function)
 {
     for (uint16_t i = 0; i < function->constantCount; i++)
     {
-        if (function->constants[i].type == REDUCT_CONST_SLOT_TYPE_STATIC &&
-            REDUCT_HANDLE_IS_ITEM(function->constants[i].handle))
+        if (!REDUCT_HANDLE_IS_ITEM(function->constants[i]))
         {
-            reduct_item_mark(REDUCT_HANDLE_TO_ITEM(function->constants[i].handle));
+            continue;
         }
+
+        reduct_item_mark(REDUCT_HANDLE_TO_ITEM(function->constants[i]));
     }
 }
 
 static inline void reduct_item_mark_closure(reduct_closure_t* closure)
 {
     reduct_item_mark(REDUCT_CONTAINER_OF(closure->function, reduct_item_t, function));
-    for (uint16_t i = 0; i < closure->function->constantCount; i++)
+    for (uint16_t i = 0; i < closure->constantCount; i++)
     {
-        if (REDUCT_HANDLE_IS_ITEM(closure->constants[i]))
+        if (!REDUCT_HANDLE_IS_ITEM(closure->constants[i]))
         {
-            reduct_item_mark(REDUCT_HANDLE_TO_ITEM(closure->constants[i]));
+            continue;
         }
+        
+        reduct_item_mark(REDUCT_HANDLE_TO_ITEM(closure->constants[i]));
     }
 }
 
@@ -457,7 +460,7 @@ static inline void reduct_item_mark_rvsdg_origin(reduct_rvsdg_origin_t* origin)
         reduct_item_mark(REDUCT_CONTAINER_OF(origin->region, reduct_item_t, rvsdgRegion));
     }
 
-    reduct_rvsdg_edge_t* edge = origin->edges;
+    reduct_rvsdg_edge_t* edge = origin->firstEdge;
     while (edge != NULL)
     {
         reduct_item_mark(REDUCT_CONTAINER_OF(edge, reduct_item_t, rvsdgEdge));

@@ -24,15 +24,21 @@ typedef enum reduct_optimize_flags
 {
     REDUCT_OPTIMIZE_NONE = 0,                          ///< No optimization flags.
     REDUCT_OPTIMIZE_CONSTANT_FOLDING = 1 << 1,         ///< Constant folding.
-    REDUCT_OPTIMIZE_CSE = 1 << 2,                      ///< Common subexpression elimination.
-    REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION = 1 << 3, ///< Algebraic simplification.
-    REDUCT_OPTIMIZE_GAMMA_FOLDING = 1 << 4,            ///< Branch folding for Gamma nodes.
-    REDUCT_OPTIMIZE_AUTO_PARALLELIZATION = 1 << 5,     ///< Automatic parallelization of independent call nodes.
+    REDUCT_OPTIMIZE_FUNCTION_INLINING = 1 << 2,        ///< Function inlining.
+    REDUCT_OPTIMIZE_COMMON_NODE_ELIMINATION = 1 << 3,  ///< Common node elimination.
+    REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION = 1 << 4, ///< Algebraic simplification.
+    REDUCT_OPTIMIZE_GAMMA_FOLDING = 1 << 5,            ///< Branch folding for Gamma nodes.
+    REDUCT_OPTIMIZE_AUTO_PARALLELIZATION = 1 << 6,     ///< Automatic parallelization of independent call nodes.
+    REDUCT_OPTIMIZE_INVARIANT_CODE_MOTION = 1 << 7,    ///< Invariant code motion.
+    REDUCT_OPTIMIZE_DEAD_PORT_ELIMINATION = 1 << 8,    ///< Dead port elimination.
     REDUCT_OPTIMIZE_ALL = 0xFFFFFFFF,                  ///< Enable all optimizations.
+    REDUCT_OPTIMIZE_COMMUTATIVE_SWAP = 1 << 9,         ///< Commutative argument swapping.
 
+    REDUCT_OPTIMIZE_O0 = REDUCT_OPTIMIZE_NONE,                     ///< Level 0 optimizations.
     REDUCT_OPTIMIZE_O1 = REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION, ///< Level 1 optimizations.
-    REDUCT_OPTIMIZE_O2 = REDUCT_OPTIMIZE_CONSTANT_FOLDING | REDUCT_OPTIMIZE_CSE |
-        REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION | REDUCT_OPTIMIZE_GAMMA_FOLDING, ///< Level 2 optimizations.
+    REDUCT_OPTIMIZE_O2 = REDUCT_OPTIMIZE_CONSTANT_FOLDING | REDUCT_OPTIMIZE_COMMON_NODE_ELIMINATION |
+        REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION | REDUCT_OPTIMIZE_GAMMA_FOLDING |
+        REDUCT_OPTIMIZE_DEAD_PORT_ELIMINATION | REDUCT_OPTIMIZE_COMMUTATIVE_SWAP, ///< Level 2 optimizations.
     REDUCT_OPTIMIZE_O3 = REDUCT_OPTIMIZE_ALL,                                     ///< Level 3 optimizations (maximum).
 } reduct_optimize_flags_t;
 

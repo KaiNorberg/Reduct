@@ -1,3 +1,4 @@
+#include "reduct/module.h"
 #include <reduct/atom.h>
 #include <reduct/core.h>
 #include <reduct/defs.h>
@@ -12,6 +13,7 @@
 #include <reduct/rvsdg.h>
 #include <reduct/scratch.h>
 
+#include <stdint.h>
 #include <stdlib.h>
 
 #define REDUCT_REGISTER_RETURN ((reduct_reg_t)0xFFFE)
@@ -55,37 +57,18 @@ typedef struct reduct_emitter_cache_entry
 
 typedef struct reduct_emitter
 {
-    reduct_bitmap_t registers[REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX)];
     struct reduct* reduct;
     reduct_function_t* function;
+    reduct_reg_t topReg;
+    reduct_reg_t freeRegs[REDUCT_REGISTER_MAX];
+    uint32_t freeCount;
     struct reduct_rvsdg_node* phiNode;
     reduct_emitter_cache_entry_t cache[REDUCT_REGISTER_MAX];
     size_t cacheCount;
     struct reduct_item* lastItem;
 } reduct_emitter_t;
 
-static inline void reduct_emit_inst(reduct_emitter_t* emitter, reduct_inst_t inst);
-static inline void reduct_emit_inst_abc(reduct_emitter_t* emitter, reduct_opcode_t opcode, int32_t a, int32_t b,
-    reduct_emitter_expr_t* c);
-static inline reduct_emitter_expr_t reduct_emit_simple_opcode(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_reg_t target);
-static inline reduct_emitter_expr_t reduct_emit_simple_constant(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node);
-static inline reduct_emitter_expr_t reduct_emit_lambda(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node);
-static inline reduct_emitter_expr_t reduct_emit_node(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_reg_t target);
-static inline reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_reg_t target);
-static inline reduct_emitter_expr_t reduct_emitter_emit_ternary(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_opcode_t op, reduct_reg_t target);
-static inline reduct_emitter_expr_t reduct_emit_phi(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node);
-static inline reduct_emitter_expr_t reduct_emit_origin(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
-    reduct_reg_t target);
-static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_emitter_expr_t* expr,
-    reduct_reg_t target);
-
-static inline reduct_function_t* reduct_emit_parse_lambda(reduct_t* reduct, reduct_rvsdg_node_t* node);
-
-static inline void reduct_emitter_init(reduct_emitter_t* emitter, reduct_t* reduct, reduct_function_t* function,
+static void reduct_emitter_init(reduct_emitter_t* emitter, reduct_t* reduct, reduct_function_t* function,
     reduct_rvsdg_node_t* node)
 {
     assert(emitter != NULL);
@@ -100,86 +83,103 @@ static inline void reduct_emitter_init(reduct_emitter_t* emitter, reduct_t* redu
     {
         emitter->phiNode = node->parent->parent;
     }
-    emitter->lastItem = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
+    emitter->lastItem = NULL;
 }
 
-static inline void reduct_emitter_deinit(reduct_emitter_t* emitter)
+static void reduct_emitter_deinit(reduct_emitter_t* emitter)
 {
     assert(emitter != NULL);
     REDUCT_UNUSED(emitter);
 }
 
-static inline reduct_reg_t reduct_emitter_alloc_register(reduct_emitter_t* emitter)
+static reduct_reg_t reduct_emitter_reg_alloc(reduct_emitter_t* emitter)
 {
     assert(emitter != NULL);
 
-    size_t index = reduct_bitmap_find_first_clear(emitter->registers, REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX));
-    if (index == REDUCT_BITMAP_INDEX_NONE)
+    if (emitter->freeCount > 0)
     {
-        REDUCT_ERROR_THROW(emitter->reduct, "out of registers");
+        reduct_reg_t reg = emitter->freeRegs[--emitter->freeCount];
+        assert(reg < REDUCT_REGISTER_MAX);
+        return reg;
     }
-    REDUCT_BITMAP_SET(emitter->registers, index);
-    if (index >= emitter->function->registerCount)
+
+    if (emitter->topReg >= REDUCT_REGISTER_MAX)
     {
-        emitter->function->registerCount = (uint16_t)(index + 1);
+        REDUCT_ERROR_THROW(emitter->reduct, "register overflow (spilling not implemented)");
     }
-    return index;
+
+    reduct_reg_t reg = emitter->topReg++;
+    assert(reg < REDUCT_REGISTER_MAX);
+    if (reg >= emitter->function->registerCount)
+    {
+        emitter->function->registerCount = reg + 1;
+    }
+    return reg;
 }
 
-static inline reduct_reg_t reduct_emitter_alloc_register_range(reduct_emitter_t* emitter, size_t count)
-{
-    assert(emitter != NULL);
-
-    if (count == 0)
-    {
-        return REDUCT_REGISTER_INVALID;
-    }
-
-    size_t index = reduct_bitmap_find_last_set(emitter->registers, REDUCT_BITMAP_SIZE(REDUCT_REGISTER_MAX));
-    if (index == REDUCT_BITMAP_INDEX_NONE)
-    {
-        index = 0;
-    }
-    else
-    {
-        index++;
-    }
-
-    if (index + count > REDUCT_REGISTER_MAX)
-    {
-        REDUCT_ERROR_THROW(emitter->reduct, "out of registers");
-    }
-
-    for (size_t i = 0; i < count; i++)
-    {
-        REDUCT_BITMAP_SET(emitter->registers, index + i);
-    }
-
-    if (index + count > emitter->function->registerCount)
-    {
-        emitter->function->registerCount = (uint16_t)(index + count);
-    }
-
-    return (reduct_reg_t)index;
-}
-
-static inline void reduct_emitter_set_register(reduct_emitter_t* emitter, reduct_reg_t reg)
+static void reduct_emitter_reg_free(reduct_emitter_t* emitter, reduct_reg_t reg)
 {
     assert(emitter != NULL);
     assert(reg < REDUCT_REGISTER_MAX);
 
-    REDUCT_BITMAP_SET(emitter->registers, reg);
+    for (uint16_t i = 0; i < emitter->freeCount; i++)
+    {
+        if (emitter->freeRegs[i] == reg)
+        {
+            return;
+        }
+    }
+
+    if (reg == emitter->topReg - 1)
+    {
+        emitter->topReg--;
+
+        while (true)
+        {
+            bool found = false;
+            for (uint16_t i = 0; i < emitter->freeCount; i++)
+            {
+                if (emitter->freeRegs[i] == emitter->topReg - 1)
+                {
+                    found = true;
+                    for (uint16_t j = i; j < emitter->freeCount - 1; j++)
+                    {
+                        emitter->freeRegs[j] = emitter->freeRegs[j + 1];
+                    }
+                    emitter->freeCount--;
+                    emitter->topReg--;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                break;
+            }
+        }
+
+        return;
+    }
+
+    emitter->freeRegs[emitter->freeCount++] = reg;
 }
 
-static inline void reduct_emitter_free_register(reduct_emitter_t* emitter, reduct_reg_t reg)
+static reduct_reg_t reduct_emitter_reg_alloc_range(reduct_emitter_t* emitter, uint16_t count)
 {
-    assert(emitter != NULL);
-    assert(reg < REDUCT_REGISTER_MAX);
-
-    REDUCT_BITMAP_CLEAR(emitter->registers, reg);
+    uint16_t allocCount = count > 0 ? count : 1;
+    if (emitter->topReg + allocCount > REDUCT_REGISTER_MAX)
+    {
+        REDUCT_ERROR_THROW(emitter->reduct, "register overflow (spilling not implemented)");
+    }
+    reduct_reg_t startReg = emitter->topReg;
+    emitter->topReg += allocCount;
+    if (startReg + allocCount > emitter->function->registerCount)
+    {
+        emitter->function->registerCount = startReg + allocCount;
+    }
+    return startReg;
 }
 
-static inline reduct_emitter_expr_t reduct_emitter_cache_get(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin)
+static reduct_emitter_expr_t reduct_emitter_cache_get(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin)
 {
     if (origin == NULL || emitter->cacheCount == 0)
     {
@@ -196,22 +196,7 @@ static inline reduct_emitter_expr_t reduct_emitter_cache_get(reduct_emitter_t* e
     return REDUCT_EMITTER_EXPR_NONE;
 }
 
-static inline reduct_emitter_cache_entry_t* reduct_emitter_get_cache_entry(reduct_emitter_t* emitter,
-    reduct_rvsdg_origin_t* origin)
-{
-    if (origin == NULL || emitter->cacheCount == 0)
-        return NULL;
-    for (size_t i = 0; i < emitter->cacheCount; i++)
-    {
-        if (emitter->cache[i].origin == origin)
-        {
-            return &emitter->cache[i];
-        }
-    }
-    return NULL;
-}
-
-static inline void reduct_emitter_cache_put(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+static void reduct_emitter_cache_put(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
     reduct_emitter_expr_t expr)
 {
     assert(origin != NULL);
@@ -237,13 +222,14 @@ static inline void reduct_emitter_cache_put(reduct_emitter_t* emitter, reduct_rv
     emitter->cacheCount++;
 }
 
-static inline void reduct_emitter_cache_update(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+static void reduct_emitter_cache_update(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
     reduct_emitter_expr_t expr)
 {
     if (origin == NULL || emitter->cacheCount == 0)
     {
         return;
     }
+
     for (size_t i = 0; i < emitter->cacheCount; i++)
     {
         if (emitter->cache[i].origin == origin)
@@ -254,7 +240,7 @@ static inline void reduct_emitter_cache_update(reduct_emitter_t* emitter, reduct
     }
 }
 
-static inline void reduct_emitter_release_origin(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin)
+static void reduct_emitter_cache_release(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin)
 {
     if (origin == NULL || emitter->cacheCount == 0)
     {
@@ -263,55 +249,41 @@ static inline void reduct_emitter_release_origin(reduct_emitter_t* emitter, redu
 
     for (size_t i = 0; i < emitter->cacheCount; i++)
     {
-        if (emitter->cache[i].origin != origin)
+        reduct_emitter_cache_entry_t* entry = &emitter->cache[i];
+
+        if (entry->origin != origin)
         {
             continue;
         }
 
-        if (emitter->cache[i].remainingUses == 0)
+        if (entry->remainingUses == 0)
         {
             return;
         }
 
-        emitter->cache[i].remainingUses--;
-        if (emitter->cache[i].remainingUses == 0 &&
-            (emitter->cache[i].expr.type == REDUCT_EMITTER_EXPR_TYPE_REG ||
-                emitter->cache[i].expr.type == REDUCT_EMITTER_EXPR_TYPE_REG_FORK))
+        entry->remainingUses--;
+        if (entry->remainingUses > 0)
         {
-            reduct_emitter_free_register(emitter, emitter->cache[i].expr.reg);
+            return;
         }
+
+        if (entry->expr.type != REDUCT_EMITTER_EXPR_TYPE_REG && entry->expr.type != REDUCT_EMITTER_EXPR_TYPE_REG_FORK)
+        {
+            return;
+        }
+
+        reduct_emitter_reg_free(emitter, entry->expr.reg);
+        entry->origin = NULL;
+        entry->expr = REDUCT_EMITTER_EXPR_NONE;
     }
 }
 
-static inline reduct_reg_t reduct_emitter_get_target_reg(reduct_emitter_t* emitter, reduct_opcode_t op,
-    reduct_reg_t target)
-{
-    if (target < REDUCT_REGISTER_MAX)
-    {
-        return target;
-    }
+static void reduct_emit_inst(reduct_emitter_t* emitter, reduct_inst_t inst);
+static reduct_emitter_expr_t reduct_emit_origin(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+    reduct_reg_t target);
+static reduct_function_t* reduct_emit_function(reduct_t* reduct, reduct_rvsdg_node_t* lambda);
 
-    return REDUCT_OPCODE_HAS_TARGET(op) ? reduct_emitter_alloc_register(emitter) : target;
-}
-
-static inline void reduct_emitter_emit_region_result(reduct_emitter_t* emitter, reduct_rvsdg_region_t* region,
-    reduct_reg_t target)
-{
-    reduct_rvsdg_user_t* result = region->result;
-    reduct_emitter_expr_t resExpr = reduct_emit_origin(emitter, result->edge->origin, target);
-    reduct_emitter_expr_flush(emitter, &resExpr, target);
-    reduct_emitter_release_origin(emitter, result->edge->origin);
-}
-
-static inline void reduct_emit_inst_at(reduct_emitter_t* emitter, reduct_inst_t inst, reduct_rvsdg_node_t* node)
-{
-    assert(emitter != NULL);
-    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
-    uint32_t pos = (item->inputId != REDUCT_INPUT_ID_NONE) ? item->position : 0;
-    reduct_function_emit(emitter->reduct, emitter->function, inst, pos);
-}
-
-static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_emitter_expr_t* expr,
+static reduct_reg_t reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_emitter_expr_t* expr,
     reduct_reg_t target)
 {
     assert(emitter != NULL);
@@ -319,7 +291,7 @@ static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_e
 
     if (expr->type == REDUCT_EMITTER_EXPR_TYPE_NONE)
     {
-        return;
+        return REDUCT_REGISTER_INVALID;
     }
 
     if (expr->type == REDUCT_EMITTER_EXPR_TYPE_REG_FORK)
@@ -327,8 +299,12 @@ static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_e
         reduct_reg_t joinTarget =
             (target == REDUCT_REGISTER_RETURN || target == REDUCT_REGISTER_INVALID) ? expr->reg : target;
         reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_JOIN, joinTarget, 0, expr->reg));
-        expr->type = REDUCT_EMITTER_EXPR_TYPE_REG;
-        expr->reg = joinTarget;
+        if (target == REDUCT_REGISTER_RETURN)
+        {
+            reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_RET, 0, 0, joinTarget));
+            return REDUCT_REGISTER_INVALID;
+        }
+        return joinTarget;
     }
 
     if (target == REDUCT_REGISTER_RETURN)
@@ -341,8 +317,7 @@ static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_e
             operand = expr->constant;
         }
         reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(op, 0, 0, operand));
-        expr->type = REDUCT_EMITTER_EXPR_TYPE_NONE;
-        return;
+        return REDUCT_REGISTER_INVALID;
     }
 
     reduct_reg_t destReg = target;
@@ -350,9 +325,9 @@ static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_e
     {
         if (expr->type == REDUCT_EMITTER_EXPR_TYPE_REG)
         {
-            return;
+            return expr->reg;
         }
-        destReg = reduct_emitter_alloc_register(emitter);
+        destReg = reduct_emitter_reg_alloc(emitter);
     }
 
     if (expr->type == REDUCT_EMITTER_EXPR_TYPE_CONST)
@@ -369,13 +344,27 @@ static inline void reduct_emitter_expr_flush(reduct_emitter_t* emitter, reduct_e
         reduct_emitter_cache_update(emitter, expr->origin, REDUCT_EMITTER_EXPR_REG(destReg));
     }
 
-    expr->type = REDUCT_EMITTER_EXPR_TYPE_REG;
-    expr->reg = destReg;
+    return destReg;
 }
 
-static inline reduct_inst_t reduct_emitter_make_inst(reduct_emitter_t* emitter, reduct_opcode_t opcode, int32_t a,
-    int32_t b, reduct_emitter_expr_t* c)
+static void reduct_emit_inst(reduct_emitter_t* emitter, reduct_inst_t inst)
 {
+    assert(emitter != NULL);
+    uint32_t modulePos = emitter->lastItem != NULL ? emitter->lastItem->modulePos : 0;
+    reduct_module_id_t moduleId = emitter->lastItem != NULL ? emitter->lastItem->moduleId : REDUCT_MODULE_ID_NONE;
+    reduct_function_emit(emitter->reduct, emitter->function, inst, modulePos, moduleId);
+}
+
+static void reduct_emit_inst_abc(reduct_emitter_t* emitter, reduct_opcode_t opcode, uint32_t a, uint32_t b,
+    reduct_emitter_expr_t* c)
+{
+    assert(emitter != NULL);
+    assert(c != NULL);
+    assert(a < REDUCT_REGISTER_MAX);
+    assert(b < REDUCT_REGISTER_MAX);
+    assert(c->type != REDUCT_EMITTER_EXPR_TYPE_REG || c->reg < REDUCT_REGISTER_MAX);
+
+
     reduct_inst_t inst;
     if (c->type == REDUCT_EMITTER_EXPR_TYPE_CONST && REDUCT_OPCODE_HAS_CONST(opcode))
     {
@@ -386,99 +375,63 @@ static inline reduct_inst_t reduct_emitter_make_inst(reduct_emitter_t* emitter, 
         reduct_emitter_expr_flush(emitter, c, REDUCT_REGISTER_INVALID);
         inst = REDUCT_INST_MAKE_ABC(opcode, a, b, c->reg);
     }
-    return inst;
-}
-
-static inline void reduct_emit_inst(reduct_emitter_t* emitter, reduct_inst_t inst)
-{
-    assert(emitter != NULL);
-    uint32_t pos = emitter->lastItem != NULL ? emitter->lastItem->position : 0;
-    reduct_function_emit(emitter->reduct, emitter->function, inst, pos);
-}
-
-static inline void reduct_emit_inst_abc(reduct_emitter_t* emitter, reduct_opcode_t opcode, int32_t a, int32_t b,
-    reduct_emitter_expr_t* c)
-{
-    assert(emitter != NULL);
-    assert(c != NULL);
-
-    reduct_inst_t inst = reduct_emitter_make_inst(emitter, opcode, a, b, c);
     reduct_emit_inst(emitter, inst);
 }
 
-static inline reduct_emitter_expr_t reduct_emit_origin(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+static reduct_emitter_expr_t reduct_emit_simple_opcode_abc(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
     reduct_reg_t target)
 {
-    assert(emitter != NULL);
-    assert(origin != NULL);
+    assert(emitter != NULL && node != NULL);
+    assert(node->firstInput != NULL);
+    assert(node->firstInput->next != NULL);
+    assert(node->firstInput->edge != NULL);
+    assert(node->firstInput->next->edge != NULL);
 
-    if (origin->ownerKind == REDUCT_RVSDG_OWNER_REGION)
+    reduct_rvsdg_origin_t* inputB = node->firstInput->edge->origin;
+    reduct_rvsdg_origin_t* inputC = node->firstInput->next->edge->origin;
+
+    reduct_emitter_expr_t exprB = reduct_emit_origin(emitter, inputB, REDUCT_REGISTER_INVALID);
+    reduct_emitter_expr_t exprC = reduct_emit_origin(emitter, inputC, REDUCT_REGISTER_INVALID);
+
+    reduct_reg_t regB = reduct_emitter_expr_flush(emitter, &exprB, REDUCT_REGISTER_INVALID);
+
+    reduct_emitter_cache_release(emitter, inputB);
+    reduct_emitter_cache_release(emitter, inputC);
+
+    if (target >= REDUCT_REGISTER_MAX)
     {
-        reduct_rvsdg_region_t* reg = origin->region;
-        if (reg != NULL && reg->parent != NULL && reg->parent->type == REDUCT_RVSDG_NODE_TYPE_PHI)
-        {
-            reduct_rvsdg_node_t* phiNode = reg->parent;
-            uint32_t recurSlots = (uint32_t)reg->argumentCount - (uint32_t)phiNode->inputCount;
-            if (origin->index < recurSlots)
-            {
-                reduct_rvsdg_node_t* lambdaNode = reg->firstNode;
-                while (lambdaNode != NULL && lambdaNode->type != REDUCT_RVSDG_NODE_TYPE_LAMBDA)
-                {
-                    lambdaNode = lambdaNode->next;
-                }
-                if (lambdaNode != NULL && lambdaNode->output != NULL)
-                {
-                    reduct_emitter_expr_t lambdaExpr = reduct_emitter_cache_get(emitter, lambdaNode->output);
-                    if (lambdaExpr.type == REDUCT_EMITTER_EXPR_TYPE_REG)
-                    {
-                        return REDUCT_EMITTER_EXPR_REG((reduct_reg_t)(lambdaExpr.reg + origin->index));
-                    }
-                }
-            }
-            else
-            {
-                uint16_t inputIdx = (uint16_t)(origin->index - recurSlots);
-                reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(phiNode, inputIdx);
-                if (input != NULL && input->edge != NULL)
-                {
-                    return reduct_emit_origin(emitter, input->edge->origin, target);
-                }
-            }
-        }
-
-        if (reg != NULL && reg->parent != NULL && reg->parent->type == REDUCT_RVSDG_NODE_TYPE_GAMMA)
-        {
-            const reduct_rvsdg_node_info_t* info = reduct_rvsdg_node_get_info(reg->parent->type);
-            uint16_t dataIdx = (uint16_t)(info->dataInputOffset + origin->index);
-            reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(reg->parent, dataIdx);
-            if (input != NULL && input->edge != NULL)
-            {
-                return reduct_emit_origin(emitter, input->edge->origin, target);
-            }
-        }
-
-        if (origin->index < emitter->function->arity)
-        {
-            return REDUCT_EMITTER_EXPR_REG(origin->index);
-        }
-        return REDUCT_EMITTER_EXPR_CONST((reduct_const_t)(origin->index - emitter->function->arity));
+        target = reduct_emitter_reg_alloc(emitter);
     }
 
-    if (origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
-    {
-        reduct_emitter_expr_t cached = reduct_emitter_cache_get(emitter, origin);
-        if (cached.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
-        {
-            return cached;
-        }
+    reduct_emit_inst_abc(emitter, node->opcode, target, regB, &exprC);
 
-        return reduct_emit_node(emitter, origin->node, target);
-    }
-
-    return REDUCT_EMITTER_EXPR_NONE;
+    return REDUCT_EMITTER_EXPR_REG(target);
 }
 
-static inline bool reduct_emitter_origin_is_phi_recur(reduct_emitter_t* emitter, const reduct_rvsdg_origin_t* origin)
+static reduct_emitter_expr_t reduct_emit_simple_opcode_ac(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
+    reduct_reg_t target)
+{
+    assert(emitter != NULL && node != NULL);
+    assert(node->firstInput != NULL);
+    assert(node->firstInput->edge != NULL);
+    assert(node->firstInput->next == NULL);
+
+    reduct_rvsdg_origin_t* inputC = node->firstInput->edge->origin;
+    reduct_emitter_expr_t exprC = reduct_emit_origin(emitter, inputC, REDUCT_REGISTER_INVALID);
+
+    reduct_emitter_cache_release(emitter, inputC);
+
+    if (target >= REDUCT_REGISTER_MAX)
+    {
+        target = reduct_emitter_reg_alloc(emitter);
+    }
+
+    reduct_emit_inst_abc(emitter, node->opcode, target, 0, &exprC);
+
+    return REDUCT_EMITTER_EXPR_REG(target);
+}
+
+static bool reduct_emitter_origin_is_phi_recur(reduct_emitter_t* emitter, const reduct_rvsdg_origin_t* origin)
 {
     if (emitter->phiNode == NULL)
     {
@@ -502,10 +455,10 @@ static inline bool reduct_emitter_origin_is_phi_recur(reduct_emitter_t* emitter,
             reduct_rvsdg_region_t* region = origin->region;
             reduct_rvsdg_node_t* parent = (region != NULL) ? region->parent : NULL;
 
-            uint16_t inputIdx;
-            if (parent != NULL && reduct_rvsdg_node_map_argument_to_input(parent, region, origin->index, &inputIdx))
+            uint16_t moduleIdx;
+            if (parent != NULL && reduct_rvsdg_node_argument_to_input(region, origin->index, &moduleIdx))
             {
-                reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(parent, inputIdx);
+                reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(parent, moduleIdx);
                 if (input == NULL || input->edge == NULL)
                 {
                     return false;
@@ -521,14 +474,15 @@ static inline bool reduct_emitter_origin_is_phi_recur(reduct_emitter_t* emitter,
     return false;
 }
 
-static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_opcode_t op, reduct_reg_t target)
+static reduct_emitter_expr_t reduct_emit_simple_opcode_abc_range(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
+    reduct_reg_t target)
 {
-    uint32_t arity;
-    uint32_t inputIdx = 0;
-    reduct_emitter_expr_t cExpr = REDUCT_EMITTER_EXPR_REG(REDUCT_REGISTER_INVALID);
-    bool isRecur = false;
+    assert(emitter != NULL && node != NULL);
+    assert(node->firstInput != NULL);
+    assert(node->firstInput->edge != NULL);
 
+    bool isRecur = false;
+    reduct_opcode_t op = node->opcode;
     if (REDUCT_OPCODE_IS_CALL(op) && !REDUCT_OPCODE_IS_RECUR(op) && !REDUCT_OPCODE_IS_FORK(op))
     {
         reduct_rvsdg_user_t* callableInput = reduct_rvsdg_node_get_input(node, 0);
@@ -537,6 +491,7 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
         {
             isRecur = true;
             op = REDUCT_OPCODE_TO_RECUR(op);
+            assert(REDUCT_OPCODE_GET_LAYOUT(op) == REDUCT_OPCODE_LAYOUT_AB_RANGE);
         }
     }
 
@@ -545,451 +500,327 @@ static inline reduct_emitter_expr_t reduct_emitter_emit_range(reduct_emitter_t* 
         op = REDUCT_OPCODE_TO_TAIL(op);
     }
 
-    if (!isRecur && REDUCT_OPCODE_READS_C(op))
+    assert(node->inputCount > 0);
+    uint32_t arity = node->inputCount - 1;
+    reduct_emitter_expr_t args[UINT8_MAX];
+
+    reduct_emitter_expr_t exprC = REDUCT_EMITTER_EXPR_NONE;
+    reduct_rvsdg_origin_t* inputC = node->firstInput->edge->origin;
+    if (!isRecur)
     {
-        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, 0);
-        if (input == NULL || input->edge == NULL)
-        {
-            REDUCT_ERROR_THROW(emitter->reduct, "call opcode expects callable at input 0");
-        }
-        cExpr = reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID);
-        arity = node->inputCount - 1;
-        inputIdx = 1;
+        reduct_rvsdg_origin_t* inputC = node->firstInput->edge->origin;
+        exprC = reduct_emit_origin(emitter, inputC, REDUCT_REGISTER_INVALID);
     }
-    else if (isRecur)
+
+    reduct_rvsdg_user_t* input = node->firstInput;
+    while (input != NULL)
     {
-        arity = node->inputCount > 0 ? (uint32_t)node->inputCount - 1 : 0;
-        inputIdx = 1;
+        if (input->index == 0)
+        {
+            input = input->next;
+            continue;
+        }
+
+        assert(input->edge != NULL);
+        args[input->index - 1] = reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID);
+        input = input->next;
+    }
+
+    reduct_reg_t base = reduct_emitter_reg_alloc_range(emitter, arity);
+    for (int32_t i = arity - 1; i >= 0; i--)
+    {
+        reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(base + i));
+    }
+
+    input = node->firstInput;
+    while (input != NULL)
+    {
+        if (input->index == 0)
+        {
+            input = input->next;
+            continue;
+        }
+
+        assert(input->edge != NULL);
+        reduct_emitter_cache_release(emitter, input->edge->origin);
+        input = input->next;
+    }
+
+    if (isRecur)
+    {
+        reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(op, base, arity, 0));
     }
     else
     {
-        arity = node->inputCount;
+        reduct_emit_inst_abc(emitter, op, base, arity, &exprC);
+        reduct_emitter_cache_release(emitter, inputC);
     }
 
-    size_t allocCount = REDUCT_MAX(arity, 1);
-    reduct_emitter_expr_t args[allocCount];
-
-    for (uint32_t i = 0; i < arity; i++)
+    for (uint32_t i = 1; i < arity; i++)
     {
-        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(inputIdx + i));
-        args[i] = (input != NULL && input->edge != NULL)
-            ? reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID)
-            : REDUCT_EMITTER_EXPR_NONE;
+        reduct_emitter_reg_free(emitter, (reduct_reg_t)(base + i));
     }
 
-    reduct_reg_t a = reduct_emitter_alloc_register_range(emitter, allocCount);
-
-    for (uint32_t i = 0; i < arity; i++)
+    if (target == REDUCT_REGISTER_RETURN && REDUCT_OPCODE_IS_TERMINATOR(op))
     {
-        reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(a + i));
-    }
-
-    if (!isRecur && REDUCT_OPCODE_READS_C(op))
-    {
-        reduct_emit_inst_abc(emitter, op, (int32_t)a, (int32_t)arity, &cExpr);
-    }
-    else
-    {
-        reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(op, a, arity, 0));
-    }
-
-    for (uint32_t i = 0; i < arity; i++)
-    {
-        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, (uint16_t)(inputIdx + i));
-        if (input != NULL && input->edge != NULL)
-        {
-            reduct_emitter_release_origin(emitter, input->edge->origin);
-        }
-    }
-
-    if (!isRecur && REDUCT_OPCODE_READS_C(op))
-    {
-        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, 0);
-        if (input != NULL && input->edge != NULL)
-        {
-            reduct_emitter_release_origin(emitter, input->edge->origin);
-        }
-    }
-
-    for (uint32_t i = 1; i < allocCount; i++)
-    {
-        reduct_emitter_free_register(emitter, (reduct_reg_t)(a + i));
-    }
-
-    if (target == REDUCT_REGISTER_RETURN && (op == REDUCT_OPCODE_TAILCALL || op == REDUCT_OPCODE_TAILRECUR))
-    {
-        reduct_emitter_free_register(emitter, a);
+        reduct_emitter_reg_free(emitter, base);
         return REDUCT_EMITTER_EXPR_NONE;
     }
 
     if (REDUCT_OPCODE_IS_FORK(op))
     {
-        return REDUCT_EMITTER_EXPR_REG_FORK(a);
+        return REDUCT_EMITTER_EXPR_REG_FORK(base);
     }
 
-    return REDUCT_EMITTER_EXPR_REG(a);
+    return REDUCT_EMITTER_EXPR_REG(base);
 }
 
-static inline reduct_emitter_expr_t reduct_emitter_emit_binary(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_opcode_t op, reduct_reg_t target)
+static reduct_emitter_expr_t reduct_emit_simple_opcode_ab_range(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
+    reduct_reg_t target)
 {
-    reduct_rvsdg_user_t* inB = reduct_rvsdg_node_get_input(node, 0);
-    reduct_rvsdg_user_t* inC = reduct_rvsdg_node_get_input(node, 1);
+    uint32_t arity = node->inputCount;
+    reduct_emitter_expr_t args[UINT8_MAX];
 
-    reduct_rvsdg_origin_t* origB = inB->edge->origin;
-    reduct_rvsdg_origin_t* origC = inC->edge->origin;
-
-    reduct_emitter_expr_t bExpr = reduct_emit_origin(emitter, origB, REDUCT_REGISTER_INVALID);
-    reduct_emitter_expr_t cExpr = reduct_emit_origin(emitter, origC, REDUCT_REGISTER_INVALID);
-
-    reduct_emitter_expr_flush(emitter, &bExpr, REDUCT_REGISTER_INVALID);
-    if (cExpr.type == REDUCT_EMITTER_EXPR_TYPE_REG_FORK)
+    reduct_rvsdg_user_t* input = node->firstInput;
+    while (input != NULL)
     {
-        reduct_emitter_expr_flush(emitter, &cExpr, REDUCT_REGISTER_INVALID);
+        assert(input->edge != NULL);
+        args[input->index] = reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID);
+        input = input->next;
     }
 
-    if (REDUCT_OPCODE_IS_COMMUTATIVE(op) && bExpr.type == REDUCT_EMITTER_EXPR_TYPE_CONST &&
-        cExpr.type != REDUCT_EMITTER_EXPR_TYPE_CONST)
+    input = node->firstInput;
+    while (input != NULL)
     {
-        reduct_emitter_expr_t temp = bExpr;
-        bExpr = cExpr;
-        cExpr = temp;
+        assert(input->edge != NULL);
+        reduct_emitter_cache_release(emitter, input->edge->origin);
+        input = input->next;
     }
 
-    reduct_reg_t bReg = bExpr.reg;
+    reduct_reg_t base = reduct_emitter_reg_alloc_range(emitter, arity);
+    for (int32_t i = arity - 1; i >= 0; i--)
+    {
+        reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(base + i));
+    }
 
-    reduct_emitter_release_origin(emitter, origB);
-    reduct_emitter_release_origin(emitter, origC);
+    reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(node->opcode, base, arity, 0));
 
-    reduct_reg_t outReg = reduct_emitter_get_target_reg(emitter, op, target);
-    reduct_emit_inst_abc(emitter, op, outReg, bReg, &cExpr);
+    for (uint32_t i = 1; i < arity; i++)
+    {
+        reduct_emitter_reg_free(emitter, (reduct_reg_t)(base + i));
+    }
 
-    return REDUCT_EMITTER_EXPR_REG(outReg);
+    return REDUCT_EMITTER_EXPR_REG(base);
 }
 
-static inline reduct_emitter_expr_t reduct_emitter_emit_unary(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_opcode_t op, reduct_reg_t target)
-{
-    reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, 0);
-    reduct_rvsdg_origin_t* origin = input->edge->origin;
-    reduct_emitter_expr_t cExpr = reduct_emit_origin(emitter, origin, REDUCT_REGISTER_INVALID);
-
-    if (cExpr.type == REDUCT_EMITTER_EXPR_TYPE_REG_FORK)
-    {
-        reduct_emitter_expr_flush(emitter, &cExpr, REDUCT_REGISTER_INVALID);
-    }
-
-    reduct_emitter_release_origin(emitter, origin);
-
-    reduct_reg_t outReg = reduct_emitter_get_target_reg(emitter, op, target);
-    reduct_emit_inst_abc(emitter, op, outReg, 0, &cExpr);
-
-    return REDUCT_EMITTER_EXPR_REG(outReg);
-}
-
-static inline reduct_emitter_expr_t reduct_emitter_emit_ternary(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_opcode_t op, reduct_reg_t target)
-{
-    reduct_rvsdg_user_t* inA = reduct_rvsdg_node_get_input(node, 0);
-    reduct_rvsdg_user_t* inB = reduct_rvsdg_node_get_input(node, 1);
-    reduct_rvsdg_user_t* inC = reduct_rvsdg_node_get_input(node, 2);
-
-    reduct_rvsdg_origin_t* origA = inA->edge->origin;
-    reduct_rvsdg_origin_t* origB = inB->edge->origin;
-    reduct_rvsdg_origin_t* origC = inC->edge->origin;
-
-    reduct_reg_t outReg = reduct_emitter_get_target_reg(emitter, op, target);
-
-    reduct_emitter_expr_t aExpr = reduct_emit_origin(emitter, origA, outReg);
-    reduct_emitter_expr_t bExpr = reduct_emit_origin(emitter, origB, REDUCT_REGISTER_INVALID);
-    reduct_emitter_expr_t cExpr = reduct_emit_origin(emitter, origC, REDUCT_REGISTER_INVALID);
-
-    reduct_emitter_expr_flush(emitter, &bExpr, REDUCT_REGISTER_INVALID);
-    if (bExpr.reg == outReg)
-    {
-        reduct_reg_t tmp = reduct_emitter_alloc_register(emitter);
-        reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_MOV, tmp, 0, bExpr.reg));
-        bExpr.reg = tmp;
-        reduct_emitter_cache_update(emitter, origB, REDUCT_EMITTER_EXPR_REG(tmp));
-    }
-
-    if (cExpr.type == REDUCT_EMITTER_EXPR_TYPE_REG && cExpr.reg == outReg)
-    {
-        reduct_reg_t tmp = reduct_emitter_alloc_register(emitter);
-        reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_MOV, tmp, 0, cExpr.reg));
-        cExpr.reg = tmp;
-        reduct_emitter_cache_update(emitter, origC, REDUCT_EMITTER_EXPR_REG(tmp));
-    }
-
-    reduct_emitter_expr_flush(emitter, &aExpr, outReg);
-
-    reduct_emitter_release_origin(emitter, origA);
-    reduct_emitter_release_origin(emitter, origB);
-    reduct_emitter_release_origin(emitter, origC);
-
-    reduct_emit_inst_abc(emitter, op, outReg, bExpr.reg, &cExpr);
-    return REDUCT_EMITTER_EXPR_REG(outReg);
-}
-
-static inline reduct_emitter_expr_t reduct_emit_simple_opcode(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
+static reduct_emitter_expr_t reduct_emit_simple_opcode(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
     reduct_reg_t target)
 {
     assert(emitter != NULL && node != NULL);
     reduct_opcode_t op = node->opcode;
 
-    if (REDUCT_OPCODE_READS_RANGE(op))
-    {
-        return reduct_emitter_emit_range(emitter, node, op, target);
-    }
-    if (REDUCT_OPCODE_IS_TERNARY(op))
-    {
-        return reduct_emitter_emit_ternary(emitter, node, op, target);
-    }
-    if (REDUCT_OPCODE_IS_BINARY(op))
-    {
-        return reduct_emitter_emit_binary(emitter, node, op, target);
-    }
-    if (REDUCT_OPCODE_IS_UNARY(op))
-    {
-        return reduct_emitter_emit_unary(emitter, node, op, target);
-    }
+    reduct_opcode_layout_t layout = REDUCT_OPCODE_GET_LAYOUT(op);
 
-    if (op == REDUCT_OPCODE_NOP)
+    switch (layout)
     {
-        reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_NOP, 0, 0, 0));
-        return REDUCT_EMITTER_EXPR_REG(REDUCT_REGISTER_INVALID);
+    case REDUCT_OPCODE_LAYOUT_ABC:
+    {
+        return reduct_emit_simple_opcode_abc(emitter, node, target);
     }
-
-    REDUCT_ERROR_THROW(emitter->reduct, "unsupported opcode %d", op);
+    break;
+    case REDUCT_OPCODE_LAYOUT_AC:
+    {
+        return reduct_emit_simple_opcode_ac(emitter, node, target);
+    }
+    break;
+    case REDUCT_OPCODE_LAYOUT_ABC_RANGE:
+    {
+        return reduct_emit_simple_opcode_abc_range(emitter, node, target);
+    }
+    break;
+    case REDUCT_OPCODE_LAYOUT_AB_RANGE:
+    {
+        return reduct_emit_simple_opcode_ab_range(emitter, node, target);
+    }
+    break;
+    default:
+        REDUCT_ERROR_THROW(emitter->reduct, "unsupported opcode %d", op);
+    }
 }
 
-static inline reduct_emitter_expr_t reduct_emit_simple_constant(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node)
+static reduct_emitter_expr_t reduct_emit_simple_constant(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node)
 {
     reduct_const_t constant = reduct_function_add_constant(emitter->reduct, emitter->function, node->constant);
     return REDUCT_EMITTER_EXPR_CONST(constant);
 }
 
-static inline reduct_emitter_expr_t reduct_emit_lambda(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node)
+static reduct_emitter_expr_t reduct_emit_lambda(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node)
 {
-    reduct_reg_t target = reduct_emitter_alloc_register(emitter);
+    assert(emitter != NULL && node != NULL);
+    assert(node->type == REDUCT_RVSDG_NODE_TYPE_LAMBDA);
+
+    reduct_reg_t target = reduct_emitter_reg_alloc(emitter);
     reduct_emitter_expr_t result = REDUCT_EMITTER_EXPR_REG(target);
     reduct_emitter_cache_put(emitter, node->output, result);
 
-    reduct_function_t* function = reduct_emit_parse_lambda(emitter->reduct, node);
+    reduct_function_t* function = reduct_emit_function(emitter->reduct, node);
     reduct_const_t constant =
         reduct_function_add_constant(emitter->reduct, emitter->function, REDUCT_HANDLE_FROM_FUNCTION(function));
 
-    reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_CLOSURE, target, 0, constant));
+    reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_CLOSURE_CONST, target, 0, constant));
 
     reduct_rvsdg_user_t* input = node->firstInput;
     while (input != NULL)
     {
-        if (input->edge != NULL)
+        if (input->edge == NULL)
         {
-            reduct_rvsdg_origin_t* origin = input->edge->origin;
-            reduct_emitter_expr_t valExpr = reduct_emit_origin(emitter, origin, REDUCT_REGISTER_INVALID);
-            reduct_emit_inst_abc(emitter, REDUCT_OPCODE_CAPTURE, target, input->index, &valExpr);
-            reduct_emitter_release_origin(emitter, origin);
+            input = input->next;
+            continue;
         }
+
+        reduct_rvsdg_origin_t* origin = input->edge->origin;
+        reduct_emitter_expr_t valExpr = reduct_emit_origin(emitter, origin, REDUCT_REGISTER_INVALID);
+        reduct_emit_inst_abc(emitter, REDUCT_OPCODE_CAPTURE, target, input->index, &valExpr);
+        reduct_emitter_cache_release(emitter, origin);
         input = input->next;
     }
 
     return result;
 }
 
-static inline void reduct_emitter_emit_skip_op(reduct_emitter_t* emitter, reduct_rvsdg_node_t* cmpNode,
-    reduct_opcode_t skipOp)
-{
-    assert(emitter != NULL && cmpNode != NULL);
-    assert(REDUCT_OPCODE_IS_SKIP(skipOp));
-
-    reduct_rvsdg_user_t* inB = reduct_rvsdg_node_get_input(cmpNode, 0);
-    reduct_rvsdg_user_t* inC = reduct_rvsdg_node_get_input(cmpNode, 1);
-    REDUCT_ERROR_ASSERT(emitter->reduct, inB != NULL && inB->edge != NULL, "comparison node missing operand B");
-    REDUCT_ERROR_ASSERT(emitter->reduct, inC != NULL && inC->edge != NULL, "comparison node missing operand C");
-
-    reduct_rvsdg_origin_t* origB = inB->edge->origin;
-    reduct_rvsdg_origin_t* origC = inC->edge->origin;
-
-    reduct_emitter_expr_t bExpr = reduct_emit_origin(emitter, origB, REDUCT_REGISTER_INVALID);
-    reduct_emitter_expr_t cExpr = reduct_emit_origin(emitter, origC, REDUCT_REGISTER_INVALID);
-
-    if (REDUCT_OPCODE_IS_COMMUTATIVE(cmpNode->opcode) && bExpr.type == REDUCT_EMITTER_EXPR_TYPE_CONST &&
-        cExpr.type != REDUCT_EMITTER_EXPR_TYPE_CONST)
-    {
-        reduct_emitter_expr_t tmp = bExpr;
-        bExpr = cExpr;
-        cExpr = tmp;
-    }
-
-    reduct_emitter_expr_flush(emitter, &bExpr, REDUCT_REGISTER_INVALID);
-
-    reduct_emitter_release_origin(emitter, origB);
-    reduct_emitter_release_origin(emitter, origC);
-
-    reduct_emit_inst_abc(emitter, skipOp, 0, (int32_t)bExpr.reg, &cExpr);
-}
-
-static inline uint32_t reduct_emit_skip_condition(reduct_emitter_t* emitter, reduct_rvsdg_node_t* cmpNode)
-{
-    assert(emitter != NULL && cmpNode != NULL);
-    assert(REDUCT_OPCODE_IS_COMPARE(cmpNode->opcode));
-
-    reduct_opcode_t skipOp = REDUCT_OPCODE_TO_SKIP(cmpNode->opcode);
-    assert(skipOp != REDUCT_OPCODE_NOP);
-
-    reduct_emitter_emit_skip_op(emitter, cmpNode, skipOp);
-
-    uint32_t jmpIdx = emitter->function->instCount;
-    reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_JMP, 0, 0, 0));
-
-    return jmpIdx;
-}
-
-static inline bool reduct_emitter_is_region_simple_return(reduct_rvsdg_region_t* region)
-{
-    if (region->firstNode == NULL)
-    {
-        return true;
-    }
-    return region->firstNode == region->lastNode && region->firstNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST;
-}
-
-static inline bool reduct_emitter_can_use_skip(const reduct_rvsdg_origin_t* origin)
-{
-    if (origin == NULL || origin->ownerKind != REDUCT_RVSDG_OWNER_NODE)
-    {
-        return false;
-    }
-
-    const reduct_rvsdg_node_t* node = origin->node;
-    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
-    {
-        return false;
-    }
-    if (!REDUCT_OPCODE_IS_COMPARE(node->opcode))
-    {
-        return false;
-    }
-
-    return origin->useCount == 1;
-}
-
-static inline void reduct_emitter_finalize_jmp(reduct_emitter_t* emitter, uint32_t jmpIdx)
-{
-    int32_t sax = (int32_t)(emitter->function->instCount - jmpIdx - 1);
-    emitter->function->insts[jmpIdx] = REDUCT_INST_SET_SAX(emitter->function->insts[jmpIdx], sax);
-}
-
-static inline reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
-    reduct_reg_t target)
-{
-    assert(emitter != NULL && node != NULL);
-    REDUCT_ERROR_ASSERT(emitter->reduct, node->regionCount == 2, "gamma node must have exactly 2 regions for now");
-
-    reduct_rvsdg_origin_t* condOrigin = reduct_rvsdg_node_get_input_origin(node, 0);
-    reduct_rvsdg_region_t* elseRegion = node->firstRegion;
-    reduct_rvsdg_region_t* thenRegion = elseRegion->next;
-
-    bool thenSimple = target == REDUCT_REGISTER_RETURN && reduct_emitter_is_region_simple_return(thenRegion);
-    bool elseSimple = target == REDUCT_REGISTER_RETURN && reduct_emitter_is_region_simple_return(elseRegion);
-
-    const bool canUseSkip = reduct_emitter_can_use_skip(condOrigin);
-    reduct_reg_t targetReg = (target == REDUCT_REGISTER_INVALID) ? reduct_emitter_alloc_register(emitter) : target;
-
-    if (canUseSkip && (thenSimple || elseSimple))
-    {
-        reduct_rvsdg_node_t* cmpNode = condOrigin->node;
-        reduct_opcode_t skipOp = REDUCT_OPCODE_TO_SKIP(cmpNode->opcode);
-
-        reduct_item_t* prevItem = emitter->lastItem;
-        emitter->lastItem = REDUCT_CONTAINER_OF(cmpNode, reduct_item_t, rvsdgNode);
-
-        reduct_rvsdg_region_t* first = thenSimple ? thenRegion : elseRegion;
-        reduct_rvsdg_region_t* second = thenSimple ? elseRegion : thenRegion;
-
-        if (thenSimple)
-        {
-            skipOp = REDUCT_OPCODE_INVERT_SKIP(skipOp);
-        }
-
-        reduct_emitter_emit_skip_op(emitter, cmpNode, skipOp);
-
-        reduct_emitter_emit_region_result(emitter, first, targetReg);
-        reduct_emitter_emit_region_result(emitter, second, targetReg);
-
-        emitter->lastItem = prevItem;
-        return REDUCT_EMITTER_EXPR_NONE;
-    }
-
-    uint32_t jmpElseIdx;
-    if (canUseSkip)
-    {
-        jmpElseIdx = reduct_emit_skip_condition(emitter, condOrigin->node);
-    }
-    else
-    {
-        reduct_emitter_expr_t condExpr = reduct_emit_origin(emitter, condOrigin, REDUCT_REGISTER_INVALID);
-        reduct_emitter_expr_flush(emitter, &condExpr, REDUCT_REGISTER_INVALID);
-
-        jmpElseIdx = emitter->function->instCount;
-        reduct_emit_inst_abc(emitter, REDUCT_OPCODE_JMPF, 0, 0, &condExpr);
-
-        reduct_emitter_release_origin(emitter, condOrigin);
-    }
-
-    reduct_emitter_emit_region_result(emitter, thenRegion, targetReg);
-
-    uint32_t jmpEndIdx = 0;
-    if (targetReg != REDUCT_REGISTER_RETURN)
-    {
-        jmpEndIdx = emitter->function->instCount;
-        reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(REDUCT_OPCODE_JMP, 0, 0, 0));
-    }
-
-    reduct_emitter_finalize_jmp(emitter, jmpElseIdx);
-    reduct_emitter_emit_region_result(emitter, elseRegion, targetReg);
-
-    if (targetReg != REDUCT_REGISTER_RETURN)
-    {
-        reduct_emitter_finalize_jmp(emitter, jmpEndIdx);
-    }
-
-    if (targetReg == REDUCT_REGISTER_RETURN)
-    {
-        return REDUCT_EMITTER_EXPR_NONE;
-    }
-    return REDUCT_EMITTER_EXPR_REG(targetReg);
-}
-
-static inline reduct_emitter_expr_t reduct_emit_phi(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node)
+static reduct_emitter_expr_t reduct_emit_phi(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node)
 {
     assert(emitter != NULL && node != NULL);
     assert(node->type == REDUCT_RVSDG_NODE_TYPE_PHI);
     return reduct_emit_origin(emitter, node->firstRegion->result->edge->origin, REDUCT_REGISTER_INVALID);
 }
 
-static inline reduct_emitter_expr_t reduct_emit_node(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
+static void reduct_emitter_patch_jmp_here(reduct_emitter_t* emitter, uint32_t jmpIdx)
+{
+    int32_t offset = (int32_t)emitter->function->instCount - (int32_t)jmpIdx - 1;
+    if (offset < INT16_MIN || offset > INT16_MAX)
+    {
+        REDUCT_ERROR_THROW(emitter->reduct, "gamma jump offset out of range");
+    }
+    emitter->function->insts[jmpIdx] = REDUCT_INST_SET_SAX(emitter->function->insts[jmpIdx], (int16_t)offset);
+}
+
+static reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node,
     reduct_reg_t target)
 {
-    assert(emitter != NULL);
-    assert(node != NULL);
+    assert(emitter != NULL && node != NULL);
+    assert(node->type == REDUCT_RVSDG_NODE_TYPE_GAMMA);
+    assert(node->regionCount == 2);
 
-    if (node->output != NULL)
+    reduct_rvsdg_user_t* predInput = reduct_rvsdg_node_get_input(node, 0);
+    assert(predInput != NULL && predInput->edge != NULL);
+    reduct_rvsdg_origin_t* predOrigin = predInput->edge->origin;
+
+    if (target == REDUCT_REGISTER_INVALID)
     {
-        reduct_emitter_expr_t cached = reduct_emitter_cache_get(emitter, node->output);
-        if (cached.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
+        target = reduct_emitter_reg_alloc(emitter);
+    }
+
+    uint32_t skipIdx = 0;
+    uint32_t jmpfIdx = 0;
+    bool fusedSkip = false;
+    bool skipInverted = false;
+
+    reduct_rvsdg_node_t* predNode = (predOrigin->ownerKind == REDUCT_RVSDG_OWNER_NODE) ? predOrigin->node : NULL;
+
+    if (predNode != NULL && predNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE &&
+        REDUCT_OPCODE_IS_COMPARE(predNode->opcode) && predOrigin->useCount == 1)
+    {
+        reduct_rvsdg_origin_t* inputB = predNode->firstInput->edge->origin;
+        reduct_rvsdg_origin_t* inputC = predNode->firstInput->next->edge->origin;
+
+        reduct_emitter_expr_t exprB = reduct_emit_origin(emitter, inputB, REDUCT_REGISTER_INVALID);
+        reduct_emitter_expr_t exprC = reduct_emit_origin(emitter, inputC, REDUCT_REGISTER_INVALID);
+
+        reduct_reg_t regB = reduct_emitter_expr_flush(emitter, &exprB, REDUCT_REGISTER_INVALID);
+        reduct_emitter_cache_release(emitter, inputB);
+        reduct_emitter_cache_release(emitter, inputC);
+
+        reduct_opcode_t skipOp = REDUCT_OPCODE_TO_SKIP(predNode->opcode);
+        skipIdx = emitter->function->instCount;
+        reduct_emit_inst_abc(emitter, skipOp, 0, regB, &exprC);
+
+        jmpfIdx = emitter->function->instCount;
+        reduct_emit_inst(emitter, REDUCT_INST_MAKE_SAXC(REDUCT_OPCODE_JMP, 0, 0));
+        fusedSkip = true;
+    }
+    else
+    {
+        reduct_emitter_expr_t predExpr = reduct_emit_origin(emitter, predOrigin, REDUCT_REGISTER_INVALID);
+        reduct_reg_t predReg = reduct_emitter_expr_flush(emitter, &predExpr, REDUCT_REGISTER_INVALID);
+        reduct_emitter_cache_release(emitter, predOrigin);
+
+        jmpfIdx = emitter->function->instCount;
+        reduct_emit_inst(emitter, REDUCT_INST_MAKE_SAXC(REDUCT_OPCODE_JMPF, 0, predReg));
+    }
+
+    reduct_rvsdg_region_t* trueRegion = node->firstRegion->next;
+    reduct_emitter_expr_t trueExpr = reduct_emit_origin(emitter, trueRegion->result->edge->origin, target);
+    reduct_emitter_expr_flush(emitter, &trueExpr, target);
+
+    uint32_t trueInstCount = emitter->function->instCount - (jmpfIdx + 1);
+    if (fusedSkip && trueInstCount == 1 &&
+        REDUCT_OPCODE_IS_TERMINATOR(REDUCT_INST_GET_OP(emitter->function->insts[jmpfIdx + 1])))
+    {
+        reduct_inst_t* skipInst = &emitter->function->insts[skipIdx];
+        reduct_opcode_t invertedOp = REDUCT_OPCODE_INVERT_SKIP(REDUCT_INST_GET_OP(*skipInst));
+
+        *skipInst = REDUCT_INST_SET_OP(*skipInst, invertedOp);
+
+        emitter->function->insts[jmpfIdx] = emitter->function->insts[jmpfIdx + 1];
+        emitter->function->instCount--;
+
+        skipInverted = true;
+    }
+
+    bool trueIsTerminated = false;
+    if (emitter->function->instCount > 0)
+    {
+        reduct_inst_t lastInst = emitter->function->insts[emitter->function->instCount - 1];
+        if (REDUCT_OPCODE_IS_TERMINATOR(REDUCT_INST_GET_OP(lastInst)))
         {
-            return cached;
+            trueIsTerminated = true;
         }
     }
 
-    reduct_item_t* previousItem = emitter->lastItem;
-    reduct_item_t* item = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
-    if (item->inputId != REDUCT_INPUT_ID_NONE)
+    uint32_t jmpIdx = 0;
+    if (!trueIsTerminated)
     {
-        emitter->lastItem = item;
+        jmpIdx = emitter->function->instCount;
+        reduct_emit_inst(emitter, REDUCT_INST_MAKE_SAXC(REDUCT_OPCODE_JMP, 0, 0));
     }
+
+    if (!skipInverted)
+    {
+        reduct_emitter_patch_jmp_here(emitter, jmpfIdx);
+    }
+
+    reduct_rvsdg_region_t* falseRegion = node->firstRegion;
+    reduct_emitter_expr_t falseExpr = reduct_emit_origin(emitter, falseRegion->result->edge->origin, target);
+    reduct_emitter_expr_flush(emitter, &falseExpr, target);
+
+    if (!trueIsTerminated)
+    {
+        reduct_emitter_patch_jmp_here(emitter, jmpIdx);
+    }
+
+    if (target == REDUCT_REGISTER_RETURN)
+    {
+        return REDUCT_EMITTER_EXPR_NONE;
+    }
+
+    return REDUCT_EMITTER_EXPR_REG(target);
+}
+
+static reduct_emitter_expr_t reduct_emit_node(reduct_emitter_t* emitter, reduct_rvsdg_node_t* node, reduct_reg_t target)
+{
+    assert(emitter != NULL);
+    assert(node != NULL);
 
     reduct_emitter_expr_t result;
     switch (node->type)
@@ -1009,18 +840,141 @@ static inline reduct_emitter_expr_t reduct_emit_node(reduct_emitter_t* emitter, 
         result = reduct_emit_lambda(emitter, node);
     }
     break;
-    case REDUCT_RVSDG_NODE_TYPE_GAMMA:
-    {
-        result = reduct_emit_gamma(emitter, node, target);
-    }
-    break;
     case REDUCT_RVSDG_NODE_TYPE_PHI:
     {
         result = reduct_emit_phi(emitter, node);
     }
     break;
+    case REDUCT_RVSDG_NODE_TYPE_GAMMA:
+    {
+        result = reduct_emit_gamma(emitter, node, target);
+    }
+    break;
     default:
         REDUCT_ERROR_THROW(emitter->reduct, "unsupported node type %d", node->type);
+    }
+    return result;
+}
+
+static reduct_emitter_expr_t reduct_emit_region_phi(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+    reduct_rvsdg_region_t* region, reduct_reg_t target)
+{
+    reduct_rvsdg_node_t* phiNode = region->parent;
+    uint32_t recurSlots = (uint32_t)region->argumentCount - (uint32_t)phiNode->inputCount;
+
+    if (origin->index < recurSlots)
+    {
+        reduct_rvsdg_node_t* lambdaNode = region->firstNode;
+        while (lambdaNode != NULL && lambdaNode->type != REDUCT_RVSDG_NODE_TYPE_LAMBDA)
+        {
+            lambdaNode = lambdaNode->next;
+        }
+
+        if (lambdaNode != NULL && lambdaNode->output != NULL)
+        {
+            reduct_emitter_expr_t lambdaExpr = reduct_emitter_cache_get(emitter, lambdaNode->output);
+            if (lambdaExpr.type == REDUCT_EMITTER_EXPR_TYPE_REG)
+            {
+                return REDUCT_EMITTER_EXPR_REG((reduct_reg_t)(lambdaExpr.reg + origin->index));
+            }
+        }
+    }
+    else
+    {
+        uint16_t inputIdx = (uint16_t)(origin->index - recurSlots);
+        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(phiNode, inputIdx);
+        if (input != NULL && input->edge != NULL)
+        {
+            return reduct_emit_origin(emitter, input->edge->origin, target);
+        }
+    }
+
+    return REDUCT_EMITTER_EXPR_NONE;
+}
+
+static reduct_emitter_expr_t reduct_emit_region_gamma(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+    reduct_rvsdg_region_t* region, reduct_reg_t target)
+{
+    reduct_rvsdg_node_t* gammaNode = region->parent;
+    const reduct_rvsdg_node_info_t* info = reduct_rvsdg_node_get_info(gammaNode->type);
+    uint16_t inputIdx = (uint16_t)(info->dataInputOffset + origin->index);
+
+    reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(gammaNode, inputIdx);
+    if (input != NULL && input->edge != NULL)
+    {
+        return reduct_emit_origin(emitter, input->edge->origin, target);
+    }
+
+    return REDUCT_EMITTER_EXPR_NONE;
+}
+
+static reduct_emitter_expr_t reduct_emit_region(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+    reduct_reg_t target)
+{
+    reduct_rvsdg_region_t* region = origin->region;
+    reduct_rvsdg_node_t* parent = region ? region->parent : NULL;
+
+    if (parent != NULL)
+    {
+        switch (parent->type)
+        {
+        case REDUCT_RVSDG_NODE_TYPE_PHI:
+        {
+            reduct_emitter_expr_t expr = reduct_emit_region_phi(emitter, origin, region, target);
+            if (expr.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
+            {
+                return expr;
+            }
+            break;
+        }
+        case REDUCT_RVSDG_NODE_TYPE_GAMMA:
+        {
+            reduct_emitter_expr_t expr = reduct_emit_region_gamma(emitter, origin, region, target);
+            if (expr.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
+            {
+                return expr;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    return REDUCT_EMITTER_EXPR_CONST((reduct_const_t)(origin->index - emitter->function->arity));
+}
+
+static reduct_emitter_expr_t reduct_emit_origin(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
+    reduct_reg_t target)
+{
+    assert(emitter != NULL);
+    assert(origin != NULL);
+
+    reduct_item_t* previousItem = emitter->lastItem;
+    reduct_item_t* item = REDUCT_CONTAINER_OF(origin, reduct_item_t, rvsdgOrigin);
+    if (item->moduleId != REDUCT_MODULE_ID_NONE)
+    {
+        emitter->lastItem = item;
+    }
+
+    reduct_emitter_expr_t cached = reduct_emitter_cache_get(emitter, origin);
+    if (cached.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
+    {
+        return cached;
+    }
+
+    reduct_emitter_expr_t result;
+    if (origin->ownerKind == REDUCT_RVSDG_OWNER_REGION)
+    {
+        result = reduct_emit_region(emitter, origin, target);
+    }
+    else if (origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+    {
+        result = reduct_emit_node(emitter, origin->node, target);
+    }
+    else
+    {
+        result = REDUCT_EMITTER_EXPR_NONE;
     }
 
     if (result.type == REDUCT_EMITTER_EXPR_TYPE_NONE)
@@ -1029,43 +983,53 @@ static inline reduct_emitter_expr_t reduct_emit_node(reduct_emitter_t* emitter, 
         return result;
     }
 
-    result.origin = node->output;
-    reduct_emitter_cache_put(emitter, node->output, result);
+    if (origin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+    {
+        result.origin = origin;
+        reduct_emitter_cache_put(emitter, origin, result);
+    }
 
     emitter->lastItem = previousItem;
     return result;
 }
 
-static inline reduct_function_t* reduct_emit_parse_lambda(reduct_t* reduct, reduct_rvsdg_node_t* node)
+static reduct_function_t* reduct_emit_function(reduct_t* reduct, reduct_rvsdg_node_t* lambda)
 {
     assert(reduct != NULL);
-    assert(node != NULL);
-    assert(node->type == REDUCT_RVSDG_NODE_TYPE_LAMBDA);
+    assert(lambda != NULL);
+    assert(lambda->type == REDUCT_RVSDG_NODE_TYPE_LAMBDA);
+    assert(lambda->firstRegion != NULL);
 
     reduct_function_t* function = reduct_function_new(reduct);
     reduct_item_t* functionItem = REDUCT_CONTAINER_OF(function, reduct_item_t, function);
-    reduct_item_t* lambdaItem = REDUCT_CONTAINER_OF(node, reduct_item_t, rvsdgNode);
-    functionItem->inputId = lambdaItem->inputId;
-    functionItem->position = lambdaItem->position;
-    if (node->flags & REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC)
+    reduct_item_t* lambdaItem = REDUCT_CONTAINER_OF(lambda, reduct_item_t, rvsdgNode);
+    functionItem->moduleId = lambdaItem->moduleId;
+    functionItem->modulePos = lambdaItem->modulePos;
+    if (lambda->flags & REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC)
     {
         function->flags |= REDUCT_FUNCTION_FLAG_VARIADIC;
     }
 
     reduct_emitter_t emitter = {0};
-    reduct_emitter_init(&emitter, reduct, function, node);
+    reduct_emitter_init(&emitter, reduct, function, lambda);
 
-    reduct_rvsdg_region_t* body = node->firstRegion;
-    function->arity = (uint32_t)body->argumentCount - (uint32_t)node->inputCount;
-    for (uint16_t i = 0; i < (uint16_t)node->inputCount; i++)
-    {
-        reduct_function_add_capture(reduct, function);
-    }
+    reduct_rvsdg_region_t* body = lambda->firstRegion;
+    function->arity = (uint32_t)body->argumentCount - (uint32_t)lambda->inputCount;
+    reduct_function_set_capture_count(reduct, function, lambda->inputCount);
+    emitter.topReg = (uint16_t)function->arity;
+
     for (uint32_t i = 0; i < function->arity; i++)
     {
-        reduct_emitter_set_register(&emitter, i);
+        reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(body, (uint16_t)i);
+        if (arg->useCount > 0)
+        {
+            reduct_emitter_cache_put(&emitter, arg, REDUCT_EMITTER_EXPR_REG((reduct_reg_t)i));
+        }
+        else
+        {
+            reduct_emitter_reg_free(&emitter, (reduct_reg_t)i);
+        }
     }
-    function->registerCount = (uint16_t)function->arity;
 
     reduct_emitter_expr_t expr = reduct_emit_origin(&emitter, body->result->edge->origin, REDUCT_REGISTER_RETURN);
     reduct_emitter_expr_flush(&emitter, &expr, REDUCT_REGISTER_RETURN);
@@ -1089,5 +1053,5 @@ REDUCT_API reduct_handle_t reduct_emit(reduct_t* reduct, reduct_handle_t graph)
         REDUCT_ERROR_THROW(reduct, "expected RVSDG lambda node as root, got %s", info->name);
     }
 
-    return REDUCT_HANDLE_FROM_FUNCTION(reduct_emit_parse_lambda(reduct, root));
+    return REDUCT_HANDLE_FROM_FUNCTION(reduct_emit_function(reduct, root));
 }
