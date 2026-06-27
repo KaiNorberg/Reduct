@@ -16,7 +16,7 @@ struct reduct_item;
  * @{
  */
 
-#define REDUCT_CLOSURE_SMALL_MAX 5 ///< The maximum number of small constants.
+#define REDUCT_CLOSURE_SMALL_MAX 4 ///< The maximum number of small constants.
 
 /**
  * @brief Closure structure.
