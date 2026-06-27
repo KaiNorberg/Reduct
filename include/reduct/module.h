@@ -62,7 +62,6 @@ typedef enum reduct_module_flags
 typedef struct reduct_module
 {
     struct reduct_module* prev;
-    reduct_handle_t ast;
     const char* buffer;
     const char* end;
     reduct_module_id_t id;

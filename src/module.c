@@ -65,7 +65,6 @@ static reduct_module_t* reduct_module_new_raw(struct reduct* reduct, const char*
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
 
-    module->ast = REDUCT_HANDLE_NIL(reduct);
     module->buffer = NULL;
     module->end = NULL;
     module->lib = NULL;
@@ -454,7 +453,14 @@ load_shared_lib:
         reduct_module_t* module = reduct_module_new_raw(reduct, pathString);
         module->lib = lib;
         module->flags = REDUCT_MODULE_FLAG_IS_LIBRARY;
-        return init(reduct);
+        
+        reduct_handle_t handle = init(reduct);
+
+        reduct_list_t* wrapper = reduct_list_new(reduct, 2);
+        wrapper->handles[0] = REDUCT_HANDLE_CREATE_SYMBOL(reduct, "do");
+        wrapper->handles[1] = handle;
+
+        return REDUCT_HANDLE_FROM_LIST(wrapper);
     }
 
     return reduct_parse_file(reduct, pathString);

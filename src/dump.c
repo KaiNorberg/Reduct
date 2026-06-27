@@ -20,9 +20,13 @@ static void reduct_dump_print_handle(reduct_handle_t handle, FILE* out)
         {
             fprintf(out, "\"%.*s\"", (int)atom->length, atom->string);
         }
-        else
+        else if (atom->length != 0)
         {
             fprintf(out, "%.*s", (int)atom->length, atom->string);
+        }
+        else
+        {
+            fprintf(out, "<%s>", REDUCT_HANDLE_GET_TYPE_STRING(handle));
         }
     }
     else if (REDUCT_HANDLE_IS_LIST(handle))

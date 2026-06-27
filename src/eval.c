@@ -528,6 +528,10 @@ OP_SHIFT(label_shr, >>, "right")
 LABEL_C_OP(label_fork, {
     DECODE_A();
     DECODE_B();
+    if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_CALLABLE(reduct, valC)))
+    {
+        REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(valC));
+    }
     reduct_handle_t future = REDUCT_HANDLE_CREATE_FUTURE(reduct, valC, b, &r[a]);
     UPDATE_STATE();
     r[a] = future;
