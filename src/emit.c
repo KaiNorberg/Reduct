@@ -364,7 +364,6 @@ static void reduct_emit_inst_abc(reduct_emitter_t* emitter, reduct_opcode_t opco
     assert(b < REDUCT_REGISTER_MAX);
     assert(c->type != REDUCT_EMITTER_EXPR_TYPE_REG || c->reg < REDUCT_REGISTER_MAX);
 
-
     reduct_inst_t inst;
     if (c->type == REDUCT_EMITTER_EXPR_TYPE_CONST && REDUCT_OPCODE_HAS_CONST(opcode))
     {
@@ -589,18 +588,18 @@ static reduct_emitter_expr_t reduct_emit_simple_opcode_ab_range(reduct_emitter_t
         input = input->next;
     }
 
+    reduct_reg_t base = reduct_emitter_reg_alloc_range(emitter, arity);
+    for (int32_t i = arity - 1; i >= 0; i--)
+    {
+        reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(base + i));
+    }
+
     input = node->firstInput;
     while (input != NULL)
     {
         assert(input->edge != NULL);
         reduct_emitter_cache_release(emitter, input->edge->origin);
         input = input->next;
-    }
-
-    reduct_reg_t base = reduct_emitter_reg_alloc_range(emitter, arity);
-    for (int32_t i = arity - 1; i >= 0; i--)
-    {
-        reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(base + i));
     }
 
     reduct_emit_inst(emitter, REDUCT_INST_MAKE_ABC(node->opcode, base, arity, 0));
