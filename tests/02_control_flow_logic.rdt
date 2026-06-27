@@ -2,21 +2,20 @@
     (assert! (== (if true 10 20) 10) "if should return the 'then' branch when condition is truthy")
     (assert! (== (if false 10 20) 20) "if should return the 'else' branch when condition is falsy")
     (assert! (== (if false 10) ()) "if should return an empty list '()' when condition is falsy and no 'else' is provided")
-    (assert! (== (if 0 "f" "t") "t") "if should treat 0 as falsy")
     (assert! (== (if "" "f" "t") "f") "if should treat empty string as truthy")
 
     (assert! (== (match 2 (1 "one") (2 "two") "else") "two") "match should return matching case result")
     (assert! (== (match "x" (1 "one") (2 "two") "default") "default") "match should return default when no match")
 
     (assert! (== (cond (false 1) (true 2) (true 3)) 2) "cond should return the value of the first truthy condition")
-    (assert! (== (cond (false 1) (0 2)) ()) "cond should return '()' if no conditions are truthy")
+    (assert! (== (cond (false 1) (nil 2)) ()) "cond should return '()' if no conditions are truthy")
 
     (assert! (== (++ 5) 6) "++ should increment value")
     (assert! (== (-- 10) 9) "-- should decrement value")
     (assert! (== (++ 1.5) 2.5) "++ should work on floats")
 
     (assert! (== (and 1 2 3) 3) "and should return the last truthy value")
-    (assert! (== (and 1 0 3) 0) "and should return first falsy value")
+    (assert! (== (and 1 nil 3) nil) "and should return first falsy value")
     (assert! (== (and 1 false (assert! false "and should short-circuit")) false) "and should return the first falsy value")
 
     (assert! (== (or false 2 3) 2) "or should return the first truthy value")

@@ -27,15 +27,14 @@ typedef enum
  */
 typedef enum
 {
-    REDUCT_LAYOUT_ABC,       ///< R(A) R(B) R/K(C)
-    REDUCT_LAYOUT_AB,        ///< R(A) R(B)
-    REDUCT_LAYOUT_AC,        ///< R(A) R/K(C)
-    REDUCT_LAYOUT_C,         ///< R/K(C)
-    REDUCT_LAYOUT_SAX,       ///< sAx
-    REDUCT_LAYOUT_SAXC,      ///< sAx R/K(C)
-    REDUCT_LAYOUT_ABC_RANGE, ///< R(A) B R/K(C)
-    REDUCT_LAYOUT_AB_RANGE,  ///< R(A) B
-    REDUCT_LAYOUT_NONE       ///< No operands
+    REDUCT_OPCODE_LAYOUT_ABC,       ///< R(A) R(B) R/K(C)
+    REDUCT_OPCODE_LAYOUT_AC,        ///< R(A) R/K(C)
+    REDUCT_OPCODE_LAYOUT_ABC_RANGE, ///< R(A) B R/K(C)
+    REDUCT_OPCODE_LAYOUT_AB_RANGE,  ///< R(A) B
+    REDUCT_OPCODE_LAYOUT_C,         ///< R/K(C)
+    REDUCT_OPCODE_LAYOUT_SAX,       ///< sAx, no operands
+    REDUCT_OPCODE_LAYOUT_SAXC,      ///< sAx R/K(C)
+    REDUCT_OPCODE_LAYOUT_NONE       ///< No operands
 } reduct_opcode_layout_t;
 
 /**
@@ -90,6 +89,7 @@ typedef enum
     REDUCT_OPCODE_MOV_CONST = REDUCT_OPCODE_MOV | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_CALL_CONST = REDUCT_OPCODE_CALL | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_RET_CONST = REDUCT_OPCODE_RET | REDUCT_OPCODE_MODE_CONST,
+    REDUCT_OPCODE_CLOSURE_CONST = REDUCT_OPCODE_CLOSURE | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_CAPTURE_CONST = REDUCT_OPCODE_CAPTURE | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_TAILCALL_CONST = REDUCT_OPCODE_TAILCALL | REDUCT_OPCODE_MODE_CONST,
     REDUCT_OPCODE_EQ_CONST = REDUCT_OPCODE_EQ | REDUCT_OPCODE_MODE_CONST,
@@ -127,7 +127,7 @@ typedef enum
 {
     REDUCT_OPCODE_FLAG_HAS_TARGET = (1 << 0),     ///< Opcode modifies target register A.
     REDUCT_OPCODE_FLAG_IS_JUMP = (1 << 1),        ///< Opcode is a jump.
-    REDUCT_OPCODE_FLAG_HAS_CONST = (1 << 2),      ///< Opcode uses C operand and has both reg/const versions.
+    REDUCT_OPCODE_FLAG_HAS_CONST = (1 << 2),      ///< Opcode uses C operand and has a const version.
     REDUCT_OPCODE_FLAG_READ_A = (1 << 3),         ///< Opcode reads from register A (or range starting at A).
     REDUCT_OPCODE_FLAG_READ_B = (1 << 4),         ///< Opcode reads from register B.
     REDUCT_OPCODE_FLAG_READ_C = (1 << 5),         ///< Opcode reads from register/constant C.

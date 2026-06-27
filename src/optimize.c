@@ -24,10 +24,94 @@ REDUCT_API void reduct_optimize_global_deinit(reduct_optimize_global_t* global)
     global->lastFlags = REDUCT_OPTIMIZE_NONE;
 }
 
+static reduct_rvsdg_origin_t* reduct_optimize_localize_origin(reduct_t* reduct, reduct_rvsdg_region_t* targetRegion,
+    reduct_rvsdg_origin_t* remoteOrigin)
+{
+    if (remoteOrigin == NULL)
+    {
+        return NULL;
+    }
+
+    reduct_rvsdg_region_t* originRegion = NULL;
+    if (remoteOrigin->ownerKind == REDUCT_RVSDG_OWNER_NODE)
+    {
+        originRegion = remoteOrigin->node->parent;
+    }
+    else if (remoteOrigin->ownerKind == REDUCT_RVSDG_OWNER_REGION)
+    {
+        originRegion = remoteOrigin->region;
+    }
+
+    if (originRegion == targetRegion)
+    {
+        return remoteOrigin;
+    }
+
+    if (remoteOrigin->ownerKind == REDUCT_RVSDG_OWNER_NODE &&
+        remoteOrigin->node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+    {
+        reduct_rvsdg_node_t* localConst =
+            reduct_rvsdg_node_new_simple_constant(reduct, targetRegion, remoteOrigin->node->constant);
+        return localConst->output;
+    }
+
+    return reduct_rvsdg_region_lift_origin(reduct, targetRegion, remoteOrigin);
+}
+
+static bool reduct_optimize_node_is_pure(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    assert(reduct != NULL);
+    assert(node != NULL);
+
+    if (node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+    {
+        if (!REDUCT_HANDLE_IS_ATOM_LIKE(node->constant))
+        {
+            return true;
+        }
+
+        reduct_atom_t* atom = reduct_handle_as_atom(reduct, node->constant);
+        if (!reduct_atom_is_native(reduct, atom))
+        {
+            return true;
+        }
+
+        if (atom->length > 0 && atom->string[atom->length - 1] == '!')
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+    {
+        return true;
+    }
+
+    if (REDUCT_OPCODE_IS_CALL(node->opcode))
+    {
+        reduct_rvsdg_node_t* callable = reduct_rvsdg_node_get_input_node(node, 0);
+        if (callable == NULL || callable->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+        {
+            return true;
+        }
+
+        return reduct_optimize_node_is_pure(reduct, callable);
+    }
+
+    return true;
+}
+
 static bool reduct_optimize_constant_folding(reduct_t* reduct, reduct_rvsdg_node_t* node)
 {
     assert(reduct != NULL);
     assert(node != NULL);
+
+    if (!reduct_optimize_node_is_pure(reduct, node))
+    {
+        return false;
+    }
 
     if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
     {
@@ -44,8 +128,10 @@ static bool reduct_optimize_constant_folding(reduct_t* reduct, reduct_rvsdg_node
             break;
         }
 
-        reduct_rvsdg_origin_t* origin = input->edge->origin;
-        if (origin->ownerKind != REDUCT_RVSDG_OWNER_NODE || origin->node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+        reduct_rvsdg_origin_t* resolved = reduct_rvsdg_resolve_origin(input->edge->origin);
+
+        if (resolved == NULL || resolved->ownerKind != REDUCT_RVSDG_OWNER_NODE ||
+            resolved->node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
         {
             allConstants = false;
             break;
@@ -61,21 +147,14 @@ static bool reduct_optimize_constant_folding(reduct_t* reduct, reduct_rvsdg_node
     for (uint8_t i = 0; i < node->inputCount; i++)
     {
         reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, i);
-        assert(input != NULL && input->edge != NULL && input->edge->origin != NULL);
-        reduct_rvsdg_origin_t* origin = input->edge->origin;
-        args[i] = origin->node->constant;
+        reduct_rvsdg_origin_t* resolved = reduct_rvsdg_resolve_origin(input->edge->origin);
+        args[i] = resolved->node->constant;
     }
 
     reduct_handle_t result;
     if (REDUCT_OPCODE_IS_CALL(node->opcode) && node->inputCount > 0)
     {
         reduct_atom_t* atom = reduct_handle_as_atom(reduct, args[0]);
-        if (atom->length == 0 || atom->string[atom->length - 1] == '!')
-        {
-            REDUCT_SCRATCH_PUT(reduct, args);
-            return false;
-        }
-
         if (!reduct_atom_is_native(reduct, atom))
         {
             REDUCT_SCRATCH_PUT(reduct, args);
@@ -117,30 +196,8 @@ static size_t reduct_optimize_count_origins(reduct_rvsdg_region_t* region)
     return count;
 }
 
-static void reduct_optimize_map_put(reduct_rvsdg_origin_t** keys, reduct_rvsdg_origin_t** values, size_t* count,
-    reduct_rvsdg_origin_t* k, reduct_rvsdg_origin_t* v)
-{
-    keys[*count] = k;
-    values[*count] = v;
-    (*count)++;
-}
-
-static reduct_rvsdg_origin_t* reduct_optimize_map_get(reduct_rvsdg_origin_t** keys, reduct_rvsdg_origin_t** values,
-    size_t count, reduct_rvsdg_origin_t* k)
-{
-    for (size_t i = 0; i < count; i++)
-    {
-        if (keys[i] == k)
-        {
-            return values[i];
-        }
-    }
-    return NULL;
-}
-
 static void reduct_optimize_clone_node_structure(reduct_t* reduct, reduct_rvsdg_node_t* oldNode,
-    reduct_rvsdg_region_t* newParentRegion, reduct_rvsdg_origin_t** keys, reduct_rvsdg_origin_t** values,
-    size_t* mapCount)
+    reduct_rvsdg_region_t* newParentRegion)
 {
     reduct_rvsdg_node_t* newNode = reduct_rvsdg_node_new(reduct);
     newNode->type = oldNode->type;
@@ -160,7 +217,7 @@ static void reduct_optimize_clone_node_structure(reduct_t* reduct, reduct_rvsdg_
         newNode->constant = oldNode->constant;
     }
 
-    reduct_optimize_map_put(keys, values, mapCount, oldNode->output, newNode->output);
+    oldNode->output->map = newNode->output;
 
     for (uint8_t i = 0; i < oldNode->inputCount; i++)
     {
@@ -174,20 +231,19 @@ static void reduct_optimize_clone_node_structure(reduct_t* reduct, reduct_rvsdg_
         for (reduct_rvsdg_origin_t* oldArg = oldSub->firstArgument; oldArg != NULL; oldArg = oldArg->next)
         {
             reduct_rvsdg_origin_t* newArg = reduct_rvsdg_region_add_argument(reduct, newSub);
-            reduct_optimize_map_put(keys, values, mapCount, oldArg, newArg);
+            oldArg->map = newArg;
         }
 
         for (reduct_rvsdg_node_t* oldSubNode = oldSub->firstNode; oldSubNode != NULL; oldSubNode = oldSubNode->next)
         {
-            reduct_optimize_clone_node_structure(reduct, oldSubNode, newSub, keys, values, mapCount);
+            reduct_optimize_clone_node_structure(reduct, oldSubNode, newSub);
         }
     }
 }
 
-static void reduct_optimize_clone_node_connect_edges(reduct_t* reduct, reduct_rvsdg_node_t* oldNode,
-    reduct_rvsdg_origin_t** keys, reduct_rvsdg_origin_t** values, size_t mapCount)
+static void reduct_optimize_clone_node_connect_edges(reduct_t* reduct, reduct_rvsdg_node_t* oldNode)
 {
-    reduct_rvsdg_origin_t* newOut = reduct_optimize_map_get(keys, values, mapCount, oldNode->output);
+    reduct_rvsdg_origin_t* newOut = oldNode->output->map;
     assert(newOut != NULL);
     reduct_rvsdg_node_t* newNode = newOut->node;
 
@@ -200,7 +256,7 @@ static void reduct_optimize_clone_node_connect_edges(reduct_t* reduct, reduct_rv
         }
 
         reduct_rvsdg_origin_t* oldOrigin = oldUser->edge->origin;
-        reduct_rvsdg_origin_t* newOrigin = reduct_optimize_map_get(keys, values, mapCount, oldOrigin);
+        reduct_rvsdg_origin_t* newOrigin = oldOrigin->map;
 
         reduct_rvsdg_user_t* newUser = reduct_rvsdg_node_get_input(newNode, i);
         assert(newUser != NULL);
@@ -222,7 +278,7 @@ static void reduct_optimize_clone_node_connect_edges(reduct_t* reduct, reduct_rv
         if (oldSub->result != NULL && oldSub->result->edge != NULL && oldSub->result->edge->origin != NULL)
         {
             reduct_rvsdg_origin_t* oldRes = oldSub->result->edge->origin;
-            reduct_rvsdg_origin_t* newRes = reduct_optimize_map_get(keys, values, mapCount, oldRes);
+            reduct_rvsdg_origin_t* newRes = oldRes->map;
             if (newRes != NULL)
             {
                 reduct_rvsdg_edge_connect(reduct, newRes, newSub->result);
@@ -235,11 +291,28 @@ static void reduct_optimize_clone_node_connect_edges(reduct_t* reduct, reduct_rv
 
         for (reduct_rvsdg_node_t* oldSubNode = oldSub->firstNode; oldSubNode != NULL; oldSubNode = oldSubNode->next)
         {
-            reduct_optimize_clone_node_connect_edges(reduct, oldSubNode, keys, values, mapCount);
+            reduct_optimize_clone_node_connect_edges(reduct, oldSubNode);
         }
 
         oldSub = oldSub->next;
         newSub = newSub->next;
+    }
+}
+
+static void reduct_optimize_clear_map(reduct_rvsdg_region_t* region)
+{
+    for (reduct_rvsdg_origin_t* arg = region->firstArgument; arg != NULL; arg = arg->next)
+    {
+        arg->map = NULL;
+    }
+
+    for (reduct_rvsdg_node_t* node = region->firstNode; node != NULL; node = node->next)
+    {
+        node->output->map = NULL;
+        for (reduct_rvsdg_region_t* sub = node->firstRegion; sub != NULL; sub = sub->next)
+        {
+            reduct_optimize_clear_map(sub);
+        }
     }
 }
 
@@ -248,17 +321,12 @@ static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_nod
     assert(reduct != NULL);
     assert(node != NULL);
 
-    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE)
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE || !REDUCT_OPCODE_IS_CALL(node->opcode))
     {
         return false;
     }
 
-    if (!REDUCT_OPCODE_IS_CALL(node->opcode))
-    {
-        return false;
-    }
-
-    reduct_rvsdg_node_t* callable = reduct_rvsdg_node_get_input_node(node, 0);
+    reduct_rvsdg_node_t* callable = reduct_rvsdg_node_get_resolved_input_node(node, 0);
     if (callable == NULL || callable->type != REDUCT_RVSDG_NODE_TYPE_LAMBDA)
     {
         return false;
@@ -272,6 +340,7 @@ static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_nod
 
     uint16_t paramCount = (uint16_t)(body->argumentCount - callable->inputCount);
     bool isVariadic = callable->flags & REDUCT_RVSDG_NODE_FLAGS_LAMBDA_VARIADIC;
+
     if (isVariadic)
     {
         REDUCT_ERROR_ASSERT(reduct, (uint16_t)(node->inputCount - 1) >= paramCount - 1,
@@ -282,29 +351,31 @@ static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_nod
         return false;
     }
 
+    reduct_rvsdg_region_t* callerRegion = node->parent;
     REDUCT_SCRATCH_GET(reduct, replacements, reduct_rvsdg_origin_t*, body->argumentCount);
 
     reduct_rvsdg_origin_t* arg = body->firstArgument;
     while (arg != NULL)
     {
         reduct_rvsdg_origin_t* next = arg->next;
-
         uint16_t capturedIndex;
         reduct_rvsdg_origin_t* replacement = NULL;
 
-        if (reduct_rvsdg_node_map_argument_to_input(callable, body, arg->index, &capturedIndex))
+        if (reduct_rvsdg_node_argument_to_input(body, arg->index, &capturedIndex))
         {
-            replacement = reduct_rvsdg_node_get_input_origin(callable, capturedIndex);
+            reduct_rvsdg_origin_t* capturedOrigin = reduct_rvsdg_node_get_input_origin(callable, capturedIndex);
+
+            capturedOrigin = reduct_rvsdg_resolve_origin(capturedOrigin);
+            replacement = reduct_optimize_localize_origin(reduct, callerRegion, capturedOrigin);
         }
         else if (isVariadic && arg->index == paramCount - 1)
         {
             reduct_rvsdg_node_t* listNode =
-                reduct_rvsdg_node_new_simple_opcode(reduct, node->parent, REDUCT_OPCODE_LIST);
+                reduct_rvsdg_node_new_simple_opcode(reduct, callerRegion, REDUCT_OPCODE_LIST);
             for (uint16_t i = paramCount; i < node->inputCount; i++)
             {
                 reduct_rvsdg_user_t* input = reduct_rvsdg_node_add_input(reduct, listNode);
                 reduct_rvsdg_origin_t* argOrigin = reduct_rvsdg_node_get_input_origin(node, i);
-                assert(argOrigin != NULL);
                 reduct_rvsdg_edge_connect(reduct, argOrigin, input);
             }
             replacement = listNode->output;
@@ -321,33 +392,27 @@ static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_nod
         arg = next;
     }
 
-    size_t totalOrigins = reduct_optimize_count_origins(body);
-    REDUCT_SCRATCH_GET(reduct, mapKeys, reduct_rvsdg_origin_t*, totalOrigins);
-    REDUCT_SCRATCH_GET(reduct, mapValues, reduct_rvsdg_origin_t*, totalOrigins);
-    size_t mapCount = 0;
-
     arg = body->firstArgument;
     while (arg != NULL)
     {
-        reduct_optimize_map_put(mapKeys, mapValues, &mapCount, arg, replacements[arg->index]);
+        arg->map = replacements[arg->index];
         arg = arg->next;
     }
 
-    reduct_rvsdg_region_t* callerRegion = node->parent;
     for (reduct_rvsdg_node_t* bodyNode = body->firstNode; bodyNode != NULL; bodyNode = bodyNode->next)
     {
-        reduct_optimize_clone_node_structure(reduct, bodyNode, callerRegion, mapKeys, mapValues, &mapCount);
+        reduct_optimize_clone_node_structure(reduct, bodyNode, callerRegion);
     }
 
     for (reduct_rvsdg_node_t* bodyNode = body->firstNode; bodyNode != NULL; bodyNode = bodyNode->next)
     {
-        reduct_optimize_clone_node_connect_edges(reduct, bodyNode, mapKeys, mapValues, mapCount);
+        reduct_optimize_clone_node_connect_edges(reduct, bodyNode);
     }
 
-    if (body->result != NULL && body->result->edge != NULL && body->result->edge->origin != NULL)
+    if (body->result->edge != NULL && body->result->edge->origin != NULL)
     {
         reduct_rvsdg_origin_t* resultOld = body->result->edge->origin;
-        reduct_rvsdg_origin_t* resultNew = reduct_optimize_map_get(mapKeys, mapValues, mapCount, resultOld);
+        reduct_rvsdg_origin_t* resultNew = resultOld->map;
 
         if (resultNew != NULL)
         {
@@ -359,11 +424,11 @@ static bool reduct_optimize_function_inlining(reduct_t* reduct, reduct_rvsdg_nod
         }
     }
 
+    reduct_optimize_clear_map(body);
     reduct_rvsdg_node_delete(reduct, node);
 
-    REDUCT_SCRATCH_PUT(reduct, mapValues);
-    REDUCT_SCRATCH_PUT(reduct, mapKeys);
     REDUCT_SCRATCH_PUT(reduct, replacements);
+
     return true;
 }
 
@@ -383,9 +448,16 @@ static reduct_handle_t reduct_optimize_alist_partial_from_node(reduct_t* reduct,
     assert(node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE && node->opcode == REDUCT_OPCODE_LIST);
 
     reduct_list_t* list = reduct_list_new(reduct, node->inputCount);
+
     size_t i = 0;
     for (reduct_rvsdg_user_t* current = node->firstInput; current != NULL; current = current->next)
     {
+        if (current->edge == NULL || current->edge->origin == NULL ||
+            current->edge->origin->ownerKind != REDUCT_RVSDG_OWNER_NODE)
+        {
+            continue;
+        }
+
         reduct_rvsdg_node_t* pairNode = current->edge->origin->node;
         if (pairNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
         {
@@ -396,39 +468,18 @@ static reduct_handle_t reduct_optimize_alist_partial_from_node(reduct_t* reduct,
         if (pairNode->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE || pairNode->opcode != REDUCT_OPCODE_LIST ||
             pairNode->inputCount < 2)
         {
-            list->handles[i++] = REDUCT_HANDLE_FROM_RVSDG_NODE(pairNode);
+            list->handles[i++] = REDUCT_HANDLE_FROM_RVSDG_ORIGIN(pairNode->output);
             continue;
         }
 
         reduct_rvsdg_node_t* keyNode = reduct_rvsdg_node_get_input_node(pairNode, 0);
-        if (keyNode == NULL || keyNode->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
-        {
-            list->handles[i++] = REDUCT_HANDLE_FROM_RVSDG_NODE(pairNode);
-            continue;
-        }
-
-        bool allValuesPresent = true;
-        for (uint8_t v = 1; v < pairNode->inputCount; v++)
-        {
-            if (reduct_rvsdg_node_get_input_origin(pairNode, v) == NULL)
-            {
-                allValuesPresent = false;
-                break;
-            }
-        }
-
-        if (!allValuesPresent)
-        {
-            list->handles[i++] = REDUCT_HANDLE_FROM_RVSDG_NODE(pairNode);
-            continue;
-        }
+        assert(keyNode != NULL && keyNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST);
 
         reduct_list_t* pair = reduct_list_new(reduct, pairNode->inputCount);
         pair->handles[0] = keyNode->constant;
         for (uint8_t v = 1; v < pairNode->inputCount; v++)
         {
-            reduct_rvsdg_origin_t* valueOrigin = reduct_rvsdg_node_get_input_origin(pairNode, v);
-            pair->handles[v] = REDUCT_HANDLE_FROM_RVSDG_NODE(valueOrigin->node);
+            pair->handles[v] = REDUCT_HANDLE_FROM_RVSDG_ORIGIN(reduct_rvsdg_node_get_input_origin(pairNode, v));
         }
         list->handles[i++] = REDUCT_HANDLE_FROM_LIST(pair);
     }
@@ -436,22 +487,20 @@ static reduct_handle_t reduct_optimize_alist_partial_from_node(reduct_t* reduct,
     return REDUCT_HANDLE_FROM_LIST(list);
 }
 
-static reduct_rvsdg_node_t* reduct_optimize_alist_to_node(reduct_t* reduct, reduct_handle_t handle,
+static reduct_rvsdg_origin_t* reduct_optimize_alist_to_origin(reduct_t* reduct, reduct_handle_t handle,
     reduct_rvsdg_region_t* parent)
 {
     assert(reduct != NULL);
     assert(parent != NULL);
 
-    if (REDUCT_HANDLE_IS_RVSDG_NODE(handle))
+    if (REDUCT_HANDLE_IS_RVSDG_ORIGIN(handle))
     {
-        return REDUCT_HANDLE_TO_RVSDG_NODE(handle);
+        return REDUCT_HANDLE_TO_RVSDG_ORIGIN(handle);
     }
-
-    assert(parent != NULL);
 
     if (!REDUCT_HANDLE_IS_LIST(handle))
     {
-        return reduct_rvsdg_node_new_simple_constant(reduct, parent, handle);
+        return reduct_rvsdg_node_new_simple_constant(reduct, parent, handle)->output;
     }
 
     reduct_list_t* list = REDUCT_HANDLE_TO_LIST(handle);
@@ -459,47 +508,41 @@ static reduct_rvsdg_node_t* reduct_optimize_alist_to_node(reduct_t* reduct, redu
     for (uint32_t i = 0; i < list->length; i++)
     {
         reduct_handle_t pairHandle = list->handles[i];
-        reduct_rvsdg_node_t* pairNode;
+        assert(REDUCT_HANDLE_IS_LIST(pairHandle));
 
-        if (!REDUCT_HANDLE_IS_LIST(pairHandle) || REDUCT_HANDLE_TO_LIST(pairHandle)->length < 2)
+        reduct_list_t* pair = REDUCT_HANDLE_TO_LIST(pairHandle);
+        assert(pair->length >= 2);
+
+        reduct_handle_t key = pair->handles[0];
+
+        reduct_rvsdg_node_t* pairNode = reduct_rvsdg_node_new_simple_opcode(reduct, parent, REDUCT_OPCODE_LIST);
+
+        reduct_rvsdg_origin_t* keyOrigin = reduct_optimize_alist_to_origin(reduct, key, parent);
+        assert(keyOrigin != NULL);
+
+        reduct_rvsdg_edge_connect(reduct, keyOrigin, reduct_rvsdg_node_add_input(reduct, pairNode));
+
+        for (uint32_t v = 1; v < pair->length; v++)
         {
-            pairNode = reduct_optimize_alist_to_node(reduct, pairHandle, parent);
-        }
-        else
-        {
-            reduct_list_t* pair = REDUCT_HANDLE_TO_LIST(pairHandle);
-            reduct_handle_t key = pair->handles[0];
+            reduct_handle_t value = pair->handles[v];
+            reduct_rvsdg_user_t* valueUser = reduct_rvsdg_node_add_input(reduct, pairNode);
 
-            pairNode = reduct_rvsdg_node_new_simple_opcode(reduct, parent, REDUCT_OPCODE_LIST);
-            reduct_rvsdg_user_t* keyUser = reduct_rvsdg_node_add_input(reduct, pairNode);
-
-            reduct_rvsdg_node_t* keyNode = reduct_optimize_alist_to_node(reduct, key, parent);
-            if (keyNode != NULL)
+            if (REDUCT_HANDLE_IS_RVSDG_ORIGIN(value))
             {
-                reduct_rvsdg_edge_connect(reduct, keyNode->output, keyUser);
+                reduct_rvsdg_edge_connect(reduct, REDUCT_HANDLE_TO_RVSDG_ORIGIN(value), valueUser);
             }
-
-            for (uint32_t v = 1; v < pair->length; v++)
+            else
             {
-                reduct_handle_t value = pair->handles[v];
-                reduct_rvsdg_user_t* valueUser = reduct_rvsdg_node_add_input(reduct, pairNode);
-
-                if (REDUCT_HANDLE_IS_RVSDG_NODE(value))
-                {
-                    reduct_rvsdg_edge_connect(reduct, REDUCT_HANDLE_TO_RVSDG_NODE(value)->output, valueUser);
-                }
-                else
-                {
-                    reduct_rvsdg_edge_connect(reduct, reduct_optimize_alist_to_node(reduct, value, parent)->output,
-                        valueUser);
-                }
+                reduct_rvsdg_origin_t* valueOrigin =
+                    reduct_rvsdg_node_new_simple_constant(reduct, parent, value)->output;
+                reduct_rvsdg_edge_connect(reduct, valueOrigin, valueUser);
             }
         }
 
         reduct_rvsdg_user_t* user = reduct_rvsdg_node_add_input(reduct, result);
         reduct_rvsdg_edge_connect(reduct, pairNode->output, user);
     }
-    return result;
+    return result->output;
 }
 
 static bool reduct_optimize_alist_is_keys_constant(reduct_t* reduct, reduct_rvsdg_node_t* node)
@@ -517,10 +560,10 @@ static bool reduct_optimize_alist_is_keys_constant(reduct_t* reduct, reduct_rvsd
         return false;
     }
 
-    reduct_rvsdg_user_t* input = node->firstInput;
-    while (input != NULL)
+    for (reduct_rvsdg_user_t* input = node->firstInput; input != NULL; input = input->next)
     {
-        if (input->edge == NULL || input->edge->origin == NULL)
+        if (input->edge == NULL || input->edge->origin == NULL ||
+            input->edge->origin->ownerKind != REDUCT_RVSDG_OWNER_NODE)
         {
             return false;
         }
@@ -538,8 +581,6 @@ static bool reduct_optimize_alist_is_keys_constant(reduct_t* reduct, reduct_rvsd
         {
             return false;
         }
-
-        input = input->next;
     }
 
     return true;
@@ -602,6 +643,12 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
 
         for (reduct_rvsdg_user_t* current = input; current != NULL; current = current->next)
         {
+            if (current->edge == NULL || current->edge->origin == NULL ||
+                current->edge->origin->ownerKind != REDUCT_RVSDG_OWNER_NODE)
+            {
+                return NULL;
+            }
+
             reduct_rvsdg_node_t* alist = current->edge->origin->node;
             if (!reduct_optimize_alist_is_keys_constant(reduct, alist))
             {
@@ -620,8 +667,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
         reduct_handle_t result = reduct_stdlib_merge(reduct, node->inputCount - 1, &args[0]);
         REDUCT_SCRATCH_PUT(reduct, args);
 
-        reduct_rvsdg_node_t* resultNode = reduct_optimize_alist_to_node(reduct, result, node->parent);
-        return resultNode->output;
+        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_get_in)
     {
@@ -639,7 +685,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
             ? REDUCT_HANDLE_FROM_RVSDG_NODE(reduct_rvsdg_node_get_input_node(node, 3))
             : REDUCT_HANDLE_NIL(reduct);
         reduct_handle_t result = reduct_get_in(reduct, alist, pathNode->constant, defaultVal);
-        return reduct_optimize_alist_to_node(reduct, result, node->parent)->output;
+        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_assoc_in)
     {
@@ -657,7 +703,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
         reduct_handle_t value = REDUCT_HANDLE_FROM_RVSDG_NODE(valueNode);
         reduct_handle_t result = reduct_assoc_in(reduct, alist, pathNode->constant, value);
-        return reduct_optimize_alist_to_node(reduct, result, node->parent)->output;
+        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_dissoc_in)
     {
@@ -672,7 +718,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
         reduct_handle_t result = reduct_dissoc_in(reduct, alist, pathNode->constant);
-        return reduct_optimize_alist_to_node(reduct, result, node->parent)->output;
+        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_update_in)
     {
@@ -691,7 +737,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
         reduct_handle_t result = reduct_update_in(reduct, alist, pathNode->constant, callableNode->constant);
-        return reduct_optimize_alist_to_node(reduct, result, node->parent)->output;
+        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_keys)
     {
@@ -704,7 +750,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
         reduct_handle_t result = reduct_keys(reduct, alist);
-        return reduct_optimize_alist_to_node(reduct, result, node->parent)->output;
+        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
     }
 
     // Handles other cases where enough, but not all, information is available at compile time.
@@ -740,7 +786,17 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
             }
         }
 
-        return reduct_rvsdg_node_get_input_node(handleNode, indexVal)->output;
+        if (indexVal < 0 || indexVal >= handleNode->inputCount)
+        {
+            return NULL;
+        }
+
+        reduct_rvsdg_node_t* elemNode = reduct_rvsdg_node_get_input_node(handleNode, indexVal);
+        if (elemNode == NULL)
+        {
+            return NULL;
+        }
+        return elemNode->output;
     }
 
     return NULL;
@@ -927,7 +983,7 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
     return false;
 }
 
-static bool reduct_optimize_cse(reduct_t* reduct, reduct_rvsdg_node_t* node)
+static bool reduct_optimize_common_node_elimination(reduct_t* reduct, reduct_rvsdg_node_t* node)
 {
     if (node->parent == NULL)
     {
@@ -944,7 +1000,7 @@ static bool reduct_optimize_cse(reduct_t* reduct, reduct_rvsdg_node_t* node)
         reduct_rvsdg_origin_t* origin = reduct_rvsdg_node_get_input_origin(node, 0);
         if (origin != NULL)
         {
-            reduct_rvsdg_edge_t* edge = origin->edges;
+            reduct_rvsdg_edge_t* edge = origin->firstEdge;
             while (edge != NULL)
             {
                 if (edge->user->ownerKind == REDUCT_RVSDG_OWNER_NODE)
@@ -986,26 +1042,15 @@ static bool reduct_optimize_gamma_folding(reduct_t* reduct, reduct_rvsdg_node_t*
         return false;
     }
 
-    reduct_rvsdg_origin_t* selector = reduct_rvsdg_node_get_input_origin(node, 0);
-    if (selector == NULL || selector->ownerKind != REDUCT_RVSDG_OWNER_NODE ||
-        selector->node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
-    {
-        return false;
-    }
-
-    if (!REDUCT_HANDLE_IS_NUMBER_SHAPED(selector->node->constant))
-    {
-        return false;
-    }
-
-    uint32_t index = (uint32_t)reduct_handle_as_number(reduct, selector->node->constant);
-    if (index >= node->regionCount)
+    reduct_rvsdg_origin_t* predicate = reduct_rvsdg_node_get_input_origin(node, 0);
+    if (predicate == NULL || predicate->ownerKind != REDUCT_RVSDG_OWNER_NODE ||
+        predicate->node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
     {
         return false;
     }
 
     reduct_rvsdg_region_t* target = node->firstRegion;
-    for (uint32_t i = 0; i < index; i++)
+    if (REDUCT_HANDLE_IS_TRUTHY(predicate->node->constant))
     {
         target = target->next;
     }
@@ -1025,7 +1070,7 @@ static bool reduct_optimize_gamma_folding(reduct_t* reduct, reduct_rvsdg_node_t*
     while (arg != NULL)
     {
         uint16_t inputIndex;
-        if (reduct_rvsdg_node_map_argument_to_input(node, target, arg->index, &inputIndex))
+        if (reduct_rvsdg_node_argument_to_input(target, arg->index, &inputIndex))
         {
             reduct_rvsdg_origin_t* inputOrigin = reduct_rvsdg_node_get_input_origin(node, inputIndex);
             if (inputOrigin != NULL)
@@ -1043,6 +1088,289 @@ static bool reduct_optimize_gamma_folding(reduct_t* reduct, reduct_rvsdg_node_t*
 
     reduct_rvsdg_node_delete(reduct, node);
     return true;
+}
+
+static bool reduct_optimize_dead_port_elimination(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    bool changed = false;
+
+    for (int16_t i = node->inputCount - 1; i >= 0; i--)
+    {
+        bool isDead = true;
+        bool mapsToAnyArg = false;
+
+        for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+        {
+            uint16_t argIndex;
+            if (reduct_rvsdg_node_map_input_to_argument(node, region, i, &argIndex))
+            {
+                mapsToAnyArg = true;
+                reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
+
+                if (arg != NULL && arg->useCount > 0)
+                {
+                    isDead = false;
+                    break;
+                }
+            }
+        }
+
+        if (mapsToAnyArg && isDead)
+        {
+            for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+            {
+                uint16_t argIndex;
+                if (reduct_rvsdg_node_map_input_to_argument(node, region, i, &argIndex))
+                {
+                    reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
+                    if (arg != NULL)
+                    {
+                        reduct_rvsdg_region_remove_argument(arg);
+                    }
+                }
+            }
+
+            reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(node, i);
+            if (input != NULL)
+            {
+                reduct_rvsdg_node_remove_input(input);
+            }
+
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+static bool reduct_optimize_invariant_inputs_mapped(reduct_rvsdg_node_t* node)
+{
+    for (uint8_t i = 0; i < node->inputCount; i++)
+    {
+        reduct_rvsdg_origin_t* origin = reduct_rvsdg_node_get_input_origin(node, i);
+        if (origin == NULL || origin->map == NULL)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool reduct_optimize_invariant_code_motion_push(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    assert(reduct != NULL);
+    assert(node != NULL);
+
+    if (node->regionCount == 0 || node->parent == NULL)
+    {
+        return false;
+    }
+
+    reduct_rvsdg_region_t* outer = node->parent;
+    bool changed = false;
+
+    for (reduct_rvsdg_region_t* body = node->firstRegion; body != NULL; body = body->next)
+    {
+        for (reduct_rvsdg_origin_t* arg = body->firstArgument; arg != NULL; arg = arg->next)
+        {
+            uint16_t inputIndex;
+            if (!reduct_rvsdg_node_argument_to_input(body, arg->index, &inputIndex))
+            {
+                arg->map = NULL;
+                continue;
+            }
+
+            arg->map = reduct_rvsdg_node_get_input_origin(node, inputIndex);
+        }
+
+        reduct_rvsdg_node_t* curr = body->firstNode;
+        while (curr != NULL)
+        {
+            reduct_rvsdg_node_t* next = curr->next;
+
+            if (!reduct_optimize_node_is_pure(reduct, curr))
+            {
+                curr->output->map = NULL;
+                curr = next;
+                continue;
+            }
+
+            if (reduct_optimize_invariant_inputs_mapped(curr))
+            {
+                reduct_optimize_clone_node_structure(reduct, curr, outer);
+                reduct_optimize_clone_node_connect_edges(reduct, curr);
+
+                reduct_rvsdg_origin_t* cloneOutput = curr->output->map;
+                assert(cloneOutput != NULL);
+
+                reduct_rvsdg_origin_t* capture = reduct_rvsdg_region_lift_origin(reduct, body, cloneOutput);
+                capture->map = cloneOutput;
+
+                reduct_rvsdg_origin_redirect_users(curr->output, capture);
+                reduct_rvsdg_node_delete(reduct, curr);
+
+                changed = true;
+            }
+            else
+            {
+                curr->output->map = NULL;
+            }
+
+            curr = next;
+        }
+
+        reduct_optimize_clear_map(body);
+    }
+
+    return changed;
+}
+
+static bool reduct_optimize_invariant_code_motion_pull(reduct_t* reduct, reduct_rvsdg_node_t* node)
+{
+    assert(reduct != NULL);
+    assert(node != NULL);
+
+    if (node->regionCount == 0 || node->parent == NULL)
+    {
+        return false;
+    }
+
+    bool changed = false;
+    reduct_rvsdg_user_t* inputUser = node->firstInput;
+    while (inputUser != NULL)
+    {
+        reduct_rvsdg_user_t* nextInput = inputUser->next;
+
+        reduct_rvsdg_origin_t* outerOrigin = (inputUser->edge != NULL) ? inputUser->edge->origin : NULL;
+
+        if (outerOrigin == NULL || outerOrigin->ownerKind != REDUCT_RVSDG_OWNER_NODE)
+        {
+            inputUser = nextInput;
+            continue;
+        }
+
+        reduct_rvsdg_node_t* originNode = outerOrigin->node;
+        bool isConst = (originNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST);
+        bool isPureOp = reduct_optimize_node_is_pure(reduct, originNode);
+
+        bool canSink = isConst;
+        if (!canSink && isPureOp)
+        {
+            canSink = true;
+            for (reduct_rvsdg_edge_t* edge = outerOrigin->firstEdge; edge != NULL; edge = edge->next)
+            {
+                if (edge->user->ownerKind != REDUCT_RVSDG_OWNER_NODE || edge->user->node != node)
+                {
+                    canSink = false;
+                    break;
+                }
+            }
+        }
+
+        if (!canSink)
+        {
+            inputUser = nextInput;
+            continue;
+        }
+
+        bool sunkAnywhere = false;
+        for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+        {
+            uint16_t argIndex;
+            if (!reduct_rvsdg_node_map_input_to_argument(node, region, inputUser->index, &argIndex))
+            {
+                continue;
+            }
+
+            reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
+            if (arg == NULL || arg->useCount == 0)
+            {
+                continue;
+            }
+
+            reduct_optimize_clone_node_structure(reduct, originNode, region);
+            reduct_optimize_clone_node_connect_edges(reduct, originNode);
+
+            reduct_rvsdg_origin_t* clonedOutput = originNode->output->map;
+
+            if (!isConst)
+            {
+                for (uint8_t i = 0; i < originNode->inputCount; i++)
+                {
+                    reduct_rvsdg_user_t* oldIn = reduct_rvsdg_node_get_input(originNode, i);
+                    if (oldIn != NULL && oldIn->edge != NULL)
+                    {
+                        reduct_rvsdg_origin_t* extOrigin = oldIn->edge->origin;
+                        reduct_rvsdg_origin_t* lifted = reduct_rvsdg_region_lift_origin(reduct, region, extOrigin);
+                        reduct_rvsdg_user_t* newIn = reduct_rvsdg_node_get_input(clonedOutput->node, i);
+
+                        reduct_rvsdg_edge_disconnect(newIn->edge);
+                        reduct_rvsdg_edge_connect(reduct, lifted, newIn);
+                    }
+                }
+            }
+
+            reduct_rvsdg_origin_redirect_users(arg, clonedOutput);
+            reduct_optimize_clear_map(region);
+
+            sunkAnywhere = true;
+        }
+
+        if (sunkAnywhere)
+        {
+            bool allDead = true;
+            for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+            {
+                uint16_t argIndex;
+                if (!reduct_rvsdg_node_map_input_to_argument(node, region, inputUser->index, &argIndex))
+                {
+                    continue;
+                }
+                reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
+                if (arg != NULL && arg->useCount > 0)
+                {
+                    allDead = false;
+                    break;
+                }
+            }
+
+            if (allDead)
+            {
+                if (inputUser->edge != NULL)
+                {
+                    reduct_rvsdg_edge_disconnect(inputUser->edge);
+                }
+
+                for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+                {
+                    uint16_t argIndex;
+                    if (!reduct_rvsdg_node_map_input_to_argument(node, region, inputUser->index, &argIndex))
+                    {
+                        continue;
+                    }
+                    reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
+                    if (arg != NULL)
+                    {
+                        reduct_rvsdg_region_remove_argument(arg);
+                    }
+                }
+
+                reduct_rvsdg_node_remove_input(inputUser);
+                if (originNode->output->useCount == 0)
+                {
+                    reduct_rvsdg_node_delete(reduct, originNode);
+                }
+                changed = true;
+                inputUser = nextInput;
+                continue;
+            }
+
+            changed = true;
+        }
+        inputUser = nextInput;
+    }
+
+    return changed;
 }
 
 static bool reduct_optimize_is_parallelization_candidate(reduct_t* reduct, reduct_rvsdg_origin_t* origin)
@@ -1070,7 +1398,7 @@ static bool reduct_optimize_is_parallelization_candidate(reduct_t* reduct, reduc
         return false;
     }
 
-    reduct_rvsdg_edge_t* output = node->output->edges;
+    reduct_rvsdg_edge_t* output = node->output->firstEdge;
     while (output != NULL)
     {
         if (output->user->ownerKind != REDUCT_RVSDG_OWNER_NODE)
@@ -1140,116 +1468,178 @@ static bool reduct_optimize_auto_parallelization(reduct_t* reduct, reduct_rvsdg_
     return true;
 }
 
-static void reduct_optimize_parallelization_region(reduct_t* reduct, reduct_rvsdg_region_t* region)
+static bool reduct_optimize_commutative_swap(reduct_t* reduct, reduct_rvsdg_node_t* node)
 {
-    reduct_rvsdg_node_t* curr = region->firstNode;
-    while (curr != NULL)
+    if (node->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE || !REDUCT_OPCODE_IS_COMMUTATIVE(node->opcode) ||
+        !REDUCT_OPCODE_IS_BINARY(node->opcode))
     {
-        reduct_rvsdg_region_t* sub = curr->firstRegion;
-        while (sub != NULL)
-        {
-            reduct_optimize_parallelization_region(reduct, sub);
-            sub = sub->next;
-        }
-
-        reduct_optimize_auto_parallelization(reduct, curr);
-        curr = curr->next;
+        return false;
     }
-}
 
-static bool reduct_optimize_node(reduct_t* reduct, reduct_rvsdg_node_t* node, reduct_optimize_flags_t flags)
-{
-    assert(reduct != NULL);
-    assert(node != NULL);
+    reduct_rvsdg_origin_t* left = reduct_rvsdg_node_get_input_origin(node, 0);
+    reduct_rvsdg_origin_t* right = reduct_rvsdg_node_get_input_origin(node, 1);
 
-    if (node->output->useCount == 0)
+    if (left == NULL || right == NULL)
     {
-        reduct_rvsdg_node_delete(reduct, node);
+        return false;
+    }
+
+    bool leftIsConst =
+        (left->ownerKind == REDUCT_RVSDG_OWNER_NODE && left->node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST);
+    bool rightIsConst =
+        (right->ownerKind == REDUCT_RVSDG_OWNER_NODE && right->node->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST);
+
+    if (leftIsConst && !rightIsConst)
+    {
+        reduct_rvsdg_user_t* leftUser = reduct_rvsdg_node_get_input(node, 0);
+        reduct_rvsdg_user_t* rightUser = reduct_rvsdg_node_get_input(node, 1);
+
+        reduct_rvsdg_edge_disconnect(leftUser->edge);
+        reduct_rvsdg_edge_disconnect(rightUser->edge);
+
+        reduct_rvsdg_edge_connect(reduct, right, leftUser);
+        reduct_rvsdg_edge_connect(reduct, left, rightUser);
         return true;
     }
 
-    bool changed = false;
+    return false;
+}
 
-    if (flags & REDUCT_OPTIMIZE_CONSTANT_FOLDING && reduct_optimize_constant_folding(reduct, node))
-    {
-        changed = true;
-    }
+static bool reduct_optimize_region(reduct_t* reduct, reduct_rvsdg_region_t* region,
+    bool (*func)(reduct_t*, reduct_rvsdg_node_t*))
+{
+    assert(reduct != NULL);
+    assert(region != NULL);
+    assert(func != NULL);
 
-    if (flags & REDUCT_OPTIMIZE_FUNCTION_INLINING && reduct_optimize_function_inlining(reduct, node))
-    {
-        changed = true;
-    }
+    size_t iteration = 0;
+    const size_t maxIterations = 1024;
 
-    if (flags & REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION && reduct_optimize_algebraic_simplification(reduct, node))
+    bool changed = true;
+    while (changed && iteration++ < maxIterations)
     {
-        changed = true;
-    }
+        changed = false;
 
-    if (flags & REDUCT_OPTIMIZE_GAMMA_FOLDING && reduct_optimize_gamma_folding(reduct, node))
-    {
-        changed = true;
-    }
-
-    if (flags & REDUCT_OPTIMIZE_CSE && reduct_optimize_cse(reduct, node))
-    {
-        changed = true;
+        reduct_rvsdg_node_t* node = region->firstNode;
+        while (node != NULL)
+        {
+            reduct_rvsdg_node_t* next = node->next;
+            reduct_rvsdg_region_t* sub = node->firstRegion;
+            while (sub != NULL)
+            {
+                reduct_rvsdg_region_t* next = sub->next;
+                if (reduct_optimize_region(reduct, sub, func))
+                {
+                    changed = true;
+                }
+                sub = next;
+            }
+            if (node->output->useCount == 0)
+            {
+                reduct_rvsdg_node_delete(reduct, node);
+                changed = true;
+                node = next;
+                continue;
+            }
+            if (func(reduct, node))
+            {
+                changed = true;
+            }
+            node = next;
+        }
     }
 
     return changed;
 }
 
-static bool reduct_optimize_region(reduct_t* reduct, reduct_rvsdg_region_t* region, reduct_optimize_flags_t flags)
+static void reduct_optimize_simplify(reduct_t* reduct, reduct_rvsdg_region_t* body, reduct_optimize_flags_t flags)
 {
-    bool changed = false;
-    reduct_rvsdg_node_t* node = region->firstNode;
-    while (node != NULL)
+    size_t iteration = 0;
+    const size_t maxIterations = 1024;
+
+    bool changed = true;
+    while (changed && iteration++ < maxIterations)
     {
-        reduct_rvsdg_node_t* next = node->next;
-        reduct_rvsdg_region_t* sub = node->firstRegion;
-        while (sub != NULL)
-        {
-            reduct_rvsdg_region_t* next = sub->next;
-            if (reduct_optimize_region(reduct, sub, flags))
-            {
-                changed = true;
-            }
-            sub = next;
-        }
-        if (reduct_optimize_node(reduct, node, flags))
+        changed = false;
+        if ((flags & REDUCT_OPTIMIZE_FUNCTION_INLINING) &&
+            reduct_optimize_region(reduct, body, reduct_optimize_function_inlining))
         {
             changed = true;
         }
-        node = next;
+        if ((flags & REDUCT_OPTIMIZE_COMMUTATIVE_SWAP) &&
+            reduct_optimize_region(reduct, body, reduct_optimize_commutative_swap))
+        {
+            changed = true;
+        }
+        if ((flags & REDUCT_OPTIMIZE_CONSTANT_FOLDING) &&
+            reduct_optimize_region(reduct, body, reduct_optimize_constant_folding))
+        {
+            changed = true;
+        }
+        if ((flags & REDUCT_OPTIMIZE_ALGEBRAIC_SIMPLIFICATION) &&
+            reduct_optimize_region(reduct, body, reduct_optimize_algebraic_simplification))
+        {
+            changed = true;
+        }
+        if ((flags & REDUCT_OPTIMIZE_GAMMA_FOLDING) &&
+            reduct_optimize_region(reduct, body, reduct_optimize_gamma_folding))
+        {
+            changed = true;
+        }
+        if ((flags & REDUCT_OPTIMIZE_COMMON_NODE_ELIMINATION) &&
+            reduct_optimize_region(reduct, body, reduct_optimize_common_node_elimination))
+        {
+            changed = true;
+        }
+        if ((flags & REDUCT_OPTIMIZE_CONSTANT_FOLDING) &&
+            reduct_optimize_region(reduct, body, reduct_optimize_constant_folding))
+        {
+            changed = true;
+        }
+        if (flags & REDUCT_OPTIMIZE_DEAD_PORT_ELIMINATION && reduct_optimize_region(reduct, body, reduct_optimize_dead_port_elimination))
+        {
+            changed = true;
+        }
     }
-
-    return changed;
 }
 
 static void reduct_optimize_graph(reduct_t* reduct, reduct_rvsdg_node_t* root, reduct_optimize_flags_t flags)
 {
-    bool changed = true;
-    uint32_t iterations = 0;
-    const uint32_t MAX_ITERATIONS = 1024;
-    reduct_optimize_flags_t iterativeFlags = flags;
-
-    while (changed && iterations < MAX_ITERATIONS)
+    if (root->type != REDUCT_RVSDG_NODE_TYPE_LAMBDA)
     {
-        changed = false;
+        return;
+    }
 
-        if (root->type == REDUCT_RVSDG_NODE_TYPE_LAMBDA)
-        {
-            changed |= reduct_optimize_region(reduct, root->firstRegion, flags);
-        }
+    reduct_rvsdg_region_t* body = root->firstRegion;
+    if (body == NULL)
+    {
+        return;
+    }
 
-        iterations++;
+    reduct_optimize_simplify(reduct, body, flags);
+
+    if (flags & REDUCT_OPTIMIZE_INVARIANT_CODE_MOTION)
+    {
+        reduct_optimize_region(reduct, body, reduct_optimize_invariant_code_motion_push);
+    }
+
+    reduct_optimize_simplify(reduct, body, flags);
+
+    if (flags & REDUCT_OPTIMIZE_INVARIANT_CODE_MOTION)
+    {
+        reduct_optimize_region(reduct, body, reduct_optimize_invariant_code_motion_pull);
+    }
+
+    reduct_optimize_simplify(reduct, body, flags);
+
+    if (flags & REDUCT_OPTIMIZE_INVARIANT_CODE_MOTION)
+    {
+        reduct_optimize_region(reduct, body, reduct_optimize_invariant_code_motion_pull);
     }
 
     if (flags & REDUCT_OPTIMIZE_AUTO_PARALLELIZATION)
     {
-        if (root->type == REDUCT_RVSDG_NODE_TYPE_LAMBDA)
-        {
-            reduct_optimize_parallelization_region(reduct, root->firstRegion);
-        }
+        reduct_optimize_region(reduct, body, reduct_optimize_auto_parallelization);
     }
 }
 

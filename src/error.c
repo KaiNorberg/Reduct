@@ -1,3 +1,4 @@
+#include "reduct/function.h"
 #include <reduct/error.h>
 #include <reduct/eval.h>
 #include <reduct/item.h>
@@ -247,7 +248,7 @@ REDUCT_API void reduct_error_print(reduct_error_t* error, FILE* file)
             reduct_error_frame_t* f = &error->frames[i];
             const char* fpath = NULL;
             const char* finput = NULL;
-            size_t fpos = f->position;
+            size_t fpos = f->modulePos;
 
             if (f->moduleId != REDUCT_MODULE_ID_NONE)
             {
@@ -347,13 +348,13 @@ REDUCT_API void reduct_error_get_item_params(reduct_t* reduct, reduct_item_t* it
             *path = itemInput->path;
             *input = itemInput->buffer;
             *inputLength = (size_t)(itemInput->end - itemInput->buffer);
-            *regionLength = reduct_error_get_region_length(itemInput->buffer + item->position, itemInput->end);
+            *regionLength = reduct_error_get_region_length(itemInput->buffer + item->modulePos, itemInput->end);
             if (*regionLength == 0)
             {
                 *regionLength = 1;
             }
 
-            *position = item->position;
+            *position = item->modulePos;
             return;
         }
     }
@@ -371,7 +372,7 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
     const char* input = NULL;
     size_t inputLength = 0;
     size_t regionLength = 0;
-    size_t position = 0;
+    size_t modulePos = 0;
 
     if (reduct != NULL && reduct->eval.frameCount > 0)
     {
@@ -381,24 +382,24 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
         {
             reduct_function_t* func = frame->closure->function;
             size_t instIndex = frame->ip > func->insts ? (size_t)(frame->ip - func->insts - 1) : 0;
-            if (instIndex < func->instCount && func->positions != NULL)
+            if (instIndex < func->instCount && func->sources != NULL)
             {
-                position = func->positions[instIndex];
-            }
+                reduct_function_inst_source_t* source = &func->sources[instIndex];
 
-            reduct_item_t* funcItem = REDUCT_CONTAINER_OF(func, reduct_item_t, function);
-            if (funcItem->moduleId != REDUCT_MODULE_ID_NONE)
-            {
-                reduct_module_t* itemInput = reduct_module_lookup(reduct, funcItem->moduleId);
-                if (itemInput != NULL)
+                modulePos = source->modulePos;
+                if (source->moduleId != REDUCT_MODULE_ID_NONE)
                 {
-                    path = itemInput->path;
-                    input = itemInput->buffer;
-                    inputLength = (size_t)(itemInput->end - itemInput->buffer);
-                    regionLength = reduct_error_get_region_length(input + position, itemInput->end);
-                    if (regionLength == 0)
+                    reduct_module_t* itemInput = reduct_module_lookup(reduct, source->moduleId);
+                    if (itemInput != NULL)
                     {
-                        regionLength = 1;
+                        path = itemInput->path;
+                        input = itemInput->buffer;
+                        inputLength = (size_t)(itemInput->end - itemInput->buffer);
+                        regionLength = reduct_error_get_region_length(input + source->modulePos, itemInput->end);
+                        if (regionLength == 0)
+                        {
+                            regionLength = 1;
+                        }
                     }
                 }
             }
@@ -411,7 +412,7 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
     vsnprintf(formattedMessage, REDUCT_ERROR_MAX_LEN, message, args);
     va_end(args);
 
-    reduct_error_set(reduct->error, path, input, inputLength, regionLength, position, REDUCT_ERROR_TYPE_RUNTIME, "%s",
+    reduct_error_set(reduct->error, path, input, inputLength, regionLength, modulePos, REDUCT_ERROR_TYPE_RUNTIME, "%s",
         formattedMessage);
 
     if (reduct != NULL && reduct->eval.frameCount > 0)
@@ -432,11 +433,12 @@ REDUCT_API void reduct_error_throw_runtime(struct reduct* reduct, const char* me
             reduct_function_t* btFunc = btFrame->closure->function;
             reduct_item_t* btFuncItem = REDUCT_CONTAINER_OF(btFunc, reduct_item_t, function);
             size_t btInstIndex = btFrame->ip > btFunc->insts ? (size_t)(btFrame->ip - btFunc->insts - 1) : 0;
-            uint32_t btPos =
-                (btInstIndex < btFunc->instCount && btFunc->positions != NULL) ? btFunc->positions[btInstIndex] : 0;
+            uint32_t btPos = (btInstIndex < btFunc->instCount && btFunc->sources != NULL)
+                ? btFunc->sources[btInstIndex].modulePos
+                : 0;
 
             reduct->error->frames[reduct->error->frameCount].moduleId = btFuncItem->moduleId;
-            reduct->error->frames[reduct->error->frameCount].position = btPos;
+            reduct->error->frames[reduct->error->frameCount].modulePos = btPos;
             reduct->error->frameCount++;
         }
     }

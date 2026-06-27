@@ -244,7 +244,7 @@ int main(int argc, char **argv)
 
     if (!REDUCT_ERROR_SUCCESS(&error))
     {
-        fprintf(stderr, "error: %s\n", error.message);
+        reduct_error_print(&error, stdout);
         result = 1;
         goto cleanup;
     }

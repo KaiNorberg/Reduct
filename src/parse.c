@@ -62,7 +62,7 @@ static reduct_handle_t reduct_parse_dot_finalize(reduct_parse_ctx_t* ctx, reduct
     if (REDUCT_HANDLE_IS_NIL(target))
     {
         reduct_item_t* pathItem = REDUCT_CONTAINER_OF(path, reduct_item_t, list);
-        REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->module, ctx->module->buffer + pathItem->position,
+        REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->module, ctx->module->buffer + pathItem->modulePos,
             "dot notation: missing target");
     }
 
@@ -70,7 +70,7 @@ static reduct_handle_t reduct_parse_dot_finalize(reduct_parse_ctx_t* ctx, reduct
     reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
     reduct_item_t* pathItem = REDUCT_CONTAINER_OF(path, reduct_item_t, list);
     wrapperItem->moduleId = pathItem->moduleId;
-    wrapperItem->position = pathItem->position;
+    wrapperItem->modulePos = pathItem->modulePos;
 
     wrapper->handles[0] = REDUCT_HANDLE_CREATE_SYMBOL(ctx->reduct, "get-in");
     wrapper->handles[1] = target;
@@ -339,7 +339,7 @@ static reduct_parse_precedence_t reduct_parse_get_precedence(reduct_parse_ctx_t*
         break;
     }
 
-    const char* ptr = ctx->module->buffer + REDUCT_CONTAINER_OF(atom, reduct_item_t, atom)->position;
+    const char* ptr = ctx->module->buffer + REDUCT_CONTAINER_OF(atom, reduct_item_t, atom)->modulePos;
     REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->module, ptr, "unexpected operator '%.*s'", (int)atom->length,
         atom->string);
 }
@@ -385,7 +385,7 @@ static reduct_handle_t reduct_parse_infix_transform_recursive(reduct_parse_ctx_t
         {
             reduct_atom_t* opAtom = reduct_parse_get_operator_atom(ctx, op, false);
             reduct_item_t* opItem = REDUCT_HANDLE_TO_ITEM(op);
-            REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->module, ctx->module->buffer + opItem->position,
+            REDUCT_ERROR_SYNTAX(ctx->reduct->error, ctx->module, ctx->module->buffer + opItem->modulePos,
                 "infix operator '%.*s' missing right operand", (int)opAtom->length, opAtom->string);
         }
 
@@ -450,7 +450,7 @@ static inline reduct_atom_t* reduct_parse_quoted_atom(reduct_parse_ctx_t* ctx)
 
     reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
     item->moduleId = ctx->module->id;
-    item->position = (size_t)(start - ctx->module->buffer);
+    item->modulePos = (size_t)(start - ctx->module->buffer);
 
     if (*ctx->ptr == '"')
     {
@@ -481,7 +481,7 @@ static inline reduct_atom_t* reduct_parse_unquoted_atom(reduct_parse_ctx_t* ctx)
 
     reduct_item_t* item = REDUCT_CONTAINER_OF(atom, reduct_item_t, atom);
     item->moduleId = ctx->module->id;
-    item->position = (size_t)(start - ctx->module->buffer);
+    item->modulePos = (size_t)(start - ctx->module->buffer);
 
     return atom;
 }
@@ -523,7 +523,7 @@ static inline reduct_list_t* reduct_parse_list(reduct_parse_ctx_t* ctx, char exp
     reduct_list_t* list = reduct_list_new_handles(ctx->reduct, count, handles);
     reduct_item_t* listItem = REDUCT_CONTAINER_OF(list, reduct_item_t, list);
     listItem->moduleId = ctx->module->id;
-    listItem->position = position;
+    listItem->modulePos = position;
 
     REDUCT_SCRATCH_PUT(ctx->reduct, handles);
     return list;
@@ -557,7 +557,7 @@ static inline reduct_handle_t reduct_parse_input(reduct_t* reduct, reduct_module
     reduct_list_t* wrapper = reduct_list_new(reduct, list->length + 1);
     reduct_item_t* wrapperItem = REDUCT_CONTAINER_OF(wrapper, reduct_item_t, list);
     wrapperItem->moduleId = module->id;
-    wrapperItem->position = 0;
+    wrapperItem->modulePos = 0;
 
     wrapper->handles[0] = REDUCT_HANDLE_CREATE_SYMBOL(reduct, "do");
     memcpy(wrapper->handles + 1, list->handles, list->length * sizeof(reduct_handle_t));

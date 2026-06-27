@@ -57,10 +57,10 @@ typedef uint8_t reduct_item_flags_t;       ///< Item flags enumeration.
  */
 typedef struct reduct_item
 {
-    uint32_t position;                  ///< The position in the input buffer where the item was parsed.
+    uint32_t modulePos;                 ///< The position within the modules buffer that created the item.
+    reduct_module_id_t moduleId;        ///< The ID of the module that created the item.
     _Atomic(reduct_item_flags_t) flags; ///< Flags for the item.
     reduct_item_type_t type;            ///< The type of the item.
-    reduct_module_id_t moduleId;        ///< The ID of the module that created the item.
     union {
         uint32_t length;                   ///< Common length for the item. (Stored in the union due to padding rules.)
         reduct_atom_t atom;                ///< An atom.

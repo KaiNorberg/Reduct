@@ -44,8 +44,8 @@ typedef enum reduct_error_type
  */
 typedef struct reduct_error_frame
 {
+    uint32_t modulePos;          ///< The position in the input buffer.
     reduct_module_id_t moduleId; ///< The ID of the module that caused the error.
-    uint32_t position;           ///< The position in the input buffer.
 } reduct_error_frame_t;
 
 /**

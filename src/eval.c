@@ -268,7 +268,7 @@ LABEL_C_OP(_label, { \
         [REDUCT_OPCODE_NOP] = &&label_nop,
         [REDUCT_OPCODE_MOV] = &&label_mov, [REDUCT_OPCODE_MOV_CONST] = &&label_mov_k,
         [REDUCT_OPCODE_LIST] = &&label_list,
-        [REDUCT_OPCODE_CLOSURE] = &&label_closure,
+        [REDUCT_OPCODE_CLOSURE] = &&label_closure, [REDUCT_OPCODE_CLOSURE_CONST] = &&label_closure_k,
         [REDUCT_OPCODE_CAPTURE] = &&label_capture, [REDUCT_OPCODE_CAPTURE_CONST] = &&label_capture_k,
         [REDUCT_OPCODE_JMP] = &&label_jmp,
         [REDUCT_OPCODE_JMPF] = &&label_jmpf,
@@ -550,20 +550,17 @@ LABEL_C_OP(label_join, {
     REDUCT_GC_CHECK(reduct);
     DISPATCH();
 })
-label_closure:
-{
+LABEL_C_OP(label_closure, {
     DECODE_A();
-    DECODE_C();
-    reduct_handle_t protoHandle = k[c];
-    assert(REDUCT_HANDLE_IS_ITEM(protoHandle));
+    assert(REDUCT_HANDLE_IS_ITEM(valC));
 
-    reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(protoHandle);
+    reduct_item_t* protoItem = REDUCT_HANDLE_TO_ITEM(valC);
     assert(protoItem->type == REDUCT_ITEM_TYPE_FUNCTION);
 
     reduct_function_t* proto = &protoItem->function;
     r[a] = REDUCT_HANDLE_FROM_CLOSURE(reduct_closure_new(reduct, proto));
     DISPATCH();
-}
+})
 LABEL_C_OP(label_capture, {
     DECODE_A();
     DECODE_B();
@@ -589,6 +586,9 @@ REDUCT_API reduct_handle_t reduct_eval(reduct_t* reduct, reduct_handle_t handle)
     }
 
     reduct_function_t* function = REDUCT_HANDLE_TO_FUNCTION(handle);
+    REDUCT_ERROR_ASSERT(reduct, function->instCount > 0, "cannot evaluate empty function");
+    REDUCT_ERROR_ASSERT(reduct, function->arity == 0, "expected 0 arguments, got %u", function->arity);
+
     reduct_eval_ensure_ready(reduct);
 
     reduct_closure_t* closure = reduct_closure_new(reduct, function);
@@ -636,6 +636,11 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
     {
         reduct_closure_t* closure = REDUCT_HANDLE_TO_CLOSURE(callable);
         reduct_function_t* func = closure->function;
+        if (func->instCount == 0)
+        {
+            return REDUCT_HANDLE_NIL(reduct);
+        }
+
         uint32_t arity = (func->flags & REDUCT_FUNCTION_FLAG_VARIADIC) ? func->arity : (uint32_t)argc;
         uint32_t target = reduct->eval.regCount;
         uint32_t needed = REDUCT_MAX(arity, (uint32_t)argc);
