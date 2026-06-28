@@ -938,6 +938,7 @@ static reduct_emitter_expr_t reduct_emit_origin(reduct_emitter_t* emitter, reduc
     reduct_emitter_expr_t cached = reduct_emitter_cache_get(emitter, origin);
     if (cached.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
     {
+        emitter->lastItem = previousItem;
         return cached;
     }
 

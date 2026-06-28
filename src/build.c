@@ -1108,14 +1108,20 @@ static reduct_rvsdg_origin_t* reduct_build_handle(reduct_builder_t* builder, red
 
     if (builder->lastItem != NULL)
     {
-        reduct_item_t* outItem = REDUCT_CONTAINER_OF(out, reduct_item_t, rvsdgNode);
+        reduct_item_t* outItem = REDUCT_CONTAINER_OF(out, reduct_item_t, rvsdgOrigin);
         reduct_item_t* ownerItem = out->ownerKind == REDUCT_RVSDG_OWNER_NODE
             ? REDUCT_CONTAINER_OF(out->node, reduct_item_t, rvsdgNode)
             : REDUCT_CONTAINER_OF(out->region, reduct_item_t, rvsdgRegion);
-        outItem->moduleId = builder->lastItem->moduleId;
-        outItem->modulePos = builder->lastItem->modulePos;
-        ownerItem->moduleId = builder->lastItem->moduleId;
-        ownerItem->modulePos = builder->lastItem->modulePos;
+        if (outItem->moduleId == REDUCT_MODULE_ID_NONE)
+        {
+            outItem->moduleId = builder->lastItem->moduleId;
+            outItem->modulePos = builder->lastItem->modulePos;
+        }
+        if (ownerItem->moduleId == REDUCT_MODULE_ID_NONE)
+        {
+            ownerItem->moduleId = builder->lastItem->moduleId;
+            ownerItem->modulePos = builder->lastItem->modulePos;
+        }
     }
 
     builder->lastItem = previousItem;

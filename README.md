@@ -1,3 +1,4 @@
+
 # Reduct
 
 <br>
@@ -28,7 +29,7 @@ Reduct is a functional, immutable, S-expression based configuration and scriptin
 
 ## Setup
 
-You can download pre-built binaries for Linux, macOS, and Windows from the [Releases](https://github.com/KaiNorberg/Reduct/releases) page.
+You can download pre-built binaries from the [Releases](https://github.com/KaiNorberg/Reduct/releases) page.
 
 Alternatively, you can build Reduct from source:
 
@@ -154,6 +155,8 @@ Which will, of course, evaluate to `Hello, World!`.
 
 For more examples, see the `bench/` and `tests/` directories.
 
+> Note that if any errors occur, it may be possible to get additional debugging information by running the code with optimizations disabled (using the `-O0` argument).
+
 ## Motivation
 
 Reduct aims to provide a series of potential advantages over existing languages.
@@ -245,7 +248,7 @@ Included is an example of what that might look like:
 
 Despite that original use case, Reduct can just as easily be utilized for scripting, configuration, or even as a general-purpose embedded language.
 
-## Parsing
+## Syntax Sugar
 
 The parser can apply several possible transformations before any code or data is evaluated.
 
@@ -313,7 +316,7 @@ The following table lists the supported suffixes:
 | 1 | `and` |
 | 0 | `or` |
 
-Since the precedence is decided based upon a functions suffix, custom functions can easily and predicably be handled by infix expressions.
+Since the precedence is based upon a functions suffix, custom functions can easily and predicably be handled by infix expressions.
 
 For example:
 
@@ -344,9 +347,7 @@ This system can also be used to implement more complex logic, such as emulating 
 {v1 vec2+ v2} // (vec2+ v1 v2) -> (("x" 4) ("y" 6))
 ```
 
-## Additional Concepts
-
-### Truthiness
+## Truthiness
 
 A truthy item is any item that is not `nil`. The only falsy item is `nil` (an empty list).
 
@@ -361,7 +362,7 @@ For example:
 (if true "truthy" "falsy") // Evaluates to "truthy"
 ```
 
-### Ordering
+## Ordering
 
 Reduct defines a total ordering for all possible items. This is used by comparison intrinsics and natives like `<` or `sort`.
 
@@ -388,7 +389,7 @@ For example, all following expressions are true:
 (< (1 2) (1 2 3))
 ```
 
-### Locals
+## Locals
 
 Locals are defined using the `def` intrinsic and can be accessed using their names. Just like everything else, locals are immutable and as such there is no `set` or similar intrinsic.
 
@@ -400,7 +401,7 @@ As an example, locals can be used to create a more traditional "function definit
 (add 1 2) // Evaluates to "3"
 ```
 
-### Side Effects
+## Side Effects
 
 Reduct avoids side effects and can generally be considered a pure and "lazy" language. This means that any operation is assumed to have the same result given the same arguments and that a operation is not executed until its result is needed, if its result is never needed, it is never executed.
 
@@ -420,6 +421,47 @@ For example, to print a set of messages, we could write:
 The `world!` function just returns a dummy value, but since we "thread" it through the `print!` calls, we can be sure that they will be executed in the correct order.
 
 > Note that any function ending in "!" will never be folded by the optimizer, since it is assumed to have some form of side effect.
+
+## Performance Considerations
+
+Included are a list of things to be considered when writing Reduct code to maximize performance.
+
+### Lists are Arrays
+
+In Reduct, lists are implemented as flat arrays with the array itself being allocated from an arena with extra tailroom and headroom to either side of the allocated array.
+
+There are several advantages to this system. The first prepend, append or concat to a list is, in the common case, `O(1)` without the need for a copy, since Reduct is strictly functional a list is unlikely to be utilized more than once. This, of course, also applies to operations such as random access, or slicing.
+
+The downside of this system is that operations such as assoc, dissoc, or update will require a copy of the entire list, as such they are `O(n)` operations.
+
+> Previously a "bitmapped vector trie" was used to implement lists in Reduct, which does provide `O(log n)` operations for assoc, dissoc, and update, but it was replaced with the flat array implementation described above as it was decided that assoc, dissoc and update are less common than other operations.
+
+### The Optimizer
+
+The optimizer utilizes an [RVSDG](https://arxiv.org/abs/1912.05036) inspired IR. As such, it can perform a wide variety of optimizations on the IR, including constant folding, dead code elimination and invariant code motion.
+
+As an example of constant folding and algebraic simplification, the code:
+
+```lisp
+(def f (lambda (x)
+    (merge 
+        (("a" 1) ("b" 2))
+        (("b" (if {x >= 0} 1 2)))
+    )
+))
+```
+
+Will be simplified to:
+
+```lisp
+(def f (lambda (x)
+    (("a" 1) ("b" (if {x >= 0} 1 2)))
+))
+```
+
+The merge, or any association list operation, can be folded away for any association list with constant keys, even if the values are not constant. This also applies to any "get-in" operation.
+
+Combined with the fact thet the `import` native is evaluated at compile time (the optimizer can optimize across module boundaries), using modules or libraries can ideally be zero-cost at runtime.
 
 ### Automatic Parallelization
 
@@ -936,8 +978,6 @@ For example:
 (sum 1 2 3) // Evaluates to "6"
 ```
 
-Returns a user-defined anonymous function. When called, the body expressions are evaluated in sequence, and the result of the last expression is returned.
-
 **`(-> <initial: expression> {step: expression}) -> <item>`**
 
 Returns the result of a series of threaded expressions, where the result of each expression is passed as the first argument to the next.
@@ -1204,8 +1244,6 @@ Returns a new list containing a sequence of numbers from `<start>` up to (but no
 **`(repeat <item> <n: number>) -> <list>`**
 
 Returns a new list containing the original item repeated `<n>` times.
-
-Returns a new list containing a sequence of numbers from `<start>` up to (but not including) `<end>`, incremented by `<step>`. If `<step>` is not provided, it defaults to `1`.
 
 **`(concat {item}) -> <item>`**
 
