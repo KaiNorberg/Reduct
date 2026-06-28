@@ -852,6 +852,7 @@ static reduct_emitter_expr_t reduct_emit_node(reduct_emitter_t* emitter, reduct_
     default:
         REDUCT_ERROR_THROW(emitter->reduct, "unsupported node type %d", node->type);
     }
+
     return result;
 }
 
@@ -915,7 +916,7 @@ static reduct_emitter_expr_t reduct_emit_region(reduct_emitter_t* emitter, reduc
     }
     break;
     default:
-    break;
+        break;
     }
 
     return REDUCT_EMITTER_EXPR_CONST((reduct_const_t)(origin->index - emitter->function->arity));

@@ -117,7 +117,7 @@ typedef struct reduct_rvsdg_origin
     struct reduct_rvsdg_origin* next;    ///< Next origin in the node/region list.
     struct reduct_rvsdg_origin* map;     ///< Used during optimization passes to copy nodes.
     uint16_t index;                      ///< The index for the associated output/argument.
-    uint16_t edgeCount;                   ///< The number of edges originating from this output/argument.
+    uint16_t edgeCount;                  ///< The number of edges originating from this output/argument.
 } reduct_rvsdg_origin_t;
 
 /**
