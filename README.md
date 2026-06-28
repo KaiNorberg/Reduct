@@ -428,7 +428,7 @@ There are two forms of parallelization in Reduct. Certain operations, such as `m
 For example:
 
 ```lisp
-(map (lambda (x) (* x x)) (range 1000000)) // Will run in parallel.
+(map (range 1000000) (lambda (x) (* x x))) // Will run in parallel.
 ```
 
 The second form of parallelization is performed by the optimizer when `-O3` is specified. The optimizer will attempt to find independent function calls utilizing the RVSDG IR and emit special `REDUCT_OPCODE_FORK` and `REDUCT_OPCODE_JOIN` opcodes.

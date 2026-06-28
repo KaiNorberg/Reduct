@@ -31,7 +31,7 @@ REDUCT_API void reduct_rvsdg_edge_connect(reduct_t* reduct, reduct_rvsdg_origin_
         origin->firstEdge->prev = edge;
     }
     origin->firstEdge = edge;
-    origin->useCount++;
+    origin->edgeCount++;
 
     user->edge = edge;
 }
@@ -55,7 +55,7 @@ REDUCT_API void reduct_rvsdg_edge_disconnect(reduct_rvsdg_edge_t* edge)
     {
         edge->next->prev = edge->prev;
     }
-    edge->origin->useCount--;
+    edge->origin->edgeCount--;
 
     if (edge->user != NULL)
     {
@@ -229,7 +229,7 @@ REDUCT_API void reduct_rvsdg_region_remove_argument(reduct_rvsdg_origin_t* origi
     }
 
     reduct_rvsdg_region_t* region = origin->region;
-    if (origin->useCount > 0)
+    if (origin->edgeCount > 0)
     {
         return;
     }
@@ -368,7 +368,7 @@ REDUCT_API void reduct_rvsdg_node_delete(struct reduct* reduct, reduct_rvsdg_nod
             reduct_rvsdg_origin_t* origin = edge->origin;
             reduct_rvsdg_edge_disconnect(edge);
 
-            if (origin->useCount == 0)
+            if (origin->edgeCount == 0)
             {
                 reduct_rvsdg_node_delete(reduct, origin->node);
             }
@@ -658,7 +658,7 @@ REDUCT_API void reduct_rvsdg_edge_redirect(reduct_rvsdg_edge_t* edge, reduct_rvs
     {
         edge->next->prev = edge->prev;
     }
-    edge->origin->useCount--;
+    edge->origin->edgeCount--;
 
     edge->origin = newOrigin;
     edge->next = newOrigin->firstEdge;
@@ -668,7 +668,7 @@ REDUCT_API void reduct_rvsdg_edge_redirect(reduct_rvsdg_edge_t* edge, reduct_rvs
         newOrigin->firstEdge->prev = edge;
     }
     newOrigin->firstEdge = edge;
-    newOrigin->useCount++;
+    newOrigin->edgeCount++;
 }
 
 static inline reduct_rvsdg_origin_t* reduct_rvsdg_get_redirection_origin(reduct_rvsdg_user_t* user,

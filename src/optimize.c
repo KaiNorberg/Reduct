@@ -1107,7 +1107,7 @@ static bool reduct_optimize_dead_port_elimination(reduct_t* reduct, reduct_rvsdg
                 mapsToAnyArg = true;
                 reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
 
-                if (arg != NULL && arg->useCount > 0)
+                if (arg != NULL && arg->edgeCount > 0)
                 {
                     isDead = false;
                     break;
@@ -1283,7 +1283,7 @@ static bool reduct_optimize_invariant_code_motion_pull(reduct_t* reduct, reduct_
             }
 
             reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
-            if (arg == NULL || arg->useCount == 0)
+            if (arg == NULL || arg->edgeCount == 0)
             {
                 continue;
             }
@@ -1327,7 +1327,7 @@ static bool reduct_optimize_invariant_code_motion_pull(reduct_t* reduct, reduct_
                     continue;
                 }
                 reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
-                if (arg != NULL && arg->useCount > 0)
+                if (arg != NULL && arg->edgeCount > 0)
                 {
                     allDead = false;
                     break;
@@ -1356,7 +1356,7 @@ static bool reduct_optimize_invariant_code_motion_pull(reduct_t* reduct, reduct_
                 }
 
                 reduct_rvsdg_node_remove_input(inputUser);
-                if (originNode->output->useCount == 0)
+                if (originNode->output->edgeCount == 0)
                 {
                     reduct_rvsdg_node_delete(reduct, originNode);
                 }
@@ -1534,7 +1534,7 @@ static bool reduct_optimize_region(reduct_t* reduct, reduct_rvsdg_region_t* regi
                 }
                 sub = next;
             }
-            if (node->output->useCount == 0)
+            if (node->output->edgeCount == 0)
             {
                 reduct_rvsdg_node_delete(reduct, node);
                 changed = true;
@@ -1596,7 +1596,8 @@ static void reduct_optimize_simplify(reduct_t* reduct, reduct_rvsdg_region_t* bo
         {
             changed = true;
         }
-        if (flags & REDUCT_OPTIMIZE_DEAD_PORT_ELIMINATION && reduct_optimize_region(reduct, body, reduct_optimize_dead_port_elimination))
+        if (flags & REDUCT_OPTIMIZE_DEAD_PORT_ELIMINATION &&
+            reduct_optimize_region(reduct, body, reduct_optimize_dead_port_elimination))
         {
             changed = true;
         }

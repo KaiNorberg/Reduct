@@ -207,7 +207,7 @@ static void reduct_emitter_cache_put(reduct_emitter_t* emitter, reduct_rvsdg_ori
         {
             emitter->cache[i].origin = origin;
             emitter->cache[i].expr = expr;
-            emitter->cache[i].remainingUses = origin->useCount;
+            emitter->cache[i].remainingUses = origin->edgeCount;
             return;
         }
     }
@@ -218,7 +218,7 @@ static void reduct_emitter_cache_put(reduct_emitter_t* emitter, reduct_rvsdg_ori
     }
     emitter->cache[emitter->cacheCount].origin = origin;
     emitter->cache[emitter->cacheCount].expr = expr;
-    emitter->cache[emitter->cacheCount].remainingUses = origin->useCount;
+    emitter->cache[emitter->cacheCount].remainingUses = origin->edgeCount;
     emitter->cacheCount++;
 }
 
@@ -526,7 +526,7 @@ static reduct_emitter_expr_t reduct_emit_simple_opcode_abc_range(reduct_emitter_
     }
 
     reduct_reg_t base = reduct_emitter_reg_alloc_range(emitter, arity);
-    for (int32_t i = arity - 1; i >= 0; i--)
+    for (uint32_t i = 0; i < arity; i++)
     {
         reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(base + i));
     }
@@ -589,7 +589,7 @@ static reduct_emitter_expr_t reduct_emit_simple_opcode_ab_range(reduct_emitter_t
     }
 
     reduct_reg_t base = reduct_emitter_reg_alloc_range(emitter, arity);
-    for (int32_t i = arity - 1; i >= 0; i--)
+    for (uint32_t i = 0; i < arity; i++)
     {
         reduct_emitter_expr_flush(emitter, &args[i], (reduct_reg_t)(base + i));
     }
@@ -728,7 +728,7 @@ static reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter, reduct
     reduct_rvsdg_node_t* predNode = (predOrigin->ownerKind == REDUCT_RVSDG_OWNER_NODE) ? predOrigin->node : NULL;
 
     if (predNode != NULL && predNode->type == REDUCT_RVSDG_NODE_TYPE_SIMPLE_OPCODE &&
-        REDUCT_OPCODE_IS_COMPARE(predNode->opcode) && predOrigin->useCount == 1)
+        REDUCT_OPCODE_IS_COMPARE(predNode->opcode) && predOrigin->edgeCount == 1)
     {
         reduct_rvsdg_origin_t* inputB = predNode->firstInput->edge->origin;
         reduct_rvsdg_origin_t* inputC = predNode->firstInput->next->edge->origin;
@@ -859,36 +859,20 @@ static reduct_emitter_expr_t reduct_emit_region_phi(reduct_emitter_t* emitter, r
     reduct_rvsdg_region_t* region, reduct_reg_t target)
 {
     reduct_rvsdg_node_t* phiNode = region->parent;
-    uint32_t recurSlots = (uint32_t)region->argumentCount - (uint32_t)phiNode->inputCount;
-
-    if (origin->index < recurSlots)
+    if (origin->index == 0)
     {
         reduct_rvsdg_node_t* lambdaNode = region->firstNode;
-        while (lambdaNode != NULL && lambdaNode->type != REDUCT_RVSDG_NODE_TYPE_LAMBDA)
-        {
-            lambdaNode = lambdaNode->next;
-        }
-
-        if (lambdaNode != NULL && lambdaNode->output != NULL)
-        {
-            reduct_emitter_expr_t lambdaExpr = reduct_emitter_cache_get(emitter, lambdaNode->output);
-            if (lambdaExpr.type == REDUCT_EMITTER_EXPR_TYPE_REG)
-            {
-                return REDUCT_EMITTER_EXPR_REG((reduct_reg_t)(lambdaExpr.reg + origin->index));
-            }
-        }
-    }
-    else
-    {
-        uint16_t inputIdx = (uint16_t)(origin->index - recurSlots);
-        reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(phiNode, inputIdx);
-        if (input != NULL && input->edge != NULL)
-        {
-            return reduct_emit_origin(emitter, input->edge->origin, target);
-        }
+        assert(lambdaNode != NULL);
+        assert(lambdaNode->type == REDUCT_RVSDG_NODE_TYPE_LAMBDA);
+        assert(lambdaNode->output != NULL);
+        return reduct_emit_origin(emitter, lambdaNode->output, target);
     }
 
-    return REDUCT_EMITTER_EXPR_NONE;
+    uint16_t inputIdx = (uint16_t)(origin->index - 1);
+    reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(phiNode, inputIdx);
+    assert(input != NULL);
+    assert(input->edge != NULL);
+    return reduct_emit_origin(emitter, input->edge->origin, target);
 }
 
 static reduct_emitter_expr_t reduct_emit_region_gamma(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
@@ -899,45 +883,39 @@ static reduct_emitter_expr_t reduct_emit_region_gamma(reduct_emitter_t* emitter,
     uint16_t inputIdx = (uint16_t)(info->dataInputOffset + origin->index);
 
     reduct_rvsdg_user_t* input = reduct_rvsdg_node_get_input(gammaNode, inputIdx);
-    if (input != NULL && input->edge != NULL)
-    {
-        return reduct_emit_origin(emitter, input->edge->origin, target);
-    }
-
-    return REDUCT_EMITTER_EXPR_NONE;
+    assert(input != NULL);
+    assert(input->edge != NULL);
+    return reduct_emit_origin(emitter, input->edge->origin, target);
 }
 
 static reduct_emitter_expr_t reduct_emit_region(reduct_emitter_t* emitter, reduct_rvsdg_origin_t* origin,
     reduct_reg_t target)
 {
     reduct_rvsdg_region_t* region = origin->region;
-    reduct_rvsdg_node_t* parent = region ? region->parent : NULL;
 
-    if (parent != NULL)
+    assert(region->parent != NULL);
+    switch (region->parent->type)
     {
-        switch (parent->type)
+    case REDUCT_RVSDG_NODE_TYPE_PHI:
+    {
+        reduct_emitter_expr_t expr = reduct_emit_region_phi(emitter, origin, region, target);
+        if (expr.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
         {
-        case REDUCT_RVSDG_NODE_TYPE_PHI:
+            return expr;
+        }
+    }
+    break;
+    case REDUCT_RVSDG_NODE_TYPE_GAMMA:
+    {
+        reduct_emitter_expr_t expr = reduct_emit_region_gamma(emitter, origin, region, target);
+        if (expr.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
         {
-            reduct_emitter_expr_t expr = reduct_emit_region_phi(emitter, origin, region, target);
-            if (expr.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
-            {
-                return expr;
-            }
-            break;
+            return expr;
         }
-        case REDUCT_RVSDG_NODE_TYPE_GAMMA:
-        {
-            reduct_emitter_expr_t expr = reduct_emit_region_gamma(emitter, origin, region, target);
-            if (expr.type != REDUCT_EMITTER_EXPR_TYPE_NONE)
-            {
-                return expr;
-            }
-            break;
-        }
-        default:
-            break;
-        }
+    }
+    break;
+    default:
+    break;
     }
 
     return REDUCT_EMITTER_EXPR_CONST((reduct_const_t)(origin->index - emitter->function->arity));
@@ -1020,7 +998,7 @@ static reduct_function_t* reduct_emit_function(reduct_t* reduct, reduct_rvsdg_no
     for (uint32_t i = 0; i < function->arity; i++)
     {
         reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(body, (uint16_t)i);
-        if (arg->useCount > 0)
+        if (arg->edgeCount > 0)
         {
             reduct_emitter_cache_put(&emitter, arg, REDUCT_EMITTER_EXPR_REG((reduct_reg_t)i));
         }

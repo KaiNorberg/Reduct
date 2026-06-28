@@ -355,7 +355,7 @@ static inline void reduct_item_mark_closure(reduct_closure_t* closure)
         {
             continue;
         }
-        
+
         reduct_item_mark(REDUCT_HANDLE_TO_ITEM(closure->constants[i]));
     }
 }

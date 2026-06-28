@@ -103,16 +103,6 @@ typedef enum
 } reduct_rvsdg_owner_kind_t;
 
 /**
- * @brief Origin flags.
- * @enum reduct_rvsdg_origin_flags_t
- */
-typedef enum
-{
-    REDUCT_RVSDG_ORIGIN_FLAG_NONE = 0,
-    REDUCT_RVSDG_ORIGIN_FLAG_SCHEDULED = 1 << 0, ///< Used by the emitter during linearization.
-} reduct_rvsdg_origin_flags_t;
-
-/**
  * @brief Origin of a data dependency edge.
  * @struct reduct_rvsdg_origin_t
  */
@@ -127,7 +117,7 @@ typedef struct reduct_rvsdg_origin
     struct reduct_rvsdg_origin* next;    ///< Next origin in the node/region list.
     struct reduct_rvsdg_origin* map;     ///< Used during optimization passes to copy nodes.
     uint16_t index;                      ///< The index for the associated output/argument.
-    uint16_t useCount;                   ///< Length of the `uses` list.
+    uint16_t edgeCount;                   ///< The number of edges originating from this output/argument.
 } reduct_rvsdg_origin_t;
 
 /**

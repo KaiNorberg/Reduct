@@ -25,8 +25,9 @@ struct reduct_item;
 typedef struct reduct_closure
 {
     reduct_function_t* function; ///< Pointer to the prototype function item.
-    size_t constantCount;         ///< The number of constants in the constant pool (equal to the number of captured and static constants in the function).
-    reduct_handle_t* constants;  ///< The array of constants forming the constant pool.
+    size_t constantCount; ///< The number of constants in the constant pool (equal to the number of captured and static
+                          ///< constants in the function).
+    reduct_handle_t* constants; ///< The array of constants forming the constant pool.
     reduct_handle_t smallConstants[REDUCT_CLOSURE_SMALL_MAX];
 } reduct_closure_t;
 

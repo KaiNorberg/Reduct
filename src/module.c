@@ -453,7 +453,7 @@ load_shared_lib:
         reduct_module_t* module = reduct_module_new_raw(reduct, pathString);
         module->lib = lib;
         module->flags = REDUCT_MODULE_FLAG_IS_LIBRARY;
-        
+
         reduct_handle_t handle = init(reduct);
 
         reduct_list_t* wrapper = reduct_list_new(reduct, 2);
