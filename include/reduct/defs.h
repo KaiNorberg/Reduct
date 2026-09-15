@@ -124,6 +124,9 @@ typedef struct
 
 /**
  * @brief Native function pointer type.
+ *
+ * @warning argv points into the evaluator's register array and is only valid for the duration of the call. Copy
+ * handles out before calling back into Reduct, as re-entrant calls may realloc the array.
  */
 typedef reduct_handle_t (*reduct_native_fn)(struct reduct* reduct, size_t argc, reduct_handle_t* argv);
 

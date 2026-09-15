@@ -12,6 +12,15 @@ struct reduct_closure;
  * @brief Virtual machine evaluation.
  * @defgroup eval Evaluation
  *
+ * The evaluator is a register-based virtual machine executing the bytecode produced by the emitter.
+ *
+ * @warning Calls are zero-copy such that the callee's frame is placed directly over the caller's argument registers, so
+ * arguments become the callee's starting registers, and tail calls reuse the current frame.
+ *
+ * @warning Registers and frames are held in arrays that are realloc'd as frames are pushed and popped. Any pointer into
+ * them, most notably the argv pointer passed to native functions, is only valid for the duration of the call that
+ * produced it. Native functions that call back into Reduct must copy the handles they need out of argv before doing so.
+ *
  * @{
  */
 
@@ -68,6 +77,9 @@ REDUCT_API void reduct_eval_local_deinit(reduct_eval_local_t* local);
  * If the handle is a compiled function then it will be interpreted, otherwise, it will first be compiled into a
  * function.
  *
+ * @warning May be called re-entrantly, including from within a native function. Doing so may grow the register and
+ * frame arrays, invalidating any pointers previously obtained into them.
+ *
  * @param reduct The Reduct instance.
  * @param handle The handle to evaluate.
  * @return The result of the evaluation as a Reduct handle.
@@ -76,6 +88,9 @@ REDUCT_API reduct_handle_t reduct_eval(struct reduct* reduct, reduct_handle_t ha
 
 /**
  * @brief Parses, builds, optimizes, emits and evaluates a file.
+ *
+ * @warning May be called re-entrantly, including from within a native function. Doing so may grow the register and
+ * frame arrays, invalidating any pointers previously obtained into them.
  *
  * @param reduct The Reduct instance.
  * @param path The path to the file.
@@ -86,6 +101,9 @@ REDUCT_API reduct_handle_t reduct_eval_file(struct reduct* reduct, const char* p
 
 /**
  * @brief Parses, builds, optimizes, emits and evaluates a string.
+ *
+ * @warning May be called re-entrantly, including from within a native function. Doing so may grow the register and
+ * frame arrays, invalidating any pointers previously obtained into them.
  *
  * @param reduct The Reduct instance.
  * @param str The string to evaluate.
@@ -99,6 +117,9 @@ REDUCT_API reduct_handle_t reduct_eval_string(struct reduct* reduct, const char*
 /**
  * @brief Calls a Reduct callable (closure or native) with arguments.
  *
+ * @warning May be called re-entrantly, including from within a native function. Doing so may grow the register and
+ * frame arrays, invalidating any pointers previously obtained into them.
+ *
  * @param reduct The Reduct instance.
  * @param callable The callable item handle.
  * @param argc The number of arguments.
@@ -110,6 +131,9 @@ REDUCT_API reduct_handle_t reduct_eval_call(struct reduct* reduct, reduct_handle
 
 /**
  * @brief Calls a Reduct callable (closure or native) with variadic arguments.
+ *
+ * @warning May be called re-entrantly, including from within a native function. Doing so may grow the register and
+ * frame arrays, invalidating any pointers previously obtained into them.
  *
  * @param reduct The Reduct instance.
  * @param callable The callable item handle.
