@@ -388,6 +388,11 @@ LABEL_C_OP(label_call, {
         DISPATCH();
     }
 
+    if (REDUCT_HANDLE_IS_NIL(valC))
+    {
+        REDUCT_ERROR_THROW(reduct, "cannot call nil");
+    }
+
     REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(valC));
 })
 LABEL_C_OP(label_tailcall, {
@@ -434,6 +439,11 @@ LABEL_C_OP(label_tailcall, {
 
         REDUCT_GC_CHECK(reduct);
         DISPATCH();
+    }
+
+    if (REDUCT_HANDLE_IS_NIL(valC))
+    {
+        REDUCT_ERROR_THROW(reduct, "cannot call nil");
     }
 
     REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(valC));
@@ -530,6 +540,11 @@ LABEL_C_OP(label_fork, {
     DECODE_B();
     if (REDUCT_UNLIKELY(!REDUCT_HANDLE_IS_CALLABLE(reduct, valC)))
     {
+        if (REDUCT_HANDLE_IS_NIL(valC))
+        {
+            REDUCT_ERROR_THROW(reduct, "cannot call nil");
+        }
+
         REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(valC));
     }
     reduct_handle_t future = REDUCT_HANDLE_CREATE_FUTURE(reduct, valC, b, &r[a]);
@@ -682,6 +697,11 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
 
         assert(atom->native != NULL);
         return atom->native(reduct, argc, argv);
+    }
+
+    if (REDUCT_HANDLE_IS_NIL(callable))
+    {
+        REDUCT_ERROR_THROW(reduct, "cannot call nil");
     }
 
     REDUCT_ERROR_THROW(reduct, "cannot call value of type %s", REDUCT_HANDLE_GET_TYPE_STRING(callable));

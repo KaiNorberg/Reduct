@@ -245,6 +245,12 @@ int main(int argc, char **argv)
     if (!REDUCT_ERROR_SUCCESS(&error))
     {
         reduct_error_print(&error, stdout);
+     
+        if (optimizeFlags != REDUCT_OPTIMIZE_NONE)
+        {
+            fprintf(stderr, "note: optimizations are enabled; try running with -O0 for more information\n");
+        }
+
         result = 1;
         goto cleanup;
     }
