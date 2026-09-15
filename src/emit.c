@@ -720,6 +720,49 @@ static reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter, reduct
         target = reduct_emitter_reg_alloc(emitter);
     }
 
+    REDUCT_SCRATCH_GET(emitter->reduct, prematOrigins, reduct_rvsdg_origin_t*, node->inputCount);
+    uint32_t prematCount = 0;
+
+    for (reduct_rvsdg_user_t* input = predInput->next; input != NULL; input = input->next)
+    {
+        if (input->edge == NULL || input->edge->origin == NULL)
+        {
+            continue;
+        }
+
+        bool shared = true;
+        for (reduct_rvsdg_region_t* region = node->firstRegion; region != NULL; region = region->next)
+        {
+            uint16_t argIndex = 0;
+            if (!reduct_rvsdg_node_map_input_to_argument(node, region, input->index, &argIndex))
+            {
+                shared = false;
+                break;
+            }
+
+            reduct_rvsdg_origin_t* arg = reduct_rvsdg_region_get_argument(region, argIndex);
+            if (arg == NULL || arg->edgeCount == 0)
+            {
+                shared = false;
+                break;
+            }
+        }
+
+        if (!shared)
+        {
+            continue;
+        }
+
+        reduct_emitter_expr_t expr = reduct_emit_origin(emitter, input->edge->origin, REDUCT_REGISTER_INVALID);
+        if (expr.type == REDUCT_EMITTER_EXPR_TYPE_CONST || expr.type == REDUCT_EMITTER_EXPR_TYPE_NONE)
+        {
+            continue;
+        }
+
+        reduct_emitter_expr_flush(emitter, &expr, REDUCT_REGISTER_INVALID);
+        prematOrigins[prematCount++] = input->edge->origin;
+    }
+
     uint32_t skipIdx = 0;
     uint32_t jmpfIdx = 0;
     bool fusedSkip = false;
@@ -807,6 +850,12 @@ static reduct_emitter_expr_t reduct_emit_gamma(reduct_emitter_t* emitter, reduct
     {
         reduct_emitter_patch_jmp_here(emitter, jmpIdx);
     }
+
+    for (uint32_t i = 0; i < prematCount; i++)
+    {
+        reduct_emitter_cache_release(emitter, prematOrigins[i]);
+    }
+    REDUCT_SCRATCH_PUT(emitter->reduct, prematOrigins);
 
     if (target == REDUCT_REGISTER_RETURN)
     {

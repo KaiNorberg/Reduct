@@ -484,10 +484,12 @@ static reduct_handle_t reduct_optimize_alist_partial_from_node(reduct_t* reduct,
         list->handles[i++] = REDUCT_HANDLE_FROM_LIST(pair);
     }
 
+    list->length = (uint32_t)i;
+
     return REDUCT_HANDLE_FROM_LIST(list);
 }
 
-static reduct_rvsdg_origin_t* reduct_optimize_alist_to_origin(reduct_t* reduct, reduct_handle_t handle,
+static reduct_rvsdg_origin_t* reduct_optimize_handle_to_origin(reduct_t* reduct, reduct_handle_t handle,
     reduct_rvsdg_region_t* parent)
 {
     assert(reduct != NULL);
@@ -507,42 +509,82 @@ static reduct_rvsdg_origin_t* reduct_optimize_alist_to_origin(reduct_t* reduct, 
     reduct_rvsdg_node_t* result = reduct_rvsdg_node_new_simple_opcode(reduct, parent, REDUCT_OPCODE_LIST);
     for (uint32_t i = 0; i < list->length; i++)
     {
-        reduct_handle_t pairHandle = list->handles[i];
-        assert(REDUCT_HANDLE_IS_LIST(pairHandle));
+        reduct_rvsdg_origin_t* elementOrigin = reduct_optimize_handle_to_origin(reduct, list->handles[i], parent);
+        assert(elementOrigin != NULL);
 
-        reduct_list_t* pair = REDUCT_HANDLE_TO_LIST(pairHandle);
-        assert(pair->length >= 2);
+        reduct_rvsdg_user_t* user = reduct_rvsdg_node_add_input(reduct, result);
+        reduct_rvsdg_edge_connect(reduct, elementOrigin, user);
+    }
+    return result->output;
+}
 
-        reduct_handle_t key = pair->handles[0];
+static bool reduct_optimize_alist_resolve_path(reduct_t* reduct, reduct_handle_t alist, reduct_handle_t path,
+    size_t depth, bool* outMiss, reduct_handle_t* outValue)
+{
+    assert(reduct != NULL);
+    assert(outMiss != NULL);
+    assert(outValue != NULL);
 
-        reduct_rvsdg_node_t* pairNode = reduct_rvsdg_node_new_simple_opcode(reduct, parent, REDUCT_OPCODE_LIST);
+    reduct_list_t* pathList = REDUCT_HANDLE_IS_LIST(path) ? REDUCT_HANDLE_TO_LIST(path) : NULL;
+    size_t keyCount = (pathList != NULL) ? pathList->length : 1;
+    if (depth > keyCount)
+    {
+        depth = keyCount;
+    }
 
-        reduct_rvsdg_origin_t* keyOrigin = reduct_optimize_alist_to_origin(reduct, key, parent);
-        assert(keyOrigin != NULL);
-
-        reduct_rvsdg_edge_connect(reduct, keyOrigin, reduct_rvsdg_node_add_input(reduct, pairNode));
-
-        for (uint32_t v = 1; v < pair->length; v++)
+    reduct_handle_t current = alist;
+    for (size_t i = 0; i < depth; i++)
+    {
+        reduct_handle_t key = (pathList != NULL) ? pathList->handles[i] : path;
+        if (!REDUCT_HANDLE_IS_ATOM(key))
         {
-            reduct_handle_t value = pair->handles[v];
-            reduct_rvsdg_user_t* valueUser = reduct_rvsdg_node_add_input(reduct, pairNode);
+            return false;
+        }
 
-            if (REDUCT_HANDLE_IS_RVSDG_ORIGIN(value))
+        // Every intermediate alist must be a real runtime list to descend into.
+        if (!REDUCT_HANDLE_IS_LIST(current) || REDUCT_HANDLE_IS_RVSDG_ORIGIN(current))
+        {
+            return false;
+        }
+
+        reduct_list_t* list = REDUCT_HANDLE_TO_LIST(current);
+        reduct_atom_t* internedKey = reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(key));
+
+        reduct_list_t* pair = NULL;
+        for (uint32_t j = 0; j < list->length; j++)
+        {
+            reduct_handle_t entry = list->handles[j];
+            if (!REDUCT_HANDLE_IS_LIST(entry) || REDUCT_HANDLE_IS_RVSDG_ORIGIN(entry))
             {
-                reduct_rvsdg_edge_connect(reduct, REDUCT_HANDLE_TO_RVSDG_ORIGIN(value), valueUser);
+                continue;
             }
-            else
+
+            reduct_list_t* entryList = REDUCT_HANDLE_TO_LIST(entry);
+            if (entryList->length < 2 || !REDUCT_HANDLE_IS_ATOM(entryList->handles[0]))
             {
-                reduct_rvsdg_origin_t* valueOrigin =
-                    reduct_rvsdg_node_new_simple_constant(reduct, parent, value)->output;
-                reduct_rvsdg_edge_connect(reduct, valueOrigin, valueUser);
+                continue;
+            }
+
+            if (reduct_atom_ensure_interned(reduct, REDUCT_HANDLE_TO_ATOM(entryList->handles[0])) == internedKey)
+            {
+                pair = entryList;
+                break;
             }
         }
 
-        reduct_rvsdg_user_t* user = reduct_rvsdg_node_add_input(reduct, result);
-        reduct_rvsdg_edge_connect(reduct, pairNode->output, user);
+        if (pair == NULL)
+        {
+            *outMiss = true;
+            *outValue = REDUCT_HANDLE_NIL(reduct);
+            return true;
+        }
+
+        current = pair->handles[1];
     }
-    return result->output;
+
+    *outMiss = false;
+    *outValue = current;
+    return true;
 }
 
 static bool reduct_optimize_alist_is_keys_constant(reduct_t* reduct, reduct_rvsdg_node_t* node)
@@ -630,7 +672,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
     {
         return NULL;
     }
-
+    
     // Handles alist manipulation where only the keys are known at compile-time but not the values.
     reduct_atom_t* atom = reduct_handle_as_atom(reduct, callable->constant);
     if (atom->native == reduct_stdlib_merge)
@@ -667,7 +709,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
         reduct_handle_t result = reduct_stdlib_merge(reduct, node->inputCount - 1, &args[0]);
         REDUCT_SCRATCH_PUT(reduct, args);
 
-        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
+        return reduct_optimize_handle_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_get_in)
     {
@@ -681,11 +723,27 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
         }
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
-        reduct_handle_t defaultVal = (node->inputCount == 4)
-            ? REDUCT_HANDLE_FROM_RVSDG_NODE(reduct_rvsdg_node_get_input_node(node, 3))
-            : REDUCT_HANDLE_NIL(reduct);
-        reduct_handle_t result = reduct_get_in(reduct, alist, pathNode->constant, defaultVal);
-        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
+
+        reduct_handle_t defaultVal = REDUCT_HANDLE_NIL(reduct);
+        if (node->inputCount == 4)
+        {
+            reduct_rvsdg_node_t* defaultNode = reduct_rvsdg_node_get_input_node(node, 3);
+            if (defaultNode == NULL || defaultNode->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+            {
+                return NULL;
+            }
+            defaultVal = defaultNode->constant;
+        }
+
+        bool miss = false;
+        reduct_handle_t value = REDUCT_HANDLE_NIL(reduct);
+        if (!reduct_optimize_alist_resolve_path(reduct, alist, pathNode->constant, SIZE_MAX, &miss, &value))
+        {
+            return NULL;
+        }
+
+        reduct_handle_t result = miss ? defaultVal : value;
+        return reduct_optimize_handle_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_assoc_in)
     {
@@ -700,10 +758,26 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
             return NULL;
         }
 
+        if (valueNode->type != REDUCT_RVSDG_NODE_TYPE_SIMPLE_CONST)
+        {
+            return NULL;
+        }
+
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
-        reduct_handle_t value = REDUCT_HANDLE_FROM_RVSDG_NODE(valueNode);
-        reduct_handle_t result = reduct_assoc_in(reduct, alist, pathNode->constant, value);
-        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
+
+        reduct_list_t* pathList = REDUCT_HANDLE_IS_LIST(pathNode->constant) ? REDUCT_HANDLE_TO_LIST(pathNode->constant)
+                                                                           : NULL;
+        size_t parentDepth = (pathList != NULL) ? pathList->length - 1 : 0;
+        bool miss = false;
+        reduct_handle_t parent = REDUCT_HANDLE_NIL(reduct);
+        if (!reduct_optimize_alist_resolve_path(reduct, alist, pathNode->constant, parentDepth, &miss, &parent) ||
+            (!miss && (!REDUCT_HANDLE_IS_LIST(parent) || REDUCT_HANDLE_IS_RVSDG_ORIGIN(parent))))
+        {
+            return NULL;
+        }
+
+        reduct_handle_t result = reduct_assoc_in(reduct, alist, pathNode->constant, valueNode->constant);
+        return reduct_optimize_handle_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_dissoc_in)
     {
@@ -717,8 +791,25 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
         }
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
+
+        reduct_list_t* pathList = REDUCT_HANDLE_IS_LIST(pathNode->constant) ? REDUCT_HANDLE_TO_LIST(pathNode->constant)
+                                                                           : NULL;
+        if (pathList != NULL && pathList->length == 0)
+        {
+            return NULL;
+        }
+
+        size_t parentDepth = (pathList != NULL) ? pathList->length - 1 : 0;
+        bool miss = false;
+        reduct_handle_t parent = REDUCT_HANDLE_NIL(reduct);
+        if (!reduct_optimize_alist_resolve_path(reduct, alist, pathNode->constant, parentDepth, &miss, &parent) ||
+            (!miss && (!REDUCT_HANDLE_IS_LIST(parent) || REDUCT_HANDLE_IS_RVSDG_ORIGIN(parent))))
+        {
+            return NULL;
+        }
+
         reduct_handle_t result = reduct_dissoc_in(reduct, alist, pathNode->constant);
-        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
+        return reduct_optimize_handle_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_update_in)
     {
@@ -736,8 +827,17 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
         }
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
+
+        bool miss = false;
+        reduct_handle_t current = REDUCT_HANDLE_NIL(reduct);
+        if (!reduct_optimize_alist_resolve_path(reduct, alist, pathNode->constant, SIZE_MAX, &miss, &current) ||
+            (!miss && REDUCT_HANDLE_IS_RVSDG_ORIGIN(current)))
+        {
+            return NULL;
+        }
+
         reduct_handle_t result = reduct_update_in(reduct, alist, pathNode->constant, callableNode->constant);
-        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
+        return reduct_optimize_handle_to_origin(reduct, result, node->parent);
     }
     if (atom->native == reduct_stdlib_keys)
     {
@@ -750,7 +850,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
         reduct_handle_t result = reduct_keys(reduct, alist);
-        return reduct_optimize_alist_to_origin(reduct, result, node->parent);
+        return reduct_optimize_handle_to_origin(reduct, result, node->parent);
     }
 
     // Handles other cases where enough, but not all, information is available at compile time.
@@ -847,12 +947,7 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
         {
             replacement = left;
         }
-        else if (left != NULL && left == right)
-        {
-            reduct_rvsdg_node_t* zero =
-                reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FROM_NUMBER(0.0));
-            replacement = zero->output;
-        }
+
     }
     break;
     case REDUCT_OPCODE_MUL:
@@ -864,12 +959,6 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
         else if (reduct_optimize_is_const(reduct, right, 1.0))
         {
             replacement = left;
-        }
-        else if (reduct_optimize_is_const(reduct, left, 0.0) || reduct_optimize_is_const(reduct, right, 0.0))
-        {
-            reduct_rvsdg_node_t* zero =
-                reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FROM_NUMBER(0.0));
-            replacement = zero->output;
         }
         else if (reduct_optimize_is_const(reduct, right, 2.0))
         {
@@ -950,17 +1039,6 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
         }
     }
     break;
-    case REDUCT_OPCODE_EQ:
-    case REDUCT_OPCODE_LE:
-    case REDUCT_OPCODE_GE:
-    {
-        if (left != NULL && left == right)
-        {
-            replacement = reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_TRUE())->output;
-        }
-    }
-    break;
-    case REDUCT_OPCODE_NEQ:
     case REDUCT_OPCODE_LT:
     case REDUCT_OPCODE_GT:
     {
@@ -970,6 +1048,8 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
                 reduct_rvsdg_node_new_simple_constant(reduct, node->parent, REDUCT_HANDLE_FALSE(reduct))->output;
         }
     }
+    break;
+    default:
     break;
     }
 
