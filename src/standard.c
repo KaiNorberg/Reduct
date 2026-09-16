@@ -3039,7 +3039,7 @@ REDUCT_API void reduct_stdlib_register(reduct_t* reduct, reduct_stdlib_sets_t se
             {"asinh", reduct_stdlib_asinh, NULL},
             {"acosh", reduct_stdlib_acosh, NULL},
             {"atanh", reduct_stdlib_atanh, NULL},
-            {"rand", reduct_stdlib_rand, NULL},
+            {"rand!", reduct_stdlib_rand, NULL},
             {"seed!", reduct_stdlib_seed, NULL},
         };
         reduct_native_register(reduct, natives, sizeof(natives) / sizeof(reduct_native_t));

@@ -50,7 +50,7 @@
     (assert! (number? (acosh 1)) "acosh should return a number")
     (assert! (number? (atanh 0)) "atanh should return a number")
 
-    (assert! (number? (rand 1 10)) "rand should return a number")
+    (assert! (number? (rand! 1 10)) "rand! should return a number")
 
     (assert! (== (seed! 42) ()) "seed! should return nil")
 )

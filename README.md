@@ -1626,7 +1626,7 @@ Returns the inverse hyperbolic cosine of the argument.
 
 Returns the inverse hyperbolic tangent of the argument.
 
-**`(rand <min: number> <max: number>) -> <number>`**
+**`(rand! <min: number> <max: number>) -> <number>`**
 
 Returns a random number between the given range.
 
