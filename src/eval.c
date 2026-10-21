@@ -665,6 +665,8 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
         uint32_t needed = REDUCT_MAX(arity, (uint32_t)argc);
         needed = REDUCT_MAX(needed, (uint32_t)func->registerCount);
 
+        uint32_t previousRegCount = target;
+
         if (REDUCT_UNLIKELY(target + needed > reduct->eval.regCapacity))
         {
             bool argvInRegs =
@@ -688,7 +690,9 @@ REDUCT_API reduct_handle_t reduct_eval_call(reduct_t* reduct, reduct_handle_t ca
         uint32_t initialFrameCount = reduct->eval.frameCount;
         reduct_eval_push_frame(reduct, closure, target);
 
-        return reduct_eval_run(reduct, initialFrameCount);
+        reduct_handle_t result = reduct_eval_run(reduct, initialFrameCount);
+        reduct->eval.regCount = previousRegCount;
+        return result;
     }
 
     if (REDUCT_LIKELY(REDUCT_HANDLE_IS_NATIVE(reduct, callable)))
