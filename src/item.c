@@ -319,7 +319,7 @@ static inline void reduct_item_mark_list(reduct_list_t* list)
             reduct_item_mark(REDUCT_HANDLE_TO_ITEM(handle));
         }
     }
-    if (list->flags & REDUCT_LIST_FLAG_LARGE && list->arena != NULL)
+    if (atomic_load(&list->flags) & REDUCT_LIST_FLAG_LARGE && list->arena != NULL)
     {
         reduct_item_mark(REDUCT_CONTAINER_OF(list->arena, reduct_item_t, arena));
     }
