@@ -60,7 +60,7 @@ typedef enum reduct_schema_type
  * @brief A single keyword/value pair of an enum field.
  * @struct reduct_schema_enum_t
  */
-typedef struct reduct_schema_enum_entry
+typedef struct reduct_schema_enum
 {
     const char* keyword; ///< The keyword as it appears in the association list, e.g. `"row"`.
     int32_t value;       ///< The value written to the C structure, e.g. an enum constant.
