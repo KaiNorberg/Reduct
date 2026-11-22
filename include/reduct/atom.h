@@ -77,8 +77,7 @@ typedef uint8_t reduct_atom_flags_t;
 #define REDUCT_ATOM_FLAG_NUMBER_CHECKED (1 << 3) ///< Atom has been checked for number shaping.
 #define REDUCT_ATOM_FLAG_NATIVE_CHECKED (1 << 4) ///< Atom has been checked for a native function.
 #define REDUCT_ATOM_FLAG_LARGE (1 << 5)          ///< Atom has an allocated buffer within a stack.
-#define REDUCT_ATOM_FLAG_SCHEMA (1 << 6)         ///< Atom is a schema field.
-#define REDUCT_ATOM_FLAG_QUOTED (1 << 7)         ///< Atom is quoted.
+#define REDUCT_ATOM_FLAG_QUOTED (1 << 6)         ///< Atom is quoted.
 
 /**
  * @brief Atom structure.
@@ -98,16 +97,6 @@ typedef struct reduct_atom
             arena; ///< The arena that this atoms string was allocated from, atom must have `REDUCT_ATOM_FLAG_LARGE`.
     };
     union {
-        struct
-        {
-            /**
-             * An array of indexes to which this atom is a key.
-             *
-             * The array is indexed by the schema id and stores the index of the field within the schema.
-             */
-            reduct_schema_index_t* schema;
-            uint32_t schemaCount;
-        };
         double numberValue; ///< Pre-computed number value, atom must have `REDUCT_ATOM_FLAG_NUMBER`.
         struct
         {

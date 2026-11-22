@@ -643,7 +643,7 @@ All Reduct standard library functions are available in C, for example, `reduct_i
 
 ### C Schema
 
-A "Schema" system is provided within Reduct to easily allow Association Lists to be parsed into C structures.
+A "Schema" system is provided within Reduct to easily allow Association Lists to be parsed into C structures. The reverse is also possible; a C structure can be serialized back into an association list.
 
 For example:
 
@@ -651,22 +651,49 @@ For example:
 typedef struct {
     char name[32];
     int age;
-    float height;
+    double height;
+    bool active;
+    int category;
+    double scores[4];
 } person_t;
 
-reduct_schema_id_t personSchema = reduct_schema_new(reduct, 3, 
-    REDUCT_SCHEMA_FIELD("name", person_t, name, STRING),
-    REDUCT_SCHEMA_FIELD("age", person_t, age, INT),
-    REDUCT_SCHEMA_FIELD("height", person_t, height, FLOAT)
-);
+static const reduct_schema_enum_t categoryEnum[] = {
+    {"student", 0},
+    {"teacher", 1},
+    {"other", 2},
+};
 
-// ...
+static reduct_schema_t personFields[] = {
+    REDUCT_SCHEMA_FIELD(person_t, "name", name, STRING),
+    REDUCT_SCHEMA_FIELD(person_t, "age", age, INT),
+    REDUCT_SCHEMA_FIELD(person_t, "height", height, FLOAT),
+    REDUCT_SCHEMA_FIELD(person_t, "active", active, BOOL),
+    REDUCT_SCHEMA_FIELD_ENUM(person_t, "category", category, categoryEnum),
+    REDUCT_SCHEMA_FIELD_ARRAY(person_t, "scores", scores, FLOAT),
+};
 
-reduct_handle_t myList = ...;
+reduct_schema_id_t personSchema = REDUCT_SCHEMA_NEW(reduct, personFields);
+```
 
-person_t person;
-reduct_schema_apply(reduct, personSchema, &myList, &person);
+The schema can then be applied to an association list, where each entry is a (key, value) pair:
+
+```lisp
+(def person (("name" "Ada") ("age" 36) ("height" 1.7) ("active" true) ("category" "teacher") ("scores" (4.5 3.0 5.0 2.0))))
+```
+
+```c
+reduct_handle_t personHandle = ...; 
+
+person_t person = {0};
+reduct_schema_apply(reduct, personSchema, personHandle, REDUCT_SCHEMA_APPLY_NORMAL, &person);
+
 printf("Name: %s, Age: %d\n", person.name, person.age);
+```
+
+Serializing a structure produces the association list it was applied from:
+
+```c
+reduct_handle_t personHandle = reduct_schema_serialize(reduct, personSchema, &person);
 ```
 
 ### Documentation

@@ -1,14 +1,102 @@
 #include <reduct/atom.h>
 #include <reduct/core.h>
+#include <reduct/error.h>
 #include <reduct/gc.h>
 #include <reduct/schema.h>
 #include <reduct/standard.h>
 
 #include <assert.h>
-#include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+typedef struct reduct_schema_lookup
+{
+    reduct_atom_t** atoms;
+    uint32_t* indexes;
+    uint32_t capacity;
+} reduct_schema_lookup_t;
+
+struct reduct_schema_internal
+{
+    size_t count;
+    reduct_schema_lookup_t keys;
+    reduct_schema_lookup_t* enums;
+    reduct_schema_t fields[];
+};
+
+static uint32_t reduct_schema_hash_atom(reduct_atom_t* atom)
+{
+    uintptr_t value = (uintptr_t)atom;
+    value ^= value >> 16;
+    value *= 0x7feb352dU;
+    value ^= value >> 15;
+    value *= 0x846ca68bU;
+    value ^= value >> 16;
+    return (uint32_t)value;
+}
+
+static reduct_schema_index_t reduct_schema_lookup_find(const reduct_schema_lookup_t* lookup, reduct_atom_t* atom)
+{
+    if (lookup->capacity == 0)
+    {
+        return REDUCT_SCHEMA_INDEX_NONE;
+    }
+
+    uint32_t slot = reduct_schema_hash_atom(atom) & (lookup->capacity - 1);
+    while (lookup->atoms[slot] != NULL)
+    {
+        if (lookup->atoms[slot] == atom)
+        {
+            return (reduct_schema_index_t)lookup->indexes[slot];
+        }
+        slot = (slot + 1) & (lookup->capacity - 1);
+    }
+    return REDUCT_SCHEMA_INDEX_NONE;
+}
+
+static bool reduct_schema_lookup_build(reduct_schema_lookup_t* lookup, reduct_atom_t** atoms, uint32_t count)
+{
+    if (count == 0)
+    {
+        lookup->atoms = NULL;
+        lookup->indexes = NULL;
+        lookup->capacity = 0;
+        return true;
+    }
+
+    uint32_t capacity = 4;
+    while (capacity < count * 2)
+    {
+        capacity <<= 1;
+    }
+
+    reduct_atom_t** slots = (reduct_atom_t**)calloc(capacity, sizeof(reduct_atom_t*));
+    uint32_t* indexes = (uint32_t*)malloc(capacity * sizeof(uint32_t));
+    if (slots == NULL || indexes == NULL)
+    {
+        free(slots);
+        free(indexes);
+        return false;
+    }
+
+    for (uint32_t i = 0; i < count; i++)
+    {
+        uint32_t slot = reduct_schema_hash_atom(atoms[i]) & (capacity - 1);
+        while (slots[slot] != NULL)
+        {
+            slot = (slot + 1) & (capacity - 1);
+        }
+        slots[slot] = atoms[i];
+        indexes[slot] = i;
+    }
+
+    lookup->atoms = slots;
+    lookup->indexes = indexes;
+    lookup->capacity = capacity;
+    return true;
+}
 
 REDUCT_API void reduct_schema_global_init(reduct_schema_global_t* global)
 {
@@ -26,10 +114,22 @@ REDUCT_API void reduct_schema_global_deinit(reduct_schema_global_t* global)
     {
         for (size_t i = 0; i < global->count; i++)
         {
-            if (global->schemas[i] != NULL)
+            reduct_schema_internal_t* schema = global->schemas[i];
+            if (schema == NULL)
             {
-                free(global->schemas[i]);
+                continue;
             }
+            for (size_t j = 0; j < schema->count; j++)
+            {
+                if (schema->enums[j].capacity != 0)
+                {
+                    free(schema->enums[j].atoms);
+                    free(schema->enums[j].indexes);
+                }
+            }
+            free(schema->keys.atoms);
+            free(schema->keys.indexes);
+            free(schema);
         }
         free(global->schemas);
     }
@@ -40,90 +140,129 @@ REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t co
 {
     assert(reduct != NULL);
     assert(count > 0);
+    assert(fields != NULL);
 
     reduct_rwmutex_write_lock(&reduct->global->schema.mutex);
-
     if (reduct->global->schema.count >= reduct->global->schema.capacity)
     {
         size_t oldCapacity = reduct->global->schema.capacity;
-        reduct->global->schema.capacity *= REDUCT_SCHEMA_GROWTH;
-        if (reduct->global->schema.capacity == 0)
+        size_t newCapacity = oldCapacity * REDUCT_SCHEMA_GROWTH;
+        if (newCapacity == 0)
         {
-            reduct->global->schema.capacity = REDUCT_SCHEMA_INITIAL;
+            newCapacity = REDUCT_SCHEMA_INITIAL;
         }
         reduct_schema_internal_t** newSchemas = (reduct_schema_internal_t**)realloc(reduct->global->schema.schemas,
-            reduct->global->schema.capacity * sizeof(reduct_schema_internal_t*));
+            newCapacity * sizeof(reduct_schema_internal_t*));
         if (newSchemas == NULL)
         {
             reduct_rwmutex_write_unlock(&reduct->global->schema.mutex);
             REDUCT_ERROR_INTERNAL(reduct, "out of memory");
         }
-
-        memset(newSchemas + oldCapacity, 0,
-            (reduct->global->schema.capacity - oldCapacity) * sizeof(reduct_schema_internal_t*));
+        memset(newSchemas + oldCapacity, 0, (newCapacity - oldCapacity) * sizeof(reduct_schema_internal_t*));
         reduct->global->schema.schemas = newSchemas;
+        reduct->global->schema.capacity = newCapacity;
     }
 
     reduct_schema_id_t id = (reduct_schema_id_t)reduct->global->schema.count++;
-    reduct_schema_internal_t* schema =
-        (reduct_schema_internal_t*)malloc(sizeof(reduct_schema_internal_t) + count * sizeof(reduct_schema_t));
+    reduct_rwmutex_write_unlock(&reduct->global->schema.mutex);
+
+    reduct_schema_internal_t* schema = (reduct_schema_internal_t*)malloc(
+        sizeof(reduct_schema_internal_t) + count * sizeof(reduct_schema_t) + count * sizeof(reduct_schema_lookup_t));
     if (schema == NULL)
     {
         REDUCT_ERROR_INTERNAL(reduct, "out of memory");
     }
 
     schema->count = count;
+    schema->keys.atoms = NULL;
+    schema->keys.indexes = NULL;
+    schema->keys.capacity = 0;
+    schema->enums = (reduct_schema_lookup_t*)(schema->fields + count);
+    memset(schema->enums, 0, count * sizeof(reduct_schema_lookup_t));
     for (size_t i = 0; i < count; i++)
     {
         schema->fields[i] = fields[i];
     }
 
-    reduct->global->schema.schemas[id] = schema;
-
+    reduct_atom_t** keyAtoms = (reduct_atom_t**)malloc(count * sizeof(reduct_atom_t*));
+    if (keyAtoms == NULL)
+    {
+        free(schema);
+        REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+    }
     for (size_t i = 0; i < count; i++)
     {
         reduct_atom_t* atom =
             reduct_atom_lookup(reduct, schema->fields[i].key, strlen(schema->fields[i].key), REDUCT_ATOM_LOOKUP_QUOTED);
-
         REDUCT_ERROR_ASSERT(reduct, !(atom->flags & REDUCT_ATOM_FLAG_NUMBER), "schema key cannot be a number");
-
-        if (!(atom->flags & REDUCT_ATOM_FLAG_SCHEMA))
-        {
-            atom->flags |= REDUCT_ATOM_FLAG_SCHEMA;
-
-            atom->schema = NULL;
-            atom->schemaCount = 0;
-        }
-
-        size_t newSchemaCount = atom->schemaCount;
-        if (id >= newSchemaCount)
-        {
-            newSchemaCount = id + 1;
-        }
-        reduct_schema_index_t* newSchema =
-            (reduct_schema_index_t*)realloc(atom->schema, newSchemaCount * sizeof(reduct_schema_index_t));
-        if (newSchema == NULL)
-        {
-            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
-        }
-        for (size_t j = atom->schemaCount; j < newSchemaCount; j++)
-        {
-            newSchema[j] = REDUCT_SCHEMA_INDEX_NONE;
-        }
-
-        atom->schema = newSchema;
-        atom->schemaCount = (uint32_t)newSchemaCount;
-
-        atom->schema[id] = i;
+        keyAtoms[i] = atom;
         reduct_atom_retain(reduct, atom);
     }
 
+    if (!reduct_schema_lookup_build(&schema->keys, keyAtoms, (uint32_t)count))
+    {
+        free(keyAtoms);
+        free(schema);
+        REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+    }
+
+    for (size_t i = 0; i < count; i++)
+    {
+        const reduct_schema_t* field = &schema->fields[i];
+        if (field->type != REDUCT_SCHEMA_TYPE_ENUM)
+        {
+            continue;
+        }
+
+        const size_t entryCount = field->as.enumeration.count;
+        REDUCT_ERROR_ASSERT(reduct, entryCount == 0 || field->as.enumeration.entries != NULL,
+            "schema enum field '%s' has no entry table", field->key);
+
+        reduct_atom_t** valueAtoms = (reduct_atom_t**)malloc(entryCount * sizeof(reduct_atom_t*));
+        if (entryCount > 0 && valueAtoms == NULL)
+        {
+            free(keyAtoms);
+            free(schema);
+            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+        }
+        for (size_t j = 0; j < entryCount; j++)
+        {
+            const char* keyword = field->as.enumeration.entries[j].keyword;
+            reduct_atom_t* atom = reduct_atom_lookup(reduct, keyword, strlen(keyword), REDUCT_ATOM_LOOKUP_QUOTED);
+            REDUCT_ERROR_ASSERT(reduct, !(atom->flags & REDUCT_ATOM_FLAG_NUMBER),
+                "schema enum keyword cannot be a number");
+            valueAtoms[j] = atom;
+            reduct_atom_retain(reduct, atom);
+        }
+
+        if (!reduct_schema_lookup_build(&schema->enums[i], valueAtoms, (uint32_t)entryCount))
+        {
+            free(valueAtoms);
+            free(keyAtoms);
+            free(schema);
+            REDUCT_ERROR_INTERNAL(reduct, "out of memory");
+        }
+
+        for (size_t j = 0; j < entryCount; j++)
+        {
+            if (reduct_schema_lookup_find(&schema->enums[i], valueAtoms[j]) != j)
+            {
+                REDUCT_ERROR_ASSERT(reduct, false, "duplicate enum keyword '%s' in schema field '%s'",
+                    field->as.enumeration.entries[j].keyword, field->key);
+            }
+        }
+        free(valueAtoms);
+    }
+    free(keyAtoms);
+
+    reduct_rwmutex_write_lock(&reduct->global->schema.mutex);
+    reduct->global->schema.schemas[id] = schema;
     reduct_rwmutex_write_unlock(&reduct->global->schema.mutex);
     return id;
 }
 
-static void reduct_schema_apply_primitive(struct reduct* reduct, reduct_schema_type_t type, size_t size, void* target,
-    reduct_handle_t valueHandle)
+static bool reduct_schema_apply_primitive(struct reduct* reduct, reduct_schema_type_t type, size_t size, void* target,
+    reduct_handle_t valueHandle, const char* key, bool lenient)
 {
     switch (type)
     {
@@ -200,21 +339,46 @@ static void reduct_schema_apply_primitive(struct reduct* reduct, reduct_schema_t
     break;
     case REDUCT_SCHEMA_TYPE_ATOM:
     {
-        REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_ATOM_LIKE(valueHandle), "expected an atom handle, got %p",
-            REDUCT_HANDLE_GET_TYPE_STRING(valueHandle));
+        if (REDUCT_HANDLE_IS_NIL(valueHandle))
+        {
+            *(reduct_atom_t**)target = NULL;
+            break;
+        }
+        if (!REDUCT_HANDLE_IS_ATOM_LIKE(valueHandle))
+        {
+            if (lenient)
+            {
+                return false;
+            }
+            REDUCT_ERROR_THROW(reduct, "expected an atom handle for '%s', got %s", key,
+                REDUCT_HANDLE_GET_TYPE_STRING(valueHandle));
+        }
         *(reduct_atom_t**)target = reduct_handle_as_atom(reduct, valueHandle);
     }
     break;
     case REDUCT_SCHEMA_TYPE_LIST:
     {
-        REDUCT_ERROR_ASSERT(reduct, REDUCT_HANDLE_IS_LIST(valueHandle), "expected a list handle, got %p",
-            REDUCT_HANDLE_GET_TYPE_STRING(valueHandle));
+        if (REDUCT_HANDLE_IS_NIL(valueHandle))
+        {
+            *(reduct_list_t**)target = NULL;
+            break;
+        }
+        if (!REDUCT_HANDLE_IS_LIST(valueHandle))
+        {
+            if (lenient)
+            {
+                return false;
+            }
+            REDUCT_ERROR_THROW(reduct, "expected a list handle for '%s', got %s", key,
+                REDUCT_HANDLE_GET_TYPE_STRING(valueHandle));
+        }
         *(reduct_list_t**)target = REDUCT_HANDLE_TO_LIST(valueHandle);
     }
     break;
     default:
-        break;
+        return false;
     }
+    return true;
 }
 
 static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduct_schema_type_t type, size_t size,
@@ -278,12 +442,14 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
     break;
     case REDUCT_SCHEMA_TYPE_ATOM:
     {
-        return REDUCT_HANDLE_FROM_ATOM(*(reduct_atom_t**)val);
+        reduct_atom_t* atom = *(reduct_atom_t**)val;
+        return atom != NULL ? REDUCT_HANDLE_FROM_ATOM(atom) : REDUCT_HANDLE_NIL(reduct);
     }
     break;
     case REDUCT_SCHEMA_TYPE_LIST:
     {
-        return REDUCT_HANDLE_FROM_LIST(*(reduct_list_t**)val);
+        reduct_list_t* list = *(reduct_list_t**)val;
+        return list != NULL ? REDUCT_HANDLE_FROM_LIST(list) : REDUCT_HANDLE_NIL(reduct);
     }
     break;
     default:
@@ -292,32 +458,28 @@ static reduct_handle_t reduct_schema_serialize_primitive(reduct_t* reduct, reduc
     return REDUCT_HANDLE_NIL(reduct);
 }
 
-REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listHandle, void* out)
+REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listHandle, reduct_schema_apply_flags_t flags, void* out)
+
 {
     assert(reduct != NULL);
     assert(out != NULL);
 
     reduct_rwmutex_read_lock(&reduct->global->schema.mutex);
-
-    if (id >= reduct->global->schema.count)
+    if (id >= reduct->global->schema.count || reduct->global->schema.schemas[id] == NULL)
     {
         reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
-
     reduct_schema_internal_t* schema = reduct->global->schema.schemas[id];
-    if (schema == NULL)
-    {
-        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
-        REDUCT_ERROR_THROW(reduct, "invalid schema ID");
-    }
+    reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
 
     if (!REDUCT_HANDLE_IS_LIST(listHandle))
     {
-        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         REDUCT_ERROR_THROW(reduct, "invalid list handle");
     }
 
+    const bool strictKeys = (flags & REDUCT_SCHEMA_APPLY_STRICT_KEYS) != 0;
+    const bool strictValues = (flags & REDUCT_SCHEMA_APPLY_STRICT_VALUES) != 0;
     reduct_list_t* list = REDUCT_HANDLE_TO_LIST(listHandle);
 
     for (uint32_t i = 0; i < list->length; i++)
@@ -340,53 +502,118 @@ REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id
         }
 
         reduct_atom_t* atom = REDUCT_HANDLE_TO_ATOM(keyHandle);
-        if (!(atom->flags & REDUCT_ATOM_FLAG_SCHEMA) || id >= atom->schemaCount)
-        {
-            continue;
-        }
-
-        reduct_schema_index_t fieldIdx = atom->schema[id];
+        reduct_schema_index_t fieldIdx = reduct_schema_lookup_find(&schema->keys, atom);
         if (fieldIdx == REDUCT_SCHEMA_INDEX_NONE)
         {
+            if (strictKeys)
+            {
+                REDUCT_ERROR_THROW(reduct, "unknown schema key '%s'", atom->string);
+            }
             continue;
         }
 
         const reduct_schema_t* field = &schema->fields[fieldIdx];
         void* target = (char*)out + field->offset;
 
-        if (field->type != REDUCT_SCHEMA_TYPE_ARRAY)
+        if (field->type == REDUCT_SCHEMA_TYPE_ARRAY)
         {
-            reduct_schema_apply_primitive(reduct, field->type, field->size, target, entry->handles[1]);
-            continue;
-        }
-
-        if (REDUCT_HANDLE_IS_LIST(entry->handles[1]))
-        {
-            reduct_list_t* subList = REDUCT_HANDLE_TO_LIST(entry->handles[1]);
-            for (uint32_t j = 0; j < subList->length; j++)
+            if (REDUCT_HANDLE_IS_LIST(entry->handles[1]))
             {
-                if (j * field->elementSize >= field->size)
+                reduct_list_t* subList = REDUCT_HANDLE_TO_LIST(entry->handles[1]);
+                for (uint32_t j = 0; j < subList->length; j++)
                 {
-                    break;
+                    if (j * field->as.array.elementSize >= field->size)
+                    {
+                        break;
+                    }
+                    reduct_schema_apply_primitive(reduct, field->as.array.subtype, field->as.array.elementSize,
+                        (char*)target + j * field->as.array.elementSize, subList->handles[j], field->key,
+                        !strictValues);
                 }
-                reduct_schema_apply_primitive(reduct, field->subtype, field->elementSize,
-                    (char*)target + j * field->elementSize, subList->handles[j]);
+            }
+            else
+            {
+                for (uint32_t j = 1; j < entry->length; j++)
+                {
+                    if ((j - 1) * field->as.array.elementSize >= field->size)
+                    {
+                        break;
+                    }
+                    reduct_schema_apply_primitive(reduct, field->as.array.subtype, field->as.array.elementSize,
+                        (char*)target + (j - 1) * field->as.array.elementSize, entry->handles[j], field->key,
+                        !strictValues);
+                }
             }
             continue;
         }
 
-        for (uint32_t j = 1; j < entry->length; j++)
+        if (field->type == REDUCT_SCHEMA_TYPE_ENUM)
         {
-            if ((j - 1) * field->elementSize >= field->size)
+            reduct_handle_t valueHandle = entry->handles[1];
+            if (!REDUCT_HANDLE_IS_ATOM(valueHandle))
             {
+                if (strictValues)
+                {
+                    REDUCT_ERROR_THROW(reduct, "expected an atom handle for '%s', got %s", field->key,
+                        REDUCT_HANDLE_GET_TYPE_STRING(valueHandle));
+                }
+                continue;
+            }
+
+            reduct_schema_index_t entryIdx =
+                reduct_schema_lookup_find(&schema->enums[fieldIdx], REDUCT_HANDLE_TO_ATOM(valueHandle));
+            if (entryIdx == REDUCT_SCHEMA_INDEX_NONE)
+            {
+                if (strictValues)
+                {
+                    REDUCT_ERROR_THROW(reduct, "invalid value '%s' for '%s'",
+                        REDUCT_HANDLE_TO_ATOM(valueHandle)->string, field->key);
+                }
+                continue;
+            }
+
+            const int32_t enumValue = field->as.enumeration.entries[entryIdx].value;
+            switch (field->size)
+            {
+            case 1:
+                *(int8_t*)target = (int8_t)enumValue;
+                break;
+            case 2:
+                *(int16_t*)target = (int16_t)enumValue;
+                break;
+            case 4:
+                *(int32_t*)target = enumValue;
+                break;
+            case 8:
+                *(int64_t*)target = (int64_t)enumValue;
+                break;
+            default:
                 break;
             }
-            reduct_schema_apply_primitive(reduct, field->subtype, field->elementSize,
-                (char*)target + (j - 1) * field->elementSize, entry->handles[j]);
+            continue;
         }
-    }
 
+        reduct_schema_apply_primitive(reduct, field->type, field->size, target, entry->handles[1], field->key,
+            !strictValues);
+    }
+}
+
+REDUCT_API reduct_schema_index_t reduct_schema_find(struct reduct* reduct, reduct_schema_id_t id,
+    reduct_atom_t* keyAtom)
+{
+    assert(reduct != NULL);
+    assert(keyAtom != NULL);
+
+    reduct_rwmutex_read_lock(&reduct->global->schema.mutex);
+    if (id >= reduct->global->schema.count || reduct->global->schema.schemas[id] == NULL)
+    {
+        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
+        return REDUCT_SCHEMA_INDEX_NONE;
+    }
+    reduct_schema_internal_t* schema = reduct->global->schema.schemas[id];
     reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
+
+    return reduct_schema_lookup_find(&schema->keys, keyAtom);
 }
 
 REDUCT_API size_t reduct_schema_get_count(struct reduct* reduct, reduct_schema_id_t id)
@@ -409,19 +636,13 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
     assert(in != NULL);
 
     reduct_rwmutex_read_lock(&reduct->global->schema.mutex);
-
-    if (id >= reduct->global->schema.count)
+    if (id >= reduct->global->schema.count || reduct->global->schema.schemas[id] == NULL)
     {
         reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
         REDUCT_ERROR_THROW(reduct, "invalid schema ID");
     }
-
     reduct_schema_internal_t* schema = reduct->global->schema.schemas[id];
-    if (schema == NULL)
-    {
-        reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
-        REDUCT_ERROR_THROW(reduct, "invalid schema ID");
-    }
+    reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
 
     reduct_list_t* list = reduct_list_new(reduct, schema->count);
 
@@ -435,14 +656,29 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
 
         if (field->type == REDUCT_SCHEMA_TYPE_ARRAY)
         {
-            size_t count = field->size / field->elementSize;
+            size_t count = field->size / field->as.array.elementSize;
             reduct_list_t* subList = reduct_list_new(reduct, count);
             for (size_t j = 0; j < count; j++)
             {
-                subList->handles[j] = reduct_schema_serialize_primitive(reduct, field->subtype, field->elementSize,
-                    (char*)val + j * field->elementSize);
+                subList->handles[j] = reduct_schema_serialize_primitive(reduct, field->as.array.subtype,
+                    field->as.array.elementSize, (char*)val + j * field->as.array.elementSize);
             }
             pair->handles[1] = REDUCT_HANDLE_FROM_LIST(subList);
+        }
+        else if (field->type == REDUCT_SCHEMA_TYPE_ENUM)
+        {
+            const int32_t enumValue = *(int32_t*)val;
+            const char* keyword = NULL;
+            for (size_t j = 0; j < field->as.enumeration.count; j++)
+            {
+                if (field->as.enumeration.entries[j].value == enumValue)
+                {
+                    keyword = field->as.enumeration.entries[j].keyword;
+                    break;
+                }
+            }
+            pair->handles[1] = keyword != NULL ? REDUCT_HANDLE_CREATE_STRING(reduct, (char*)keyword)
+                                               : REDUCT_HANDLE_FROM_NUMBER((double)enumValue);
         }
         else
         {
@@ -453,6 +689,5 @@ REDUCT_API reduct_handle_t reduct_schema_serialize(reduct_t* reduct, reduct_sche
         list->handles[i] = REDUCT_HANDLE_FROM_LIST(pair);
     }
 
-    reduct_rwmutex_read_unlock(&reduct->global->schema.mutex);
     return REDUCT_HANDLE_FROM_LIST(list);
 }

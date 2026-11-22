@@ -154,11 +154,6 @@ REDUCT_API void reduct_item_deinit(reduct_t* reduct, reduct_item_t* item)
         reduct_atom_t* atom = &item->atom;
 
         reduct_rwmutex_write_lock(&reduct->global->atom.mutex);
-        if (atom->flags & REDUCT_ATOM_FLAG_SCHEMA && atom->schema != NULL)
-        {
-            free(atom->schema);
-            atom->schema = NULL;
-        }
         if (reduct->global->atom.map != NULL && atom->index != REDUCT_ATOM_INDEX_NONE)
         {
             reduct->global->atom.map[atom->index] = REDUCT_ATOM_TOMBSTONE;

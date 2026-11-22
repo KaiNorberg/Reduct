@@ -13,7 +13,7 @@ static size_t reduct_get_cpu_count(void)
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
     return sysinfo.dwNumberOfProcessors > 0 ? (size_t)sysinfo.dwNumberOfProcessors : 1;
-#else 
+#else
     long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
     return nprocs > 0 ? (size_t)nprocs : 1;
 #endif

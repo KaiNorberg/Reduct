@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 struct reduct;
+typedef struct reduct_atom reduct_atom_t;
 
 /**
  * @file schema.h
@@ -24,6 +25,15 @@ struct reduct;
  * Arrays are an exception to the above and can be specified in two ways:
  * - `("my-key" ("first" "second" "third"))`
  * - `("my-key" "first" "second" "third")`
+ *
+ * Enum fields are validated against a table of keywords registered with the schema. In strict mode an invalid keyword
+ * throws an error naming both the keyword and the field.
+ *
+ * Application is lenient by default such that unknown keys, malformed entries, and invalid values are skipped
+ * non-destructively. 
+ *
+ * Schemas are append-only. Once registered, a schema is never modified or freed before VM teardown, to allow
+ * `reduct_schema_apply()` to run without holding any locks.
  *
  * @{
  */
@@ -43,7 +53,18 @@ typedef enum reduct_schema_type
     REDUCT_SCHEMA_TYPE_ARRAY,  ///< A fixed-size array of primitives.
     REDUCT_SCHEMA_TYPE_ATOM,   ///< A pointer to a `reduct_atom_t`.
     REDUCT_SCHEMA_TYPE_LIST,   ///< A pointer to a `reduct_list_t`.
+    REDUCT_SCHEMA_TYPE_ENUM,   ///< An enumerator, validated against a keyword table and stored as an integer.
 } reduct_schema_type_t;
+
+/**
+ * @brief A single keyword/value pair of an enum field.
+ * @struct reduct_schema_enum_t
+ */
+typedef struct reduct_schema_enum_entry
+{
+    const char* keyword; ///< The keyword as it appears in the association list, e.g. `"row"`.
+    int32_t value;       ///< The value written to the C structure, e.g. an enum constant.
+} reduct_schema_enum_t;
 
 /**
  * @brief Schema field structure.
@@ -55,19 +76,21 @@ typedef struct reduct_schema
     size_t offset;
     size_t size;
     reduct_schema_type_t type;
-    reduct_schema_type_t subtype;
-    size_t elementSize;
+    union {
+        struct
+        {
+            reduct_schema_type_t subtype;
+            size_t elementSize;
+        } array;
+        struct
+        {
+            const reduct_schema_enum_t* entries; ///< The keyword table, must stay valid for the VM lifetime.
+            size_t count;
+        } enumeration;
+    } as;
 } reduct_schema_t;
 
-/**
- * @brief Internal schema structure.
- * @struct reduct_schema_internal_t
- */
-typedef struct reduct_schema_internal
-{
-    size_t count;
-    reduct_schema_t fields[];
-} reduct_schema_internal_t;
+typedef struct reduct_schema_internal reduct_schema_internal_t; ///< Internal schema representation.
 
 typedef uint32_t reduct_schema_id_t; ///< Schema ID type.
 
@@ -88,6 +111,17 @@ typedef struct
 } reduct_schema_global_t;
 
 /**
+ * @brief Apply flags for `reduct_schema_apply()`.
+ * @enum reduct_schema_apply_flags_t
+ */
+typedef enum
+{
+    REDUCT_SCHEMA_APPLY_NORMAL = 0,             ///< No flags.
+    REDUCT_SCHEMA_APPLY_STRICT_KEYS = 1 << 0,   ///< Throw on unknown keys.
+    REDUCT_SCHEMA_APPLY_STRICT_VALUES = 1 << 1, ///< Throw on malformed or invalid values.
+} reduct_schema_apply_flags_t;
+
+/**
  * @brief Initialize a global schema state.
  *
  * @param global Pointer to the global schema state to initialize.
@@ -104,6 +138,9 @@ REDUCT_API void reduct_schema_global_deinit(reduct_schema_global_t* global);
 /**
  * @brief Create a new schema from an array of fields.
  *
+ * Schema keys and enum keywords are interned and retained for the lifetime of the VM, so lookups during application
+ * are pointer comparisons.
+ *
  * @param reduct Pointer to the Reduct structure.
  * @param count Number of fields.
  * @param fields Array of field definitions.
@@ -118,10 +155,22 @@ REDUCT_API reduct_schema_id_t reduct_schema_new(struct reduct* reduct, size_t co
  *
  * @param reduct Pointer to the Reduct structure.
  * @param id The ID of the schema to apply.
- * @param listH The handle to the association list.
+ * @param listHandle The handle to the association list.
+ * @param flags Apply flags.
  * @param out Pointer to the destination C structure.
  */
-REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listH, void* out);
+REDUCT_API void reduct_schema_apply(struct reduct* reduct, reduct_schema_id_t id, reduct_handle_t listHandle, reduct_schema_apply_flags_t flags, void* out);
+
+/**
+ * @brief Look up which field an atom corresponds to within a schema.
+ *
+ * @param reduct Pointer to the Reduct structure.
+ * @param id The schema ID.
+ * @param keyAtom The atom to look up.
+ * @return The index of the field, or `REDUCT_SCHEMA_INDEX_NONE` if the atom is not a key in the schema.
+ */
+REDUCT_API reduct_schema_index_t reduct_schema_find(struct reduct* reduct, reduct_schema_id_t id,
+    reduct_atom_t* keyAtom);
 
 /**
  * @brief Get the number of fields in a schema.
@@ -143,32 +192,65 @@ REDUCT_API size_t reduct_schema_get_count(struct reduct* reduct, reduct_schema_i
 REDUCT_API reduct_handle_t reduct_schema_serialize(struct reduct* reduct, reduct_schema_id_t id, const void* in);
 
 /**
+ * @brief Registers a schema, deriving the field count automatically.
+ *
+ * @param _reduct Pointer to the Reduct structure.
+ * @param _schema A static array of `reduct_schema_t`.
+ */
+#define REDUCT_SCHEMA_NEW(_reduct, _schema) \
+    reduct_schema_new((_reduct), sizeof(_schema) / sizeof((_schema)[0]), (_schema))
+
+/**
  * @brief Helper macro to define a schema field.
  *
- * @param _key The key string in the association list.
  * @param _struct The C structure type.
+ * @param _key The key string in the association list.
  * @param _member The member name in the C structure.
  * @param _type The `reduct_schema_type_t` of the field, only the suffix is required, `REDUCT_SCHEMA_TYPE_` is added
  * automatically.
  */
-#define REDUCT_SCHEMA_FIELD(_key, _struct, _member, _type) \
-    (reduct_schema_t){(_key), offsetof(_struct, _member), sizeof(((_struct*)0)->_member), REDUCT_SCHEMA_TYPE_##_type, \
-        0, 0}
+#define REDUCT_SCHEMA_FIELD(_struct, _key, _member, _type) \
+    (reduct_schema_t) \
+    { \
+        (_key), offsetof(_struct, _member), sizeof(((_struct*)0)->_member), REDUCT_SCHEMA_TYPE_##_type, \
+        {{0}} \
+    }
 
 /**
  * @brief Helper macro to define an array schema field.
  *
- * @param _key The key string.
  * @param _struct The C structure type.
+ * @param _key The key string.
  * @param _member The array member name.
  * @param _type The `reduct_schema_type_t` of the field, only the suffix is required, `REDUCT_SCHEMA_TYPE_` is added
  * automatically.
  */
-#define REDUCT_SCHEMA_FIELD_ARRAY(_key, _struct, _member, _subtype) \
+#define REDUCT_SCHEMA_FIELD_ARRAY(_struct, _key, _member, _subtype) \
     (reduct_schema_t) \
     { \
         (_key), offsetof(_struct, _member), sizeof(((_struct*)0)->_member), REDUCT_SCHEMA_TYPE_ARRAY, \
-            REDUCT_SCHEMA_TYPE_##_subtype, sizeof(((_struct*)0)->_member[0]) \
+        { \
+            .array = { REDUCT_SCHEMA_TYPE_##_subtype, sizeof(((_struct*)0)->_member[0]) } \
+        } \
+    }
+
+/**
+ * @brief Helper macro to define an enum schema field.
+ *
+ * The member must be an integer type capable of holding every value in the keyword table.
+ *
+ * @param _struct The C structure type.
+ * @param _key The key string.
+ * @param _member The integer member name.
+ * @param _entries The static array of `reduct_schema_enum_t`, the array size is derived automatically.
+ */
+#define REDUCT_SCHEMA_FIELD_ENUM(_struct, _key, _member, _entries) \
+    (reduct_schema_t) \
+    { \
+        (_key), offsetof(_struct, _member), sizeof(((_struct*)0)->_member), REDUCT_SCHEMA_TYPE_ENUM, \
+        { \
+            .enumeration = {(_entries), sizeof(_entries) / sizeof((_entries)[0]) } \
+        } \
     }
 
 /** @} */

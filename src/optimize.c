@@ -672,7 +672,7 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
     {
         return NULL;
     }
-    
+
     // Handles alist manipulation where only the keys are known at compile-time but not the values.
     reduct_atom_t* atom = reduct_handle_as_atom(reduct, callable->constant);
     if (atom->native == reduct_stdlib_merge)
@@ -765,8 +765,8 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
 
-        reduct_list_t* pathList = REDUCT_HANDLE_IS_LIST(pathNode->constant) ? REDUCT_HANDLE_TO_LIST(pathNode->constant)
-                                                                           : NULL;
+        reduct_list_t* pathList =
+            REDUCT_HANDLE_IS_LIST(pathNode->constant) ? REDUCT_HANDLE_TO_LIST(pathNode->constant) : NULL;
         size_t parentDepth = (pathList != NULL) ? pathList->length - 1 : 0;
         bool miss = false;
         reduct_handle_t parent = REDUCT_HANDLE_NIL(reduct);
@@ -792,8 +792,8 @@ static reduct_rvsdg_origin_t* reduct_optimize_algebraic_simplification_call(redu
 
         reduct_handle_t alist = reduct_optimize_alist_partial_from_node(reduct, alistNode);
 
-        reduct_list_t* pathList = REDUCT_HANDLE_IS_LIST(pathNode->constant) ? REDUCT_HANDLE_TO_LIST(pathNode->constant)
-                                                                           : NULL;
+        reduct_list_t* pathList =
+            REDUCT_HANDLE_IS_LIST(pathNode->constant) ? REDUCT_HANDLE_TO_LIST(pathNode->constant) : NULL;
         if (pathList != NULL && pathList->length == 0)
         {
             return NULL;
@@ -947,7 +947,6 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
         {
             replacement = left;
         }
-
     }
     break;
     case REDUCT_OPCODE_MUL:
@@ -1050,7 +1049,7 @@ static bool reduct_optimize_algebraic_simplification(reduct_t* reduct, reduct_rv
     }
     break;
     default:
-    break;
+        break;
     }
 
     if (replacement != NULL)
